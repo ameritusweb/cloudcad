@@ -2,7 +2,7 @@
 
 CloudCad is an advanced, open-source, web-based Computer-Aided Design (CAD) application that integrates powerful 3D modeling capabilities with structural analysis features. Built for engineers, designers, and makers, CloudCad offers a seamless, cloud-based experience for creating, analyzing, and optimizing 3D models.
 
-![CloudCad Logo](path/to/logo.png)
+![CloudCad Logo](frontend/public/logo.png)
 
 ## Features
 
