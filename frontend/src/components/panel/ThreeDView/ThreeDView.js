@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import BabylonSceneService from '../services/babylonScene';
+import BabylonSceneService from '../../../services/babylonScene';
 
 const ThreeDView = ({ modelData, analysisResults, failurePoints }) => {
   const canvasRef = useRef(null);

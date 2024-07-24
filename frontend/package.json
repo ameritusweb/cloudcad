@@ -3,45 +3,46 @@
     "version": "0.1.0",
     "private": true,
     "dependencies": {
-      "@testing-library/jest-dom": "^5.14.1",
-      "@testing-library/react": "^11.2.7",
-      "@testing-library/user-event": "^12.8.3",
-      "axios": "^0.21.1",
-      "babylonjs": "^4.2.0",
-      "babylonjs-gui": "^4.2.0",
-      "daisyui": "^2.6.0",
-      "react": "^17.0.2",
-      "react-dom": "^17.0.2",
-      "react-scripts": "4.0.3",
-      "web-vitals": "^1.1.2"
+        "@testing-library/jest-dom": "^5.14.1",
+        "@testing-library/react": "^11.2.7",
+        "@testing-library/user-event": "^12.8.3",
+        "axios": "^0.21.1",
+        "babylonjs": "^4.2.0",
+        "babylonjs-gui": "^4.2.0",
+        "daisyui": "^2.6.0",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "react-scripts": "^5.0.1",
+        "web-vitals": "^1.1.2"
     },
     "scripts": {
-      "start": "react-scripts start",
-      "build": "react-scripts build",
-      "test": "react-scripts test",
-      "eject": "react-scripts eject"
+        "start": "react-scripts start",
+        "build": "react-scripts build",
+        "test": "react-scripts test",
+        "eject": "react-scripts eject"
     },
     "eslintConfig": {
-      "extends": [
-        "react-app",
-        "react-app/jest"
-      ]
+        "extends": [
+            "react-app",
+            "react-app/jest"
+        ]
     },
     "browserslist": {
-      "production": [
-        ">0.2%",
-        "not dead",
-        "not op_mini all"
-      ],
-      "development": [
-        "last 1 chrome version",
-        "last 1 firefox version",
-        "last 1 safari version"
-      ]
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
     },
     "devDependencies": {
-      "autoprefixer": "^10.3.1",
-      "postcss": "^8.3.6",
-      "tailwindcss": "^2.2.7"
+        "@babel/plugin-proposal-private-property-in-object": "~7.21.11",
+        "autoprefixer": "^10.3.1",
+        "postcss": "^8.3.6",
+        "tailwindcss": "^3.4.6"
     }
-  }
+}
