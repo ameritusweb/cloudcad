@@ -73,7 +73,7 @@ We welcome contributions to CloudCad! Please see our [Contributing Guidelines](C
 
 ## License
 
-CloudCad is released under the MIT License. See the [LICENSE](LICENSE) file for more details.
+CloudCad is released under the LGPL License. See the [LICENSE](LICENSE) file for more details.
 
 ## Acknowledgements
 
@@ -84,8 +84,8 @@ CloudCad is released under the MIT License. See the [LICENSE](LICENSE) file for 
 
 ## Contact
 
-For questions, suggestions, or discussions about CloudCad, please open an issue in this repository or contact the maintainers:
+For questions, suggestions, or discussions about CloudCad, please open an issue in this repository or contact:
 
-- [Your Name](mailto:ameritusweb@gmail.com)
+- [ameritusweb](mailto:ameritusweb@gmail.com)
 
 Thank you for your interest in CloudCad! We look forward to your contributions and feedback.
