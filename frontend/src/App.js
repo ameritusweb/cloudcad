@@ -72,6 +72,10 @@ function App() {
           <div className="w-full md:w-1/3 pr-4">
             <div className="card bg-base-200 shadow-xl">
               <div className="card-body">
+              <AdvancedCADControlPanel
+                  currentModelId={currentModelId}
+                  onModelUpdate={handleModelUpdate}
+                />
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import cadquery as cq
 from flask import Blueprint, request, jsonify
-from .model_manager import ModelManager
-from .parametric_feature_functions import circular_cut, concentric_extrude, mirror_feature
+from ..cad.model_manager import ModelManager
+from ..cad.parametric_feature_functions import circular_cut, concentric_extrude, mirror_feature
 
 # Create a Blueprint
 cad_operations = Blueprint('cad_operations', __name__)
