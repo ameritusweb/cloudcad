@@ -3,8 +3,9 @@ import {
   Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder,
   StandardMaterial, Color3, PointerEventTypes
 } from '@babylonjs/core';
+import { Button, Rectangle, AdvancedDynamicTexture, Control } from '@babylonjs/gui';
 
-export const BabylonViewport = ({ onViewChange, controlMode }) => {
+export const BabylonViewport = ({ currentModelView, onViewChange, controlMode }) => {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const boxRef = useRef(null);
@@ -19,7 +20,7 @@ export const BabylonViewport = ({ onViewChange, controlMode }) => {
 
     // Camera
     const camera = new ArcRotateCamera("camera1", Math.PI / 2, Math.PI / 2, 10, Vector3.Zero(), scene);
-    camera.attachControl(canvas, false); // We'll handle control manually
+    camera.attachControl(canvas, true);
     cameraRef.current = camera;
 
     // Light
@@ -35,6 +36,7 @@ export const BabylonViewport = ({ onViewChange, controlMode }) => {
     // Wireframe cube
     createWireframeCube(scene, (normal) => {
       const newView = getViewFromNormal(normal);
+      console.log("New view:", newView);  // Debug log
       setCurrentView(newView);
       onViewChange(newView);
     });
@@ -42,6 +44,10 @@ export const BabylonViewport = ({ onViewChange, controlMode }) => {
     engine.runRenderLoop(() => {
       scene.render();
     });
+
+    if (currentModelView === '') {
+        onViewChange('Front');
+    }
 
     return () => {
       engine.dispose();
@@ -53,6 +59,44 @@ export const BabylonViewport = ({ onViewChange, controlMode }) => {
       updateCameraPosition(currentView);
     }
   }, [currentView]);
+
+  useEffect(() => {
+    if (cameraRef.current && sceneRef.current) {
+      updateCameraControls();
+    }
+  }, [controlMode]);
+
+  const updateCameraControls = () => {
+    const camera = cameraRef.current;
+    const scene = sceneRef.current;
+    
+    // Reset all camera controls
+    camera.inputs.clear();
+
+    switch (controlMode) {
+      case 'zoom':
+        camera.inputs.addMouseWheel();
+        break;
+      case 'pan':
+        camera.inputs.addPointers();
+        camera.panningSensibility = 50;
+        camera.inputs.attached.pointers.buttons = [1]; // Middle mouse button
+        break;
+      case 'rotate':
+      default:
+        camera.inputs.addMouseWheel();
+        camera.inputs.addPointers();
+        camera.inputs.attached.pointers.buttons = [0, 1]; // Left and middle mouse buttons
+        break;
+    }
+
+    // Prevent default behavior for right-click
+    scene.onPointerDown = (evt) => {
+        if (evt.button === 2) {
+          evt.preventDefault();
+        }
+      };
+}
 
   useEffect(() => {
     if (cameraRef.current && sceneRef.current) {
@@ -89,50 +133,81 @@ export const BabylonViewport = ({ onViewChange, controlMode }) => {
   }, [controlMode]);
 
   const createWireframeCube = (scene, onFaceClick) => {
-    const size = 0.5;
-    const positions = [
-      new Vector3(-size, size, -size),
-      new Vector3(size, size, -size),
-      new Vector3(size, size, size),
-      new Vector3(-size, size, size),
-      new Vector3(-size, -size, -size),
-      new Vector3(size, -size, -size),
-      new Vector3(size, -size, size),
-      new Vector3(-size, -size, size)
-    ];
+    const advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("UI");
+    
+    const button = Button.CreateImageOnlyButton("wireframeButton", "data:image/svg+xml;base64," + btoa(`
+      <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 80 L80 80 L80 20 L20 20 Z" fill="none" stroke="white" stroke-width="2"/>
+        <path d="M20 20 L35 5 L95 5 L80 20" fill="none" stroke="white" stroke-width="2"/>
+        <path d="M80 80 L95 65 L95 5" fill="none" stroke="white" stroke-width="2"/>
+        <path d="M20 80 L35 65 L95 65" fill="none" stroke="white" stroke-width="2"/>
+        <path d="M35 5 L35 65" fill="none" stroke="white" stroke-width="2"/>
+      </svg>
+    `));
 
-    const lines = [
-      [0, 1], [1, 2], [2, 3], [3, 0], // top
-      [4, 5], [5, 6], [6, 7], [7, 4], // bottom
-      [0, 4], [1, 5], [2, 6], [3, 7]  // sides
-    ];
+    button.width = "100px";
+    button.height = "100px";
+    button.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    button.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    button.top = "60px";
+    button.left = "-10px";
+    
+    button.onPointerUpObservable.add((eventData) => {
+      const buttonRect = button._currentMeasure;
+      const screenWidth = scene.getEngine().getRenderWidth();
+      const screenHeight = scene.getEngine().getRenderHeight();
 
-    const wireframeCube = MeshBuilder.CreateLineSystem("wireframeCube", {
-      lines: lines.map(pair => [positions[pair[0]], positions[pair[1]]]),
-      updatable: false
-    }, scene);
+      const buttonLeft = screenWidth - parseFloat(button.width) + parseFloat(button.left);
+      const buttonTop = parseFloat(button.top);
 
-    wireframeCube.position = new Vector3(2.5, 2.5, -2.5);
-    wireframeCube.scaling = new Vector3(0.5, 0.5, 0.5);
+      const relativeX = eventData.x - buttonLeft;
+      const relativeY = eventData.y - buttonTop;
 
-    const wireframeMaterial = new StandardMaterial("wireframeMaterial", scene);
-    wireframeMaterial.emissiveColor = Color3.White();
-    wireframeCube.material = wireframeMaterial;
+      const normalizedX = relativeX / parseFloat(button.width);
+      const normalizedY = relativeY / parseFloat(button.height);
 
-    scene.onPointerObservable.add((pointerInfo) => {
-      if (pointerInfo.type === PointerEventTypes.POINTERPICK && pointerInfo.pickInfo.hit) {
-        const pickedMesh = pointerInfo.pickInfo.pickedMesh;
-        if (pickedMesh === wireframeCube) {
-          const pickResult = scene.pick(scene.pointerX, scene.pointerY);
-          if (pickResult.hit) {
-            const normal = pickResult.getNormal();
-            if (normal) {
-              onFaceClick(normal);
-            }
-          }
-        }
+      console.log("Normalized click position:", normalizedX, normalizedY);  // Debug log
+
+      if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
+        const face = determineFaceClicked(normalizedX, normalizedY);
+        console.log("Clicked face:", face);  // Debug log
+
+        const normal = getFaceNormal(face);
+        console.log("Face normal:", normal);  // Debug log
+
+        onFaceClick(normal);
+      } else {
+        console.log("Click outside the button");
       }
     });
+
+    advancedTexture.addControl(button);
+  };
+
+  const determineFaceClicked = (normalizedX, normalizedY) => {
+    if (normalizedY < 0.2) {
+      return normalizedX < 0.6 ? "Top" : "Back";
+    } else if (normalizedY > 0.8) {
+      return "Bottom";
+    } else if (normalizedX < 0.2) {
+      return "Left";
+    } else if (normalizedX > 0.8) {
+      return "Right";
+    } else {
+      return "Front";
+    }
+  };
+
+  const getFaceNormal = (face) => {
+    switch (face) {
+      case "Right": return new Vector3(1, 0, 0);
+      case "Left": return new Vector3(-1, 0, 0);
+      case "Top": return new Vector3(0, 1, 0);
+      case "Bottom": return new Vector3(0, -1, 0);
+      case "Front": return new Vector3(0, 0, 1);
+      case "Back": return new Vector3(0, 0, -1);
+      default: return new Vector3(0, 0, 1);
+    }
   };
 
   const getViewFromNormal = (normal) => {
@@ -147,6 +222,10 @@ export const BabylonViewport = ({ onViewChange, controlMode }) => {
 
   const updateCameraPosition = (view) => {
     const camera = cameraRef.current;
+    if (!camera) return;
+
+    console.log("Updating camera position for view:", view);  // Debug log
+    
     switch (view) {
       case "Front":
         camera.setPosition(new Vector3(0, 0, -10));

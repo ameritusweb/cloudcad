@@ -9,7 +9,7 @@ const HypeStudio = () => {
   const [activeView, setActiveView] = useState('List View');
   const [leftPanelContent, setLeftPanelContent] = useState([]);
   const [projectInfo, setProjectInfo] = useState({ name: '', dimensions: '' });
-  const [currentModelView, setCurrentModelView] = useState('Front');
+  const [currentModelView, setCurrentModelView] = useState('');
   const [controlMode, setControlMode] = useState('rotate');
 
   useEffect(() => {
@@ -50,7 +50,7 @@ const HypeStudio = () => {
       <div className="flex flex-1">
         <LeftPanel content={leftPanelContent} />
         <div className="flex-1 relative">
-          <BabylonViewport onViewChange={handleViewChange} controlMode={controlMode} />
+          <BabylonViewport currentModelView={currentModelView} onViewChange={handleViewChange} controlMode={controlMode} />
           <div className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
             Current View: {currentModelView}
           </div>
