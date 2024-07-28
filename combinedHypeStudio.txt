@@ -1,0 +1,1438 @@
+/** @type { import('@storybook/react-webpack5').StorybookConfig } */
+const config = {
+  stories: ["../src/**/*.mdx", "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
+  addons: [
+    "@storybook/preset-create-react-app",
+    "@storybook/addon-onboarding",
+    "@storybook/addon-links",
+    "@storybook/addon-essentials",
+    "@chromatic-com/storybook",
+    "@storybook/addon-interactions",
+    'msw-storybook-addon',
+  ],
+  framework: {
+    name: "@storybook/react-webpack5",
+    options: {},
+  },
+  staticDirs: ["..\\public"],
+};
+export default config;
+
+/* ================================================================================ */
+/** @type { import('@storybook/react').Preview } */
+import { initialize, mswLoader } from 'msw-storybook-addon';
+import { handlers } from '../src/mocks/handlers';
+
+// Initialize MSW
+initialize();
+
+export const loaders = [
+  mswLoader,
+];
+
+export const parameters = {
+  actions: { argTypesRegex: "^on[A-Z].*" },
+  controls: {
+    matchers: {
+      color: /(background|color)$/i,
+      date: /Date$/,
+    },
+  },
+  msw: {
+    handlers: handlers,
+  },
+};
+/* ================================================================================ */
+// config-overrides.js
+module.exports = function override(config, env) {
+    // Custom overrides here
+    return config;
+  };
+/* ================================================================================ */
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+
+/* ================================================================================ */
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="%PUBLIC_URL%/favicon.ico"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#000000"><meta name="description" content="Web site created using create-react-app"><link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png"><link rel="manifest" href="%PUBLIC_URL%/manifest.json"><title>React App</title></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div></body></html>
+/* ================================================================================ */
+/* eslint-disable */
+/* tslint:disable */
+
+/**
+ * Mock Service Worker.
+ * @see https://github.com/mswjs/msw
+ * - Please do NOT modify this file.
+ * - Please do NOT serve this file on production.
+ */
+
+const PACKAGE_VERSION = '2.3.4'
+const INTEGRITY_CHECKSUM = '26357c79639bfa20d64c0efca2a87423'
+const IS_MOCKED_RESPONSE = Symbol('isMockedResponse')
+const activeClientIds = new Set()
+
+self.addEventListener('install', function () {
+  self.skipWaiting()
+})
+
+self.addEventListener('activate', function (event) {
+  event.waitUntil(self.clients.claim())
+})
+
+self.addEventListener('message', async function (event) {
+  const clientId = event.source.id
+
+  if (!clientId || !self.clients) {
+    return
+  }
+
+  const client = await self.clients.get(clientId)
+
+  if (!client) {
+    return
+  }
+
+  const allClients = await self.clients.matchAll({
+    type: 'window',
+  })
+
+  switch (event.data) {
+    case 'KEEPALIVE_REQUEST': {
+      sendToClient(client, {
+        type: 'KEEPALIVE_RESPONSE',
+      })
+      break
+    }
+
+    case 'INTEGRITY_CHECK_REQUEST': {
+      sendToClient(client, {
+        type: 'INTEGRITY_CHECK_RESPONSE',
+        payload: {
+          packageVersion: PACKAGE_VERSION,
+          checksum: INTEGRITY_CHECKSUM,
+        },
+      })
+      break
+    }
+
+    case 'MOCK_ACTIVATE': {
+      activeClientIds.add(clientId)
+
+      sendToClient(client, {
+        type: 'MOCKING_ENABLED',
+        payload: true,
+      })
+      break
+    }
+
+    case 'MOCK_DEACTIVATE': {
+      activeClientIds.delete(clientId)
+      break
+    }
+
+    case 'CLIENT_CLOSED': {
+      activeClientIds.delete(clientId)
+
+      const remainingClients = allClients.filter((client) => {
+        return client.id !== clientId
+      })
+
+      // Unregister itself when there are no more clients
+      if (remainingClients.length === 0) {
+        self.registration.unregister()
+      }
+
+      break
+    }
+  }
+})
+
+self.addEventListener('fetch', function (event) {
+  const { request } = event
+
+  // Bypass navigation requests.
+  if (request.mode === 'navigate') {
+    return
+  }
+
+  // Opening the DevTools triggers the "only-if-cached" request
+  // that cannot be handled by the worker. Bypass such requests.
+  if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') {
+    return
+  }
+
+  // Bypass all requests when there are no active clients.
+  // Prevents the self-unregistered worked from handling requests
+  // after it's been deleted (still remains active until the next reload).
+  if (activeClientIds.size === 0) {
+    return
+  }
+
+  // Generate unique request ID.
+  const requestId = crypto.randomUUID()
+  event.respondWith(handleRequest(event, requestId))
+})
+
+async function handleRequest(event, requestId) {
+  const client = await resolveMainClient(event)
+  const response = await getResponse(event, client, requestId)
+
+  // Send back the response clone for the "response:*" life-cycle events.
+  // Ensure MSW is active and ready to handle the message, otherwise
+  // this message will pend indefinitely.
+  if (client && activeClientIds.has(client.id)) {
+    ;(async function () {
+      const responseClone = response.clone()
+
+      sendToClient(
+        client,
+        {
+          type: 'RESPONSE',
+          payload: {
+            requestId,
+            isMockedResponse: IS_MOCKED_RESPONSE in response,
+            type: responseClone.type,
+            status: responseClone.status,
+            statusText: responseClone.statusText,
+            body: responseClone.body,
+            headers: Object.fromEntries(responseClone.headers.entries()),
+          },
+        },
+        [responseClone.body],
+      )
+    })()
+  }
+
+  return response
+}
+
+// Resolve the main client for the given event.
+// Client that issues a request doesn't necessarily equal the client
+// that registered the worker. It's with the latter the worker should
+// communicate with during the response resolving phase.
+async function resolveMainClient(event) {
+  const client = await self.clients.get(event.clientId)
+
+  if (client?.frameType === 'top-level') {
+    return client
+  }
+
+  const allClients = await self.clients.matchAll({
+    type: 'window',
+  })
+
+  return allClients
+    .filter((client) => {
+      // Get only those clients that are currently visible.
+      return client.visibilityState === 'visible'
+    })
+    .find((client) => {
+      // Find the client ID that's recorded in the
+      // set of clients that have registered the worker.
+      return activeClientIds.has(client.id)
+    })
+}
+
+async function getResponse(event, client, requestId) {
+  const { request } = event
+
+  // Clone the request because it might've been already used
+  // (i.e. its body has been read and sent to the client).
+  const requestClone = request.clone()
+
+  function passthrough() {
+    const headers = Object.fromEntries(requestClone.headers.entries())
+
+    // Remove internal MSW request header so the passthrough request
+    // complies with any potential CORS preflight checks on the server.
+    // Some servers forbid unknown request headers.
+    delete headers['x-msw-intention']
+
+    return fetch(requestClone, { headers })
+  }
+
+  // Bypass mocking when the client is not active.
+  if (!client) {
+    return passthrough()
+  }
+
+  // Bypass initial page load requests (i.e. static assets).
+  // The absence of the immediate/parent client in the map of the active clients
+  // means that MSW hasn't dispatched the "MOCK_ACTIVATE" event yet
+  // and is not ready to handle requests.
+  if (!activeClientIds.has(client.id)) {
+    return passthrough()
+  }
+
+  // Notify the client that a request has been intercepted.
+  const requestBuffer = await request.arrayBuffer()
+  const clientMessage = await sendToClient(
+    client,
+    {
+      type: 'REQUEST',
+      payload: {
+        id: requestId,
+        url: request.url,
+        mode: request.mode,
+        method: request.method,
+        headers: Object.fromEntries(request.headers.entries()),
+        cache: request.cache,
+        credentials: request.credentials,
+        destination: request.destination,
+        integrity: request.integrity,
+        redirect: request.redirect,
+        referrer: request.referrer,
+        referrerPolicy: request.referrerPolicy,
+        body: requestBuffer,
+        keepalive: request.keepalive,
+      },
+    },
+    [requestBuffer],
+  )
+
+  switch (clientMessage.type) {
+    case 'MOCK_RESPONSE': {
+      return respondWithMock(clientMessage.data)
+    }
+
+    case 'PASSTHROUGH': {
+      return passthrough()
+    }
+  }
+
+  return passthrough()
+}
+
+function sendToClient(client, message, transferrables = []) {
+  return new Promise((resolve, reject) => {
+    const channel = new MessageChannel()
+
+    channel.port1.onmessage = (event) => {
+      if (event.data && event.data.error) {
+        return reject(event.data.error)
+      }
+
+      resolve(event.data)
+    }
+
+    client.postMessage(
+      message,
+      [channel.port2].concat(transferrables.filter(Boolean)),
+    )
+  })
+}
+
+async function respondWithMock(response) {
+  // Setting response status code to 0 is a no-op.
+  // However, when responding with a "Response.error()", the produced Response
+  // instance will have status code set to 0. Since it's not possible to create
+  // a Response instance with status code 0, handle that use-case separately.
+  if (response.status === 0) {
+    return Response.error()
+  }
+
+  const mockedResponse = new Response(response.body, response)
+
+  Reflect.defineProperty(mockedResponse, IS_MOCKED_RESPONSE, {
+    value: true,
+    enumerable: true,
+  })
+
+  return mockedResponse
+}
+
+/* ================================================================================ */
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ================================================================================ */
+import logo from './logo.svg';
+import './App.css';
+import React, { useState } from 'react';
+import { AiOutlineExpand, AiOutlinePlus, AiOutlineImport } from 'react-icons/ai';
+import CenterView from './CenterView';
+import ProjectsPanel from './ProjectsPanel';
+import ImportPanel from './ImportPanel';
+
+const App = () => {
+  const [zoom, setZoom] = useState(1);
+  const [expanded, setExpanded] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const handleSliderChange = (e) => {
+    setZoom(e.target.value);
+  };
+
+  const toggleExpand = () => {
+    setExpanded(!expanded);
+  };
+
+  const toggleProjects = () => {
+    setProjectsOpen(!projectsOpen);
+  };
+
+  const toggleImport = () => {
+    setImportOpen(!importOpen);
+    if (projectsOpen) setProjectsOpen(false);
+  };
+
+  return (
+    <div className="flex h-screen">
+      {!expanded && (
+        <div className="bg-black w-16 flex flex-col items-center">
+          <button onClick={toggleImport} className="text-gray-200 hover:text-white mt-4 flex flex-col items-center">
+            <AiOutlineImport size={24} />
+            <span className="text-xs mt-1">Import</span>
+          </button>
+      </div>
+      )}
+      {importOpen && !expanded && (
+        <ImportPanel />
+      )}
+      {projectsOpen && !expanded && (
+        <ProjectsPanel />
+      )}
+      <div className="flex flex-col flex-grow">
+        {!expanded && (
+          <div className="bg-white h-8 p-1 pl-4 border-b border-gray-300">
+            <button onClick={toggleProjects} className="font-bold">
+              Projects
+            </button>
+          </div>
+        )}
+        <div className="flex flex-grow overflow-auto items-center justify-center">
+          <CenterView zoom={zoom} />
+        </div>
+        <div className="bg-white h-8 border-t border-gray-300 flex items-center justify-end">
+          <input
+            type="range"
+            min="1"
+            max="3"
+            step="0.1"
+            value={zoom}
+            onChange={handleSliderChange}
+            className="mr-4"
+          />
+          <button onClick={toggleExpand} className="mr-4">
+            <AiOutlineExpand size={24} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
+/* ================================================================================ */
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn react/i);
+  expect(linkElement).toBeInTheDocument();
+});
+
+/* ================================================================================ */
+import React from 'react';
+import HypeStudio from './HypeStudio';
+
+const CenterView = ({ zoom }) => {
+  return (
+    <div
+      className="bg-gray-200 w-[80%] h-[80%] flex items-center justify-center"
+      style={{ transform: `scale(${zoom})` }}
+    >
+      <HypeStudio />
+    </div>
+  );
+};
+
+export default CenterView;
+
+/* ================================================================================ */
+import React, { useState, useEffect } from 'react';
+import { Header } from './stories/Header';
+import { Toolbar } from './stories/Toolbar';
+import { LeftPanel } from './stories/LeftPanel';
+import { BabylonViewport } from './stories/BabylonViewport';
+import { FaSearchPlus, FaHandPaper, FaSyncAlt } from 'react-icons/fa';
+
+const HypeStudio = () => {
+  const [activeView, setActiveView] = useState('List View');
+  const [leftPanelContent, setLeftPanelContent] = useState([]);
+  const [projectInfo, setProjectInfo] = useState({ name: '', dimensions: '' });
+  const [currentModelView, setCurrentModelView] = useState('Front');
+  const [controlMode, setControlMode] = useState('rotate');
+
+  useEffect(() => {
+    // Fetch project info
+    fetch('/api/project')
+      .then(res => res.json())
+      .then(data => setProjectInfo(data));
+    
+    // Fetch initial left panel content
+    fetchLeftPanelContent('List View');
+  }, []);
+
+  const fetchLeftPanelContent = (viewName) => {
+    fetch(`/api/${viewName.toLowerCase().replace(' ', '-')}`)
+      .then(res => res.json())
+      .then(data => setLeftPanelContent(data));
+  };
+
+  const handleToolbarClick = (viewName) => {
+    setActiveView(viewName);
+    fetchLeftPanelContent(viewName);
+  };
+
+  const handleViewChange = (newView) => {
+    setCurrentModelView(newView);
+    console.log(`View changed to ${newView}`);
+  };
+
+  const handleControlModeChange = (mode) => {
+    setControlMode(mode);
+    console.log(`Control mode changed to ${mode}`);
+  };
+
+  return (
+    <div className="flex flex-col h-full w-full bg-gray-100">
+      <Header projectName={projectInfo.name} dimensions={projectInfo.dimensions} />
+      <Toolbar activeView={activeView} onItemClick={handleToolbarClick} />
+      <div className="flex flex-1">
+        <LeftPanel content={leftPanelContent} />
+        <div className="flex-1 relative">
+          <BabylonViewport onViewChange={handleViewChange} controlMode={controlMode} />
+          <div className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
+            Current View: {currentModelView}
+          </div>
+          <div className="absolute bottom-2 right-2 flex space-x-2">
+            <button 
+              onClick={() => handleControlModeChange('zoom')}
+              className={`p-2 rounded ${controlMode === 'zoom' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+            >
+              <FaSearchPlus />
+            </button>
+            <button 
+              onClick={() => handleControlModeChange('pan')}
+              className={`p-2 rounded ${controlMode === 'pan' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+            >
+              <FaHandPaper />
+            </button>
+            <button 
+              onClick={() => handleControlModeChange('rotate')}
+              className={`p-2 rounded ${controlMode === 'rotate' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+            >
+              <FaSyncAlt />
+            </button>
+          </div>
+        </div>
+      </div>
+      <img src="/images/banner.png" alt="Banner" className="w-48 absolute bottom-2 left-2" />
+    </div>
+  );
+};
+
+export default HypeStudio;
+/* ================================================================================ */
+import React from 'react';
+import { HypeStudio } from './HypeStudio';
+import { handlers } from './mocks/handlers';
+
+export default {
+  title: 'HypeStudio',
+  component: HypeStudio,
+  parameters: {
+    msw: {
+      handlers: handlers,
+    },
+  },
+};
+
+const Template = (args) => <HypeStudio {...args} />;
+
+export const Default = Template.bind({});
+Default.args = {};
+/* ================================================================================ */
+import React from 'react';
+import { AiOutlinePlus } from 'react-icons/ai';
+
+const ImportPanel = () => {
+  return (
+    <div className="bg-black w-32 border-r border-gray-300">
+      <div className="flex items-center justify-between p-2 border-b border-gray-300 text-white">
+        <span>Import</span>
+        <AiOutlinePlus size={24} />
+      </div>
+    </div>
+  );
+};
+
+export default ImportPanel;
+
+/* ================================================================================ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* ================================================================================ */
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+
+// src/index.js
+if (process.env.NODE_ENV === 'development') {
+  const { worker } = require('./mocks/browser');
+  worker.start();
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+
+/* ================================================================================ */
+// src/mocks/browser.js
+import { setupWorker } from 'msw/browser';
+import { handlers } from './handlers';
+
+export const worker = setupWorker(...handlers);
+
+/* ================================================================================ */
+import { http, HttpResponse } from 'msw';
+
+export const handlers = [
+  http.get('/api/project', () => {
+    return HttpResponse.json({
+      name: 'My Project',
+      dimensions: '20mm x 40mm x 60mm'
+    }, { status: 200 });
+  }),
+
+  http.get('/api/list-view', () => {
+    return HttpResponse.json(
+      ['Sketch1', 'Sketch2', 'Fillet1', 'Sketch3'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/sketch-view', () => {
+    return HttpResponse.json(
+      ['New Sketch', 'Edit Sketch', 'Delete Sketch'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/extrude-view', () => {
+    return HttpResponse.json(
+      ['Extrude1', 'Extrude2', 'New Extrude'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/import-export-view', () => {
+    return HttpResponse.json(
+      ['Import CAD', 'Export STL', 'Export OBJ'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/fillet-chamfer-view', () => {
+    return HttpResponse.json(
+      ['Fillet1', 'Chamfer1', 'New Fillet/Chamfer'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/dimension-tool-view', () => {
+    return HttpResponse.json(
+      ['Dimension1', 'Dimension2', 'Add Dimension'],
+      { status: 200 }
+    );
+  }),
+];
+/* ================================================================================ */
+import React from 'react';
+import { AiOutlinePlus } from 'react-icons/ai';
+
+const ProjectsPanel = () => {
+  return (
+    <div className="bg-white w-32 border-r border-gray-300">
+      <div className="flex items-center justify-between p-2 border-b border-gray-300">
+        <span>Projects</span>
+        <AiOutlinePlus size={24} />
+      </div>
+    </div>
+  );
+};
+
+export default ProjectsPanel;
+
+/* ================================================================================ */
+const reportWebVitals = onPerfEntry => {
+  if (onPerfEntry && onPerfEntry instanceof Function) {
+    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+      getCLS(onPerfEntry);
+      getFID(onPerfEntry);
+      getFCP(onPerfEntry);
+      getLCP(onPerfEntry);
+      getTTFB(onPerfEntry);
+    });
+  }
+};
+
+export default reportWebVitals;
+
+/* ================================================================================ */
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+
+/* ================================================================================ */
+import React, { useEffect, useRef, useState } from 'react';
+import { 
+  Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder,
+  StandardMaterial, Color3, PointerEventTypes
+} from '@babylonjs/core';
+
+export const BabylonViewport = ({ onViewChange, controlMode }) => {
+  const canvasRef = useRef(null);
+  const sceneRef = useRef(null);
+  const boxRef = useRef(null);
+  const cameraRef = useRef(null);
+  const [currentView, setCurrentView] = useState('Front');
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const engine = new Engine(canvas, true);
+    const scene = new Scene(engine);
+    sceneRef.current = scene;
+
+    // Camera
+    const camera = new ArcRotateCamera("camera1", Math.PI / 2, Math.PI / 2, 10, Vector3.Zero(), scene);
+    camera.attachControl(canvas, false); // We'll handle control manually
+    cameraRef.current = camera;
+
+    // Light
+    new HemisphericLight("light", new Vector3(0, 1, 0), scene);
+
+    // Main box
+    const box = MeshBuilder.CreateBox("box", { size: 2 }, scene);
+    const boxMaterial = new StandardMaterial("boxMaterial", scene);
+    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
+    box.material = boxMaterial;
+    boxRef.current = box;
+
+    // Wireframe cube
+    createWireframeCube(scene, (normal) => {
+      const newView = getViewFromNormal(normal);
+      setCurrentView(newView);
+      onViewChange(newView);
+    });
+
+    engine.runRenderLoop(() => {
+      scene.render();
+    });
+
+    return () => {
+      engine.dispose();
+    };
+  }, [onViewChange]);
+
+  useEffect(() => {
+    if (cameraRef.current) {
+      updateCameraPosition(currentView);
+    }
+  }, [currentView]);
+
+  useEffect(() => {
+    if (cameraRef.current && sceneRef.current) {
+      const camera = cameraRef.current;
+      const scene = sceneRef.current;
+      
+      // Reset all camera controls
+      camera.inputs.clear();
+
+      switch (controlMode) {
+        case 'zoom':
+          camera.inputs.addMouseWheel();
+          break;
+        case 'pan':
+          camera.inputs.addPointers();
+          camera.panningSensibility = 50;
+          camera.inputs.attached.pointers.buttons = [1]; // Middle mouse button
+          break;
+        case 'rotate':
+          camera.inputs.addPointers();
+          camera.inputs.attached.pointers.buttons = [0, 1]; // Left and middle mouse buttons
+          break;
+        default:
+          break;
+      }
+
+      // Prevent default behavior for right-click
+      scene.onPointerDown = (evt) => {
+        if (evt.button === 2) {
+          evt.preventDefault();
+        }
+      };
+    }
+  }, [controlMode]);
+
+  const createWireframeCube = (scene, onFaceClick) => {
+    const size = 0.5;
+    const positions = [
+      new Vector3(-size, size, -size),
+      new Vector3(size, size, -size),
+      new Vector3(size, size, size),
+      new Vector3(-size, size, size),
+      new Vector3(-size, -size, -size),
+      new Vector3(size, -size, -size),
+      new Vector3(size, -size, size),
+      new Vector3(-size, -size, size)
+    ];
+
+    const lines = [
+      [0, 1], [1, 2], [2, 3], [3, 0], // top
+      [4, 5], [5, 6], [6, 7], [7, 4], // bottom
+      [0, 4], [1, 5], [2, 6], [3, 7]  // sides
+    ];
+
+    const wireframeCube = MeshBuilder.CreateLineSystem("wireframeCube", {
+      lines: lines.map(pair => [positions[pair[0]], positions[pair[1]]]),
+      updatable: false
+    }, scene);
+
+    wireframeCube.position = new Vector3(2.5, 2.5, -2.5);
+    wireframeCube.scaling = new Vector3(0.5, 0.5, 0.5);
+
+    const wireframeMaterial = new StandardMaterial("wireframeMaterial", scene);
+    wireframeMaterial.emissiveColor = Color3.White();
+    wireframeCube.material = wireframeMaterial;
+
+    scene.onPointerObservable.add((pointerInfo) => {
+      if (pointerInfo.type === PointerEventTypes.POINTERPICK && pointerInfo.pickInfo.hit) {
+        const pickedMesh = pointerInfo.pickInfo.pickedMesh;
+        if (pickedMesh === wireframeCube) {
+          const pickResult = scene.pick(scene.pointerX, scene.pointerY);
+          if (pickResult.hit) {
+            const normal = pickResult.getNormal();
+            if (normal) {
+              onFaceClick(normal);
+            }
+          }
+        }
+      }
+    });
+  };
+
+  const getViewFromNormal = (normal) => {
+    if (normal.equalsWithEpsilon(Vector3.Right())) return "Right";
+    if (normal.equalsWithEpsilon(Vector3.Left())) return "Left";
+    if (normal.equalsWithEpsilon(Vector3.Up())) return "Top";
+    if (normal.equalsWithEpsilon(Vector3.Down())) return "Bottom";
+    if (normal.equalsWithEpsilon(Vector3.Forward())) return "Front";
+    if (normal.equalsWithEpsilon(Vector3.Backward())) return "Back";
+    return "Front"; // Default view
+  };
+
+  const updateCameraPosition = (view) => {
+    const camera = cameraRef.current;
+    switch (view) {
+      case "Front":
+        camera.setPosition(new Vector3(0, 0, -10));
+        break;
+      case "Back":
+        camera.setPosition(new Vector3(0, 0, 10));
+        break;
+      case "Left":
+        camera.setPosition(new Vector3(-10, 0, 0));
+        break;
+      case "Right":
+        camera.setPosition(new Vector3(10, 0, 0));
+        break;
+      case "Top":
+        camera.setPosition(new Vector3(0, 10, 0));
+        break;
+      case "Bottom":
+        camera.setPosition(new Vector3(0, -10, 0));
+        break;
+      default:
+        break;
+    }
+    camera.setTarget(Vector3.Zero());
+  };
+
+  return <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />;
+};
+/* ================================================================================ */
+import { fn } from '@storybook/test';
+import { BabylonViewport } from './BabylonViewport';
+
+export default {
+  title: 'Components/BabylonViewport',
+  component: BabylonViewport,
+  parameters: {
+    layout: 'fullscreen',
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    controlMode: {
+      control: 'select',
+      options: ['zoom', 'pan', 'rotate'],
+    },
+  },
+  args: { onViewChange: fn() },
+};
+
+export const Default = {
+  args: {
+    controlMode: 'rotate',
+  },
+};
+
+export const ZoomMode = {
+  args: {
+    controlMode: 'zoom',
+  },
+};
+
+export const PanMode = {
+  args: {
+    controlMode: 'pan',
+  },
+};
+/* ================================================================================ */
+.storybook-button {
+  font-family: 'Nunito Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  border: 0;
+  border-radius: 3em;
+  cursor: pointer;
+  display: inline-block;
+  line-height: 1;
+}
+.storybook-button--primary {
+  color: white;
+  background-color: #1ea7fd;
+}
+.storybook-button--secondary {
+  color: #333;
+  background-color: transparent;
+  box-shadow: rgba(0, 0, 0, 0.15) 0px 0px 0px 1px inset;
+}
+.storybook-button--small {
+  font-size: 12px;
+  padding: 10px 16px;
+}
+.storybook-button--medium {
+  font-size: 14px;
+  padding: 11px 20px;
+}
+.storybook-button--large {
+  font-size: 16px;
+  padding: 12px 24px;
+}
+
+/* ================================================================================ */
+import React from 'react';
+import PropTypes from 'prop-types';
+import './button.css';
+
+/**
+ * Primary UI component for user interaction
+ */
+export const Button = ({ primary, backgroundColor, size, label, ...props }) => {
+  const mode = primary ? 'storybook-button--primary' : 'storybook-button--secondary';
+  return (
+    <button
+      type="button"
+      className={['storybook-button', `storybook-button--${size}`, mode].join(' ')}
+      style={backgroundColor && { backgroundColor }}
+      {...props}
+    >
+      {label}
+    </button>
+  );
+};
+
+Button.propTypes = {
+  /**
+   * Is this the principal call to action on the page?
+   */
+  primary: PropTypes.bool,
+  /**
+   * What background color to use
+   */
+  backgroundColor: PropTypes.string,
+  /**
+   * How large should the button be?
+   */
+  size: PropTypes.oneOf(['small', 'medium', 'large']),
+  /**
+   * Button contents
+   */
+  label: PropTypes.string.isRequired,
+  /**
+   * Optional click handler
+   */
+  onClick: PropTypes.func,
+};
+
+Button.defaultProps = {
+  backgroundColor: null,
+  primary: false,
+  size: 'medium',
+  onClick: undefined,
+};
+
+/* ================================================================================ */
+import { fn } from '@storybook/test';
+import { Button } from './Button';
+
+// More on how to set up stories at: https://storybook.js.org/docs/writing-stories#default-export
+export default {
+  title: 'Example/Button',
+  component: Button,
+  parameters: {
+    // Optional parameter to center the component in the Canvas. More info: https://storybook.js.org/docs/configure/story-layout
+    layout: 'centered',
+  },
+  // This component will have an automatically generated Autodocs entry: https://storybook.js.org/docs/writing-docs/autodocs
+  tags: ['autodocs'],
+  // More on argTypes: https://storybook.js.org/docs/api/argtypes
+  argTypes: {
+    backgroundColor: { control: 'color' },
+  },
+  // Use `fn` to spy on the onClick arg, which will appear in the actions panel once invoked: https://storybook.js.org/docs/essentials/actions#action-args
+  args: { onClick: fn() },
+};
+
+// More on writing stories with args: https://storybook.js.org/docs/writing-stories/args
+export const Primary = {
+  args: {
+    primary: true,
+    label: 'Button',
+  },
+};
+
+export const Secondary = {
+  args: {
+    label: 'Button',
+  },
+};
+
+export const Large = {
+  args: {
+    size: 'large',
+    label: 'Button',
+  },
+};
+
+export const Small = {
+  args: {
+    size: 'small',
+    label: 'Button',
+  },
+};
+
+/* ================================================================================ */
+import React from 'react';
+import { FaList } from 'react-icons/fa';
+
+export const Header = ({ projectName, dimensions }) => (
+  <header className="bg-blue-600 text-white p-2 flex justify-between items-center">
+    <img src="/images/logo.png" alt="HypeStudio Logo" className="h-8" />
+    <div className="flex items-center space-x-2">
+      <span>{projectName} | {dimensions}</span>
+      <button className="bg-blue-500 p-1 rounded">
+        <FaList className="text-white" />
+      </button>
+    </div>
+  </header>
+);
+/* ================================================================================ */
+import { fn } from '@storybook/test';
+import { Header } from './Header';
+
+export default {
+  title: 'Components/Header',
+  component: Header,
+  parameters: {
+    layout: 'centered',
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    projectName: { control: 'text' },
+    dimensions: { control: 'text' },
+  },
+  args: { onMenuClick: fn() },
+};
+
+export const Default = {
+  args: {
+    projectName: 'My Project',
+    dimensions: '20mm x 40mm x 60mm',
+  },
+};
+
+export const LongProjectName = {
+  args: {
+    projectName: 'Very Long Project Name That Might Overflow',
+    dimensions: '20mm x 40mm x 60mm',
+  },
+};
+/* ================================================================================ */
+import React from 'react';
+
+export const LeftPanel = ({ content }) => (
+  <div className="w-48 bg-white p-2 overflow-y-auto">
+    <ul>
+      {content.map((item, index) => (
+        <li key={index} className="py-1 cursor-pointer hover:bg-gray-100">{item}</li>
+      ))}
+    </ul>
+  </div>
+);
+/* ================================================================================ */
+import { LeftPanel } from './LeftPanel';
+
+export default {
+  title: 'Components/LeftPanel',
+  component: LeftPanel,
+  parameters: {
+    layout: 'centered',
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    content: { control: 'array' },
+  },
+};
+
+export const Default = {
+  args: {
+    content: ['Sketch1', 'Sketch2', 'Fillet1', 'Sketch3'],
+  },
+};
+
+export const EmptyPanel = {
+  args: {
+    content: [],
+  },
+};
+
+export const LongList = {
+  args: {
+    content: Array.from({ length: 20 }, (_, i) => `Item ${i + 1}`),
+  },
+};
+/* ================================================================================ */
+.storybook-page {
+  font-family: 'Nunito Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 24px;
+  padding: 48px 20px;
+  margin: 0 auto;
+  max-width: 600px;
+  color: #333;
+}
+
+.storybook-page h2 {
+  font-weight: 700;
+  font-size: 32px;
+  line-height: 1;
+  margin: 0 0 4px;
+  display: inline-block;
+  vertical-align: top;
+}
+
+.storybook-page p {
+  margin: 1em 0;
+}
+
+.storybook-page a {
+  text-decoration: none;
+  color: #1ea7fd;
+}
+
+.storybook-page ul {
+  padding-left: 30px;
+  margin: 1em 0;
+}
+
+.storybook-page li {
+  margin-bottom: 8px;
+}
+
+.storybook-page .tip {
+  display: inline-block;
+  border-radius: 1em;
+  font-size: 11px;
+  line-height: 12px;
+  font-weight: 700;
+  background: #e7fdd8;
+  color: #66bf3c;
+  padding: 4px 12px;
+  margin-right: 10px;
+  vertical-align: top;
+}
+
+.storybook-page .tip-wrapper {
+  font-size: 13px;
+  line-height: 20px;
+  margin-top: 40px;
+  margin-bottom: 40px;
+}
+
+.storybook-page .tip-wrapper svg {
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+  margin-right: 4px;
+  vertical-align: top;
+  margin-top: 3px;
+}
+
+.storybook-page .tip-wrapper svg path {
+  fill: #1ea7fd;
+}
+
+/* ================================================================================ */
+import React from 'react';
+
+import { Header } from './Header';
+import './page.css';
+
+export const Page = () => {
+  const [user, setUser] = React.useState();
+
+  return (
+    <article>
+      <Header
+        user={user}
+        onLogin={() => setUser({ name: 'Jane Doe' })}
+        onLogout={() => setUser(undefined)}
+        onCreateAccount={() => setUser({ name: 'Jane Doe' })}
+      />
+
+      <section className="storybook-page">
+        <h2>Pages in Storybook</h2>
+        <p>
+          We recommend building UIs with a{' '}
+          <a href="https://componentdriven.org" target="_blank" rel="noopener noreferrer">
+            <strong>component-driven</strong>
+          </a>{' '}
+          process starting with atomic components and ending with pages.
+        </p>
+        <p>
+          Render pages with mock data. This makes it easy to build and review page states without
+          needing to navigate to them in your app. Here are some handy patterns for managing page
+          data in Storybook:
+        </p>
+        <ul>
+          <li>
+            Use a higher-level connected component. Storybook helps you compose such data from the
+            "args" of child component stories
+          </li>
+          <li>
+            Assemble data in the page component from your services. You can mock these services out
+            using Storybook.
+          </li>
+        </ul>
+        <p>
+          Get a guided tutorial on component-driven development at{' '}
+          <a href="https://storybook.js.org/tutorials/" target="_blank" rel="noopener noreferrer">
+            Storybook tutorials
+          </a>
+          . Read more in the{' '}
+          <a href="https://storybook.js.org/docs" target="_blank" rel="noopener noreferrer">
+            docs
+          </a>
+          .
+        </p>
+        <div className="tip-wrapper">
+          <span className="tip">Tip</span> Adjust the width of the canvas with the{' '}
+          <svg width="10" height="10" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+            <g fill="none" fillRule="evenodd">
+              <path
+                d="M1.5 5.2h4.8c.3 0 .5.2.5.4v5.1c-.1.2-.3.3-.4.3H1.4a.5.5 0 01-.5-.4V5.7c0-.3.2-.5.5-.5zm0-2.1h6.9c.3 0 .5.2.5.4v7a.5.5 0 01-1 0V4H1.5a.5.5 0 010-1zm0-2.1h9c.3 0 .5.2.5.4v9.1a.5.5 0 01-1 0V2H1.5a.5.5 0 010-1zm4.3 5.2H2V10h3.8V6.2z"
+                id="a"
+                fill="#999"
+              />
+            </g>
+          </svg>
+          Viewports addon in the toolbar
+        </div>
+      </section>
+    </article>
+  );
+};
+
+/* ================================================================================ */
+import { within, userEvent, expect } from '@storybook/test';
+
+import { Page } from './Page';
+
+export default {
+  title: 'Example/Page',
+  component: Page,
+  parameters: {
+    // More on how to position stories at: https://storybook.js.org/docs/configure/story-layout
+    layout: 'fullscreen',
+  },
+};
+
+export const LoggedOut = {};
+
+// More on interaction testing: https://storybook.js.org/docs/writing-tests/interaction-testing
+export const LoggedIn = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const loginButton = canvas.getByRole('button', { name: /Log in/i });
+    await expect(loginButton).toBeInTheDocument();
+    await userEvent.click(loginButton);
+    await expect(loginButton).not.toBeInTheDocument();
+
+    const logoutButton = canvas.getByRole('button', { name: /Log out/i });
+    await expect(logoutButton).toBeInTheDocument();
+  },
+};
+
+/* ================================================================================ */
+import React from 'react';
+import { FaList, FaPencilAlt, FaCube, FaGlobe, FaDrawPolygon, FaRuler } from 'react-icons/fa';
+
+const toolbarItems = [
+  { icon: FaList, name: 'List View' },
+  { icon: FaPencilAlt, name: 'Sketch View' },
+  { icon: FaCube, name: 'Extrude View' },
+  { icon: FaGlobe, name: 'Import/Export View' },
+  { icon: FaDrawPolygon, name: 'Fillet/Chamfer View' },
+  { icon: FaRuler, name: 'Dimension Tool View' },
+];
+
+export const Toolbar = ({ activeView, onItemClick }) => (
+  <div className="bg-white p-2 flex space-x-4">
+    {toolbarItems.map((item, index) => (
+      <button
+        key={index}
+        onClick={() => onItemClick(item.name)}
+        className={`p-2 rounded transition-all duration-200 ease-in-out ${
+          activeView === item.name 
+            ? 'bg-blue-200 outline outline-2 outline-green-500' 
+            : 'hover:bg-blue-100'
+        }`}
+      >
+        <item.icon />
+      </button>
+    ))}
+  </div>
+);
+/* ================================================================================ */
+import { fn } from '@storybook/test';
+import { Toolbar } from './Toolbar';
+
+export default {
+  title: 'Components/Toolbar',
+  component: Toolbar,
+  parameters: {
+    layout: 'centered',
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    activeView: {
+      control: 'select',
+      options: ['List View', 'Sketch View', 'Extrude View', 'Import/Export View', 'Fillet/Chamfer View', 'Dimension Tool View'],
+    },
+  },
+  args: { onItemClick: fn() },
+};
+
+export const Default = {
+  args: {
+    activeView: 'List View',
+  },
+};
+
+export const SketchViewActive = {
+  args: {
+    activeView: 'Sketch View',
+  },
+};
+/* ================================================================================ */
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}

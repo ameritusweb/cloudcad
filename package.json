@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "html-minifier": "^4.0.0",
+    "ignore": "^5.3.1",
+    "yargs": "^17.7.2"
+  }
+}
