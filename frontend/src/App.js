@@ -25,7 +25,8 @@ function App() {
     fetchInitialModel();
   }, []);
 
-  const handleModelUpdate = (updatedModelData) => {
+  const handleModelUpdate = (modelId, updatedModelData) => {
+    setCurrentModelId(modelId);
     setModelData(updatedModelData);
   };
 

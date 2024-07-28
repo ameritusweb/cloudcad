@@ -14,8 +14,7 @@ const AdvancedCadControlPanel = ({ currentModelId, onModelUpdate }) => {
 
   const handleNewModel = async () => {
     try {
-      const response = await ApiService.createModel();
-      const data = await response.json();
+      const data = await ApiService.createModel();
       if (data.success) {
         onModelUpdate(data.modelId, data.modelData);
         showMessage('New model created');
@@ -70,6 +69,7 @@ const AdvancedCadControlPanel = ({ currentModelId, onModelUpdate }) => {
               <option value="structuralAnalysis">Structural Analysis</option>
             </select>
           </div>
+          
 
           {currentOperation === 'circularCut' && (
             <CircularCutControls
