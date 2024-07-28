@@ -1,5 +1,5 @@
 import { fn } from '@storybook/test';
-import { BabylonViewport } from '../components/BabylonViewport';
+import { BabylonViewport } from './BabylonViewport';
 
 export default {
   title: 'Components/BabylonViewport',

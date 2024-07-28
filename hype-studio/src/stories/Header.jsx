@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaList } from 'react-icons/fa';
 
-const Header = ({ projectName, dimensions }) => (
+export const Header = ({ projectName, dimensions }) => (
   <header className="bg-blue-600 text-white p-2 flex justify-between items-center">
     <img src="/images/logo.png" alt="HypeStudio Logo" className="h-8" />
     <div className="flex items-center space-x-2">
@@ -12,5 +12,3 @@ const Header = ({ projectName, dimensions }) => (
     </div>
   </header>
 );
-
-export default Header;

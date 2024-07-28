@@ -21,5 +21,3 @@ export const parameters = {
     handlers: handlers,
   },
 };
-
-export default preview;

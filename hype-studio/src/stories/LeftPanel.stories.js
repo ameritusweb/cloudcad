@@ -1,4 +1,4 @@
-import { LeftPanel } from '../components/LeftPanel';
+import { LeftPanel } from './LeftPanel';
 
 export default {
   title: 'Components/LeftPanel',

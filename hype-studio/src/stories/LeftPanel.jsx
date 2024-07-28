@@ -1,6 +1,6 @@
 import React from 'react';
 
-const LeftPanel = ({ content }) => (
+export const LeftPanel = ({ content }) => (
   <div className="w-48 bg-white p-2 overflow-y-auto">
     <ul>
       {content.map((item, index) => (
@@ -9,5 +9,3 @@ const LeftPanel = ({ content }) => (
     </ul>
   </div>
 );
-
-export default LeftPanel;

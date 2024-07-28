@@ -1,5 +1,5 @@
 import { fn } from '@storybook/test';
-import { Toolbar } from '../components/Toolbar';
+import { Toolbar } from './Toolbar';
 
 export default {
   title: 'Components/Toolbar',

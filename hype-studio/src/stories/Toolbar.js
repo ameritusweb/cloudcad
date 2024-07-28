@@ -10,7 +10,7 @@ const toolbarItems = [
   { icon: FaRuler, name: 'Dimension Tool View' },
 ];
 
-const Toolbar = ({ activeView, onItemClick }) => (
+export const Toolbar = ({ activeView, onItemClick }) => (
   <div className="bg-white p-2 flex space-x-4">
     {toolbarItems.map((item, index) => (
       <button
@@ -27,5 +27,3 @@ const Toolbar = ({ activeView, onItemClick }) => (
     ))}
   </div>
 );
-
-export default Toolbar;

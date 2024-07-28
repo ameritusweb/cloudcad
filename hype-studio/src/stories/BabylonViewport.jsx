@@ -4,7 +4,7 @@ import {
   StandardMaterial, Color3, PointerEventTypes
 } from '@babylonjs/core';
 
-const BabylonViewport = ({ onViewChange, controlMode }) => {
+export const BabylonViewport = ({ onViewChange, controlMode }) => {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const boxRef = useRef(null);
@@ -174,5 +174,3 @@ const BabylonViewport = ({ onViewChange, controlMode }) => {
 
   return <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />;
 };
-
-export default BabylonViewport;

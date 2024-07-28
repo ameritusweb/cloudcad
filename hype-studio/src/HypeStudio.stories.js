@@ -1,6 +1,6 @@
 import React from 'react';
-import { HypeStudio } from '../HypeStudio';
-import { handlers } from 'mocks/handlers';
+import { HypeStudio } from './HypeStudio';
+import { handlers } from './mocks/handlers';
 
 export default {
   title: 'HypeStudio',
