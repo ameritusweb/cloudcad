@@ -32,6 +32,9 @@ const outputFilePath = path.resolve(argv.outputFile);
 const gitignorePath = path.join(appDirectory, '.gitignore');
 const ig = ignore();
 
+// Custom ignore list
+const customIgnoreList = ['mockServiceWorker.js'];
+
 // Load the .gitignore file
 async function loadGitignore() {
   try {
@@ -45,6 +48,9 @@ async function loadGitignore() {
       throw error;
     }
   }
+
+  // Add custom ignore list
+  ig.add(customIgnoreList);
 }
 
 // Helper function to read file content
