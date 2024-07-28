@@ -55,6 +55,7 @@
     "autoprefixer": "^10.4.19",
     "eslint-plugin-storybook": "^0.8.0",
     "msw": "^2.3.4",
+    "msw-storybook-addon": "^2.0.3",
     "postcss": "^8.4.40",
     "prop-types": "^15.8.1",
     "react-app-rewired": "^2.2.1",
