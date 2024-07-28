@@ -36,7 +36,6 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
     // Wireframe cube
     createWireframeCube(scene, (normal) => {
       const newView = getViewFromNormal(normal);
-      console.log("New view:", newView);  // Debug log
       setCurrentView(newView);
       onViewChange(newView);
     });
@@ -46,13 +45,20 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
     });
 
     if (currentModelView === '') {
-        onViewChange('Front');
+      onViewChange('Front');
     }
+
+    // Prevent default behavior for right-click
+    scene.onPointerDown = (evt) => {
+        if (evt.button === 2) {
+            evt.preventDefault();
+        }
+        };
 
     return () => {
       engine.dispose();
     };
-  }, [onViewChange]);
+  }, [onViewChange, currentModelView]);
 
   useEffect(() => {
     if (cameraRef.current) {
@@ -69,8 +75,14 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
   const updateCameraControls = () => {
     const camera = cameraRef.current;
     const scene = sceneRef.current;
-    
-    // Reset all camera controls
+    if (!camera || !scene) return;
+
+    // Store current camera position and target
+    const currentPosition = camera.position.clone();
+    const currentTarget = camera.target.clone();
+
+    // Reset camera to apply new controls
+    camera.detachControl();
     camera.inputs.clear();
 
     switch (controlMode) {
@@ -80,7 +92,9 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
       case 'pan':
         camera.inputs.addPointers();
         camera.panningSensibility = 50;
-        camera.inputs.attached.pointers.buttons = [1]; // Middle mouse button
+        camera.inputs.attached.pointers.buttons = [0]; // Left mouse button
+        camera.inputs.attached.pointers.multiTouchPanAndZoom = false;
+        camera.inputs.attached.pointers.multiTouchPanning = false;
         break;
       case 'rotate':
       default:
@@ -90,13 +104,20 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
         break;
     }
 
-    // Prevent default behavior for right-click
+    // Reattach control and restore camera position and target
+    camera.attachControl(canvasRef.current, true);
+    camera.setPosition(currentPosition);
+    camera.setTarget(currentTarget);
+
+    // Prevent context menu on right-click
     scene.onPointerDown = (evt) => {
-        if (evt.button === 2) {
-          evt.preventDefault();
-        }
-      };
-}
+      if (evt.button === 2) {
+        evt.preventDefault();
+      }
+    };
+
+    console.log(`Control mode updated to: ${controlMode}`);
+  };
 
   useEffect(() => {
     if (cameraRef.current && sceneRef.current) {
