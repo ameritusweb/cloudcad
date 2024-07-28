@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import Header from './stories/Header';
-import Toolbar from './stories/Toolbar';
-import LeftPanel from './stories/LeftPanel';
-import BabylonViewport from './stories/BabylonViewport';
+import { Header } from './stories/Header';
+import { Toolbar } from './stories/Toolbar';
+import { LeftPanel } from './stories/LeftPanel';
+import { BabylonViewport } from './stories/BabylonViewport';
 import { FaSearchPlus, FaHandPaper, FaSyncAlt } from 'react-icons/fa';
 
 const HypeStudio = () => {
