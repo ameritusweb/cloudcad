@@ -182,40 +182,6 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
     }
   }, [controlMode, updateCameraControls]);
 
-  useEffect(() => {
-    if (cameraRef.current && sceneRef.current) {
-      const camera = cameraRef.current;
-      const scene = sceneRef.current;
-      
-      // Reset all camera controls
-      camera.inputs.clear();
-
-      switch (controlMode) {
-        case 'zoom':
-          camera.inputs.addMouseWheel();
-          break;
-        case 'pan':
-          camera.inputs.addPointers();
-          camera.panningSensibility = 50;
-          camera.inputs.attached.pointers.buttons = [1]; // Middle mouse button
-          break;
-        case 'rotate':
-          camera.inputs.addPointers();
-          camera.inputs.attached.pointers.buttons = [0, 1]; // Left and middle mouse buttons
-          break;
-        default:
-          break;
-      }
-
-      // Prevent default behavior for right-click
-      scene.onPointerDown = (evt) => {
-        if (evt.button === 2) {
-          evt.preventDefault();
-        }
-      };
-    }
-  }, [controlMode]);
-
   const determineFaceClicked = (normalizedX, normalizedY) => {
     if (normalizedY < 0.2) {
       return normalizedX < 0.6 ? "Top" : "Back";
