@@ -44,7 +44,7 @@ const HypeStudio = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
+    <div className="flex flex-col h-full w-full bg-gray-100">
       <Header projectName={projectInfo.name} dimensions={projectInfo.dimensions} />
       <Toolbar activeView={activeView} onItemClick={handleToolbarClick} />
       <div className="flex flex-1">
