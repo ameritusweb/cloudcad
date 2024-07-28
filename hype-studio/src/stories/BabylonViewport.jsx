@@ -15,54 +15,132 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
   const createWireframeCube = useCallback((scene, onFaceClick) => {
     const advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("UI");
     
-    const button = Button.CreateImageOnlyButton("wireframeButton", "data:image/svg+xml;base64," + btoa(`
-      <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <path d="M20 80 L80 80 L80 20 L20 20 Z" fill="none" stroke="white" stroke-width="2"/>
-        <path d="M20 20 L35 5 L95 5 L80 20" fill="none" stroke="white" stroke-width="2"/>
-        <path d="M80 80 L95 65 L95 5" fill="none" stroke="white" stroke-width="2"/>
-        <path d="M20 80 L35 65 L95 65" fill="none" stroke="white" stroke-width="2"/>
-        <path d="M35 5 L35 65" fill="none" stroke="white" stroke-width="2"/>
-      </svg>
-    `));
+    const createFaceButton = (name, path, hoverPath, x, y, width, height) => {
+      const button = Button.CreateImageOnlyButton(name, "data:image/svg+xml;base64," + btoa(`
+        <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <path d="${path}" fill="transparent" stroke="white" stroke-width="2" />
+        </svg>
+      `));
 
-    button.width = "100px";
-    button.height = "100px";
-    button.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
-    button.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-    button.top = "60px";
-    button.left = "-10px";
-    
-    button.onPointerUpObservable.add((eventData) => {
-      const buttonRect = button._currentMeasure;
-      const screenWidth = scene.getEngine().getRenderWidth();
-      const screenHeight = scene.getEngine().getRenderHeight();
+      button.width = "100px";
+      button.height = "100px";
+      button.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+      button.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+      button.top = "60px";
+      button.left = "-10px";
+      button.thickness = 0;
+      button.background = "transparent";
+      button.color = "transparent";
 
-      const buttonLeft = screenWidth - parseFloat(button.width) + parseFloat(button.left);
-      const buttonTop = parseFloat(button.top);
+      button.onPointerEnterObservable.add(() => {
+        button.image.source = "data:image/svg+xml;base64," + btoa(`
+          <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="${hoverPath}" fill="rgba(255,255,255,0.3)" stroke="white" stroke-width="2" />
+          </svg>
+        `);
+      });
 
-      const relativeX = eventData.x - buttonLeft;
-      const relativeY = eventData.y - buttonTop;
+      button.onPointerOutObservable.add(() => {
+        button.image.source = "data:image/svg+xml;base64," + btoa(`
+          <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="${path}" fill="transparent" stroke="white" stroke-width="2" />
+          </svg>
+        `);
+      });
 
-      const normalizedX = relativeX / parseFloat(button.width);
-      const normalizedY = relativeY / parseFloat(button.height);
+      button.onPointerUpObservable.add(() => {
+        onFaceClick(getFaceNormal(name));
+      });
 
-      console.log("Normalized click position:", normalizedX, normalizedY);  // Debug log
+      advancedTexture.addControl(button);
 
-      if (normalizedX >= 0 && normalizedX <= 1 && normalizedY >= 0 && normalizedY <= 1) {
-        const face = determineFaceClicked(normalizedX, normalizedY);
-        console.log("Clicked face:", face);  // Debug log
+      return { button, hoverPath };
+    };
 
-        const normal = getFaceNormal(face);
-        console.log("Face normal:", normal);  // Debug log
+    // Create buttons for each face
+    createFaceButton(
+      "Front",
+      "M20 80 L80 80 L80 20 L20 20 Z",
+      "M20 80 L80 80 L80 20 L20 20 Z",
+      20, 20, 60, 60
+    );
+    createFaceButton(
+      "Top",
+      "M20 20 L35 5 L95 5 L80 20",
+      "M20 20 L35 5 L95 5 L80 20 Z",
+      20, 5, 60, 15
+    );
+    createFaceButton(
+      "Right",
+      "M80 20 L95 5 L95 65 L80 80",
+      "M80 20 L95 5 L95 65 L80 80 Z",
+      80, 20, 15, 60
+    );
+    createFaceButton(
+      "Left",
+      "M20 20 L35 5 L35 65 L20 80",
+      "M20 20 L35 5 L35 65 L20 80 Z",
+      5, 20, 15, 60
+    );
+    createFaceButton(
+      "Bottom",
+      "M20 80 L35 65 L95 65 L80 80",
+      "M20 80 L35 65 L95 65 L80 80 Z",
+      20, 80, 60, 15
+    );
+    var backFaceButton = createFaceButton(
+        "Back",
+        "M35 5 L95 5 L95 65 L35 65 Z",
+        "M35 5 L95 5 L95 65 L35 65 Z"
+    );
 
-        onFaceClick(normal);
-      } else {
-        console.log("Click outside the button");
-      }
+    // Create a button for the back face (surrounding area)
+    const backButton = new Rectangle();
+
+    backButton.width = "100px";
+    backButton.height = "100px";
+    backButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    backButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    backButton.top = "60px";
+    backButton.left = "-10px";
+    backButton.thickness = 5;
+    backButton.color = "transparent";
+    backButton.background = "transparent";
+
+    backButton.onPointerEnterObservable.add(() => {
+        backFaceButton.button.image.source = "data:image/svg+xml;base64," + btoa(`
+          <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="${backFaceButton.hoverPath}" fill="rgba(255,255,255,0.3)" stroke="white" stroke-width="2" />
+          </svg>
+        `);
+      });
+
+    backButton.onPointerOutObservable.add(() => {
+        backFaceButton.button.image.source = "data:image/svg+xml;base64," + btoa(`
+            <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="${backFaceButton.hoverPath}" fill="transparent" stroke="white" stroke-width="2" />
+            </svg>
+        `);
     });
 
-    advancedTexture.addControl(button);
+    backButton.onPointerUpObservable.add(() => {
+      onFaceClick(getFaceNormal("Back"));
+    });
+
+    advancedTexture.addControl(backButton);
   }, []);
+
+  const getFaceNormal = (face) => {
+    switch (face) {
+      case "Right": return new Vector3(1, 0, 0);
+      case "Left": return new Vector3(-1, 0, 0);
+      case "Top": return new Vector3(0, 1, 0);
+      case "Bottom": return new Vector3(0, -1, 0);
+      case "Front": return new Vector3(0, 0, 1);
+      case "Back": return new Vector3(0, 0, -1);
+      default: return new Vector3(0, 0, 1);
+    }
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -181,32 +259,6 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
       updateCameraControls();
     }
   }, [controlMode, updateCameraControls]);
-
-  const determineFaceClicked = (normalizedX, normalizedY) => {
-    if (normalizedY < 0.2) {
-      return normalizedX < 0.6 ? "Top" : "Back";
-    } else if (normalizedY > 0.8) {
-      return "Bottom";
-    } else if (normalizedX < 0.2) {
-      return "Left";
-    } else if (normalizedX > 0.8) {
-      return "Right";
-    } else {
-      return "Front";
-    }
-  };
-
-  const getFaceNormal = (face) => {
-    switch (face) {
-      case "Right": return new Vector3(1, 0, 0);
-      case "Left": return new Vector3(-1, 0, 0);
-      case "Top": return new Vector3(0, 1, 0);
-      case "Bottom": return new Vector3(0, -1, 0);
-      case "Front": return new Vector3(0, 0, 1);
-      case "Back": return new Vector3(0, 0, -1);
-      default: return new Vector3(0, 0, 1);
-    }
-  };
 
   const getViewFromNormal = (normal) => {
     if (normal.equalsWithEpsilon(Vector3.Right())) return "Right";

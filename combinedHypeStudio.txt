@@ -469,10 +469,10 @@ export default reportWebVitals;
 import '@testing-library/jest-dom';
 
 /* ================================================================================ */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
   Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder,
-  StandardMaterial, Color3, PointerEventTypes
+  StandardMaterial, Color3, PointerInput
 } from '@babylonjs/core';
 import { Button, Rectangle, AdvancedDynamicTexture, Control } from '@babylonjs/gui';
 
@@ -483,127 +483,7 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
   const cameraRef = useRef(null);
   const [currentView, setCurrentView] = useState('Front');
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const engine = new Engine(canvas, true);
-    const scene = new Scene(engine);
-    sceneRef.current = scene;
-
-    // Camera
-    const camera = new ArcRotateCamera("camera1", Math.PI / 2, Math.PI / 2, 10, Vector3.Zero(), scene);
-    camera.attachControl(canvas, true);
-    cameraRef.current = camera;
-
-    // Light
-    new HemisphericLight("light", new Vector3(0, 1, 0), scene);
-
-    // Main box
-    const box = MeshBuilder.CreateBox("box", { size: 2 }, scene);
-    const boxMaterial = new StandardMaterial("boxMaterial", scene);
-    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
-    box.material = boxMaterial;
-    boxRef.current = box;
-
-    // Wireframe cube
-    createWireframeCube(scene, (normal) => {
-      const newView = getViewFromNormal(normal);
-      console.log("New view:", newView);  // Debug log
-      setCurrentView(newView);
-      onViewChange(newView);
-    });
-
-    engine.runRenderLoop(() => {
-      scene.render();
-    });
-
-    if (currentModelView === '') {
-        onViewChange('Front');
-    }
-
-    return () => {
-      engine.dispose();
-    };
-  }, [onViewChange]);
-
-  useEffect(() => {
-    if (cameraRef.current) {
-      updateCameraPosition(currentView);
-    }
-  }, [currentView]);
-
-  useEffect(() => {
-    if (cameraRef.current && sceneRef.current) {
-      updateCameraControls();
-    }
-  }, [controlMode]);
-
-  const updateCameraControls = () => {
-    const camera = cameraRef.current;
-    const scene = sceneRef.current;
-    
-    // Reset all camera controls
-    camera.inputs.clear();
-
-    switch (controlMode) {
-      case 'zoom':
-        camera.inputs.addMouseWheel();
-        break;
-      case 'pan':
-        camera.inputs.addPointers();
-        camera.panningSensibility = 50;
-        camera.inputs.attached.pointers.buttons = [1]; // Middle mouse button
-        break;
-      case 'rotate':
-      default:
-        camera.inputs.addMouseWheel();
-        camera.inputs.addPointers();
-        camera.inputs.attached.pointers.buttons = [0, 1]; // Left and middle mouse buttons
-        break;
-    }
-
-    // Prevent default behavior for right-click
-    scene.onPointerDown = (evt) => {
-        if (evt.button === 2) {
-          evt.preventDefault();
-        }
-      };
-}
-
-  useEffect(() => {
-    if (cameraRef.current && sceneRef.current) {
-      const camera = cameraRef.current;
-      const scene = sceneRef.current;
-      
-      // Reset all camera controls
-      camera.inputs.clear();
-
-      switch (controlMode) {
-        case 'zoom':
-          camera.inputs.addMouseWheel();
-          break;
-        case 'pan':
-          camera.inputs.addPointers();
-          camera.panningSensibility = 50;
-          camera.inputs.attached.pointers.buttons = [1]; // Middle mouse button
-          break;
-        case 'rotate':
-          camera.inputs.addPointers();
-          camera.inputs.attached.pointers.buttons = [0, 1]; // Left and middle mouse buttons
-          break;
-        default:
-          break;
-      }
-
-      // Prevent default behavior for right-click
-      scene.onPointerDown = (evt) => {
-        if (evt.button === 2) {
-          evt.preventDefault();
-        }
-      };
-    }
-  }, [controlMode]);
-
-  const createWireframeCube = (scene, onFaceClick) => {
+  const createWireframeCube = useCallback((scene, onFaceClick) => {
     const advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("UI");
     
     const button = Button.CreateImageOnlyButton("wireframeButton", "data:image/svg+xml;base64," + btoa(`
@@ -653,7 +533,125 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
     });
 
     advancedTexture.addControl(button);
-  };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const engine = new Engine(canvas, true);
+    const scene = new Scene(engine);
+    sceneRef.current = scene;
+
+    // Camera
+    const camera = new ArcRotateCamera("camera1", Math.PI / 2, Math.PI / 2, 10, Vector3.Zero(), scene);
+    camera.attachControl(canvas, true);
+    cameraRef.current = camera;
+
+    // Light
+    new HemisphericLight("light", new Vector3(0, 1, 0), scene);
+
+    // Main box
+    const box = MeshBuilder.CreateBox("box", { size: 2 }, scene);
+    const boxMaterial = new StandardMaterial("boxMaterial", scene);
+    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
+    box.material = boxMaterial;
+    boxRef.current = box;
+
+    // Wireframe cube
+    createWireframeCube(scene, (normal) => {
+      const newView = getViewFromNormal(normal);
+      setCurrentView(newView);
+      onViewChange(newView);
+    });
+
+    engine.runRenderLoop(() => {
+      scene.render();
+    });
+
+    if (currentModelView === '') {
+      onViewChange('Front');
+    }
+
+    // Prevent default behavior for right-click
+    scene.onPointerDown = (evt) => {
+        if (evt.button === 2) {
+            evt.preventDefault();
+        }
+        };
+
+    return () => {
+      engine.dispose();
+    };
+  }, [onViewChange, currentModelView, createWireframeCube]);
+
+  useEffect(() => {
+    if (cameraRef.current) {
+      updateCameraPosition(currentView);
+    }
+  }, [currentView]);
+
+  const updateCameraControls = useCallback(() => {
+    const camera = cameraRef.current;
+    const scene = sceneRef.current;
+    if (!camera || !scene) return;
+
+    // Store current camera position and target
+    const currentPosition = camera.position.clone();
+    const currentTarget = camera.target.clone();
+
+    // Reset camera to apply new controls
+    camera.detachControl();
+    camera.inputs.clear();
+
+    switch (controlMode) {
+      case 'zoom':
+        camera.inputs.addMouseWheel();
+        break;
+      case 'pan':
+        camera.inputs.addPointers();
+        camera.panningSensibility = 50;
+        camera.inputs.attached.pointers.buttons = [0]; // Left mouse button
+        camera.inputs.attached.pointers.angularSensibilityX = 0;
+        camera.inputs.attached.pointers.angularSensibilityY = 0;
+        
+        // Override onButtonDown for custom pan behavior
+        const originalOnButtonDown = camera.inputs.attached.pointers.onButtonDown;
+        camera.inputs.attached.pointers.onButtonDown = (evt) => {
+          if (evt.button === 0) { // Left mouse button
+            camera.inputs.attached.pointers._isPanClick = true;
+            evt.preventDefault();
+          } else {
+            originalOnButtonDown(evt);
+          }
+        };
+        break;
+      case 'rotate':
+      default:
+        camera.inputs.addMouseWheel();
+        camera.inputs.addPointers();
+        camera.inputs.attached.pointers.buttons = [0, 1]; // Left and middle mouse buttons
+        break;
+    }
+
+    // Reattach control and restore camera position and target
+    camera.attachControl(canvasRef.current, true);
+    camera.setPosition(currentPosition);
+    camera.setTarget(currentTarget);
+
+    // Prevent context menu on right-click
+    scene.onPointerDown = (evt) => {
+      if (evt.button === 2) {
+        evt.preventDefault();
+      }
+    };
+
+    console.log(`Control mode updated to: ${controlMode}`);
+  }, [controlMode]);
+
+  useEffect(() => {
+    if (cameraRef.current && sceneRef.current) {
+      updateCameraControls();
+    }
+  }, [controlMode, updateCameraControls]);
 
   const determineFaceClicked = (normalizedX, normalizedY) => {
     if (normalizedY < 0.2) {
