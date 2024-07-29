@@ -6,9 +6,9 @@ import {
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import * as meshUtils from '../utils/meshUtils';
 
-export const BabylonViewport = ({ currentModelView, onViewChange, onSelectionChange, controlMode }) => {
-  const canvasRef = useRef(null);
-  const engineRef = useRef(null);
+export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange, onSelectionChange, controlMode }) => {
+  const engineRef = useRef(engine);
+  const canvasRef = useRef(canvas);
   const sceneRef = useRef(null);
   const controlSceneRef = useRef(null);
   const boxRef = useRef(null);
@@ -124,10 +124,9 @@ export const BabylonViewport = ({ currentModelView, onViewChange, onSelectionCha
   };
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const engine = new Engine(canvas, true);
-    engineRef.current = engine;
 
+    if (!engine || !canvas) return;
+    
     // Main scene
     const mainScene = new Scene(engine);
     sceneRef.current = mainScene;
@@ -408,5 +407,5 @@ export const BabylonViewport = ({ currentModelView, onViewChange, onSelectionCha
     camera.setTarget(Vector3.Zero());
   };
 
-  return <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />;
+  return null;
 };

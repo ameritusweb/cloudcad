@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Engine } from '@babylonjs/core';
 import { Header } from './stories/Header';
 import { Toolbar } from './stories/Toolbar';
 import { LeftPanel } from './stories/LeftPanel';
@@ -15,6 +16,26 @@ const HypeStudio = () => {
   const [currentModelView, setCurrentModelView] = useState('');
   const [currentModelSelection, setCurrentModelSelection] = useState('');
   const [controlMode, setControlMode] = useState('rotate');
+  // New state for the engine
+  const [engine, setEngine] = useState(null);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    // Create the engine
+    if (canvasRef.current && !engine) {
+      const newEngine = new Engine(canvasRef.current, true);
+      setEngine(newEngine);
+
+      // Set up the resize event listener
+      window.addEventListener('resize', () => newEngine.resize());
+
+      // Cleanup function
+      return () => {
+        window.removeEventListener('resize', () => newEngine.resize());
+        newEngine.dispose();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     // Fetch project info
@@ -59,12 +80,17 @@ const HypeStudio = () => {
       <div className="flex flex-1">
         <LeftPanel content={leftPanelContent} />
         <div className="flex-1 relative">
-          <BabylonViewport 
-            currentModelView={currentModelView} 
-            onViewChange={handleViewChange} 
-            onSelectionChange={handleSelectionChange}
-            controlMode={controlMode} 
-          />
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+          {engine && (
+            <BabylonViewport 
+              engine={engine}
+              canvas={canvasRef.current}
+              currentModelView={currentModelView} 
+              onViewChange={handleViewChange} 
+              onSelectionChange={handleSelectionChange}
+              controlMode={controlMode} 
+            />
+          )}
           <div className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
             Current View: {currentModelView}
           </div>
