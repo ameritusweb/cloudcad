@@ -3,13 +3,17 @@ import { Header } from './stories/Header';
 import { Toolbar } from './stories/Toolbar';
 import { LeftPanel } from './stories/LeftPanel';
 import { BabylonViewport } from './stories/BabylonViewport';
+import { PropertyPanel } from './stories/PropertyPanel';  // Import the new PropertyPanel
 import { FaSearchPlus, FaHandPaper, FaSyncAlt } from 'react-icons/fa';
+import { useHypeStudioModel } from './contexts/HypeStudioContext';  // Import the context hook
 
 const HypeStudio = () => {
+  const model = useHypeStudioModel();  // Use the HypeStudio model
   const [activeView, setActiveView] = useState('List View');
   const [leftPanelContent, setLeftPanelContent] = useState([]);
   const [projectInfo, setProjectInfo] = useState({ name: '', dimensions: '' });
   const [currentModelView, setCurrentModelView] = useState('');
+  const [currentModelSelection, setCurrentModelSelection] = useState('');
   const [controlMode, setControlMode] = useState('rotate');
 
   useEffect(() => {
@@ -38,6 +42,11 @@ const HypeStudio = () => {
     console.log(`View changed to ${newView}`);
   };
 
+  const handleSelectionChange = (newSelection) => {
+    setCurrentModelSelection(newSelection);
+    console.log(`Selection changed to ${newSelection}`);
+  }
+
   const handleControlModeChange = (mode) => {
     setControlMode(mode);
     console.log(`Control mode changed to ${mode}`);
@@ -50,7 +59,12 @@ const HypeStudio = () => {
       <div className="flex flex-1">
         <LeftPanel content={leftPanelContent} />
         <div className="flex-1 relative">
-          <BabylonViewport currentModelView={currentModelView} onViewChange={handleViewChange} controlMode={controlMode} />
+          <BabylonViewport 
+            currentModelView={currentModelView} 
+            onViewChange={handleViewChange} 
+            onSelectionChange={handleSelectionChange}
+            controlMode={controlMode} 
+          />
           <div className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
             Current View: {currentModelView}
           </div>
@@ -75,6 +89,7 @@ const HypeStudio = () => {
             </button>
           </div>
         </div>
+        <PropertyPanel />  {/* Add the PropertyPanel here */}
       </div>
       <img src="/images/banner.png" alt="Banner" className="w-48 absolute bottom-2 left-2" />
     </div>

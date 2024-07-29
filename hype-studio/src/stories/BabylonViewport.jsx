@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
   Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, UtilityLayerRenderer, ExecuteCodeAction, DynamicTexture,
-  StandardMaterial, Color3, Camera, ActionManager, Matrix, RenderTargetTexture, Viewport, Mesh
+  StandardMaterial, Color3, Camera, TransformNode, ActionManager, Matrix, RenderTargetTexture, Viewport, Mesh
 } from '@babylonjs/core';
-import { Button, Rectangle, Line, AdvancedDynamicTexture, MeshButton3D, StackPanel3D, Control, StackPanel } from '@babylonjs/gui';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import * as meshUtils from '../utils/meshUtils';
 
-export const BabylonViewport = ({ currentModelView, onViewChange, controlMode }) => {
+export const BabylonViewport = ({ currentModelView, onViewChange, onSelectionChange, controlMode }) => {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const sceneRef = useRef(null);
@@ -14,6 +15,9 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
   const cameraRef = useRef(null);
   const hoverFaceRef = useRef(null);
   const [currentView, setCurrentView] = useState('Front');
+  const [meshes, setMeshes] = useState({});
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const model = useHypeStudioModel();
 
   const createControlCube = useCallback((scene, onFaceClick) => {
     const cube = MeshBuilder.CreateBox("controlCube", { size: 0.5 }, scene);
@@ -43,10 +47,12 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
       faceMesh.material = faceMaterial;
 
       faceMesh.actionManager = new ActionManager(scene);
+      console.log(`Registering action for face: ${name}`);
       faceMesh.actionManager.registerAction(
         new ExecuteCodeAction(
           ActionManager.OnPickTrigger,
           () => {
+            console.log(`Action triggered for face: ${name}`);
             if (hoverFaceRef.current) {
                 onFaceClick(hoverFaceRef.current);
             } else {
@@ -80,6 +86,43 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
     return cube;
   }, []);
 
+  const handleSketchInteraction = (sketchId, pickResult) => {
+    const sketch = model.elements.sketches[sketchId];
+    if (sketch) {
+      const closestPointIndex = meshUtils.findClosestPointIndex(sketch.geometry, pickResult.pickedPoint);
+      if (closestPointIndex !== -1) {
+        meshUtils.startDragOperation(
+          sceneRef.current,
+          (dragPoint) => {
+            const newGeometry = [...sketch.geometry];
+            newGeometry[closestPointIndex] = {
+              x: dragPoint.x,
+              y: dragPoint.y
+            };
+            model.updateElement('sketches', sketchId, { geometry: newGeometry });
+          }
+        );
+      }
+    }
+  };
+
+  const handleExtrusionInteraction = (extrusionId, pickResult) => {
+    const extrusion = model.elements.extrusions[extrusionId];
+    if (extrusion) {
+      const startDepth = extrusion.depth;
+      const startY = pickResult.pickedPoint.y;
+
+      meshUtils.startDragOperation(
+        sceneRef.current,
+        (dragPoint) => {
+          const depthChange = dragPoint.y - startY;
+          const newDepth = Math.max(0, startDepth + depthChange);
+          model.updateElement('extrusions', extrusionId, { depth: newDepth });
+        }
+      );
+    }
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const engine = new Engine(canvas, true);
@@ -96,16 +139,17 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), mainScene);
     light.intensity = 0.7;
 
-    const box = MeshBuilder.CreateBox("box", { size: 2 }, mainScene);
-    const boxMaterial = new StandardMaterial("boxMaterial", mainScene);
-    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
-    box.material = boxMaterial;
+    // const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, mainScene);
+    // const boxMaterial = new StandardMaterial("boxMaterial", mainScene);
+    // boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
+    // box.material = boxMaterial;
 
     // Control scene
     const controlScene = new Scene(engine);
     controlSceneRef.current = controlScene;
     controlScene.autoClear = false; // This is crucial for overlaying
-
+    controlScene.detachControl();
+    controlScene.attachControl(canvas, true);
     const controlCamera = new ArcRotateCamera("controlCamera", Math.PI / 4, Math.PI / 3, 10, Vector3.Zero(), controlScene);
     controlCamera.mode = Camera.ORTHOGRAPHIC_CAMERA;
     controlCamera.orthoTop = 1;
@@ -128,6 +172,10 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
     const controlViewport = new Viewport(0.75, 0.45, 0.25, 0.5);
     controlCamera.viewport = controlViewport;
 
+    mainScene.getSketchById = (id) => {
+      return model.elements.sketches[id];
+    };
+
     engine.runRenderLoop(() => {
       mainScene.render();
       controlScene.render();
@@ -140,18 +188,107 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
         if (currentModelView === '') {
       onViewChange('Front');
     }
+    
+        const handleMainScenePointerDown = (evt) => {
+          if (evt.button === 2) {
+              evt.preventDefault();
+              return;
+          }
+  
+          const scene = sceneRef.current;
+          const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+          if (pickResult.hit) {
+              let pickedNode = pickResult.pickedMesh;
+              while (pickedNode && !(pickedNode instanceof TransformNode)) {
+                  pickedNode = pickedNode.parent;
+              }
+              
+              if (pickedNode) {
+                  const nodeId = pickedNode.id;
+          
+                  // Clear previous selection
+                  if (selectedNodeId && meshes[selectedNodeId]) {
+                      meshUtils.unhighlightMesh(meshes[selectedNodeId]);
+                  }
+          
+                  // Set new selection
+                  setSelectedNodeId(nodeId);
+                  model.selectElement(nodeId);
+                  meshUtils.highlightMesh(scene, pickedNode);
+                  
+                  onSelectionChange(nodeId);
+          
+                  const elementType = nodeId.split('_')[0];
+                  switch (elementType) {
+                      case 'sketch':
+                          handleSketchInteraction(nodeId, pickResult);
+                          break;
+                      case 'extrusion':
+                          handleExtrusionInteraction(nodeId, pickResult);
+                          break;
+                      // Add cases for other element types
+                  }
+              }
+          } else {
+              // Clear selection if clicking on empty space
+              if (selectedNodeId && meshes[selectedNodeId]) {
+                  meshUtils.unhighlightMesh(meshes[selectedNodeId]);
+              }
+              setSelectedNodeId(null);
+              model.selectElement(null);
+              onSelectionChange(null);
+          }
+      };
+  
+      mainScene.onPointerDown = handleMainScenePointerDown;
+  
+      return () => {
+          window.removeEventListener("resize", engine.resize);
+          // engine.dispose();
+      };
+  }, [createControlCube, onViewChange, currentModelView, model.elements.sketches, 
+      handleSketchInteraction, handleExtrusionInteraction, meshes, model, 
+      selectedNodeId, onSelectionChange]);
 
-    // Prevent default behavior for right-click
-    mainScene.onPointerDown = (evt) => {
-        if (evt.button === 2) {
-            evt.preventDefault();
+  const renderModelToScene = useCallback(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+  
+    const newMeshes = { ...meshes };
+  
+    for (const elementType in model.elements) {
+      Object.values(model.elements[elementType]).forEach(element => {
+        const customProperties = model.customProperties[element.id];
+        if (newMeshes[element.id]) {
+          newMeshes[element.id] = meshUtils.manageElementMesh(scene, element, elementType, newMeshes[element.id], customProperties);
+        } else {
+          newMeshes[element.id] = meshUtils.manageElementMesh(scene, element, elementType, null, customProperties);
         }
-        };
-
-    return () => {
-      engine.dispose();
-    };
-  }, [createControlCube, onViewChange, currentModelView]);
+        if (newMeshes[element.id]) {
+          newMeshes[element.id].id = element.id;
+        }
+      });
+    }
+  
+    // Remove meshes for deleted elements
+    Object.keys(newMeshes).forEach(meshId => {
+      if (!Object.values(model.elements).some(elements => elements[meshId])) {
+        if (newMeshes[meshId] instanceof TransformNode) {
+          newMeshes[meshId].getChildMeshes().forEach(mesh => mesh.dispose());
+        }
+        newMeshes[meshId].dispose();
+        delete newMeshes[meshId];
+      }
+    });
+  
+    setMeshes(newMeshes);
+  }, [meshes, model.elements, model.customProperties]);
+  
+  // useEffect(() => {
+  //   if (sceneRef.current) {
+  //     renderModelToScene();
+  //   }
+  // }, [renderModelToScene]);
 
   useEffect(() => {
     if (cameraRef.current) {
