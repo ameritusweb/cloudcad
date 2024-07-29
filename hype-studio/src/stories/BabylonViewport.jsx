@@ -12,6 +12,7 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
   const controlSceneRef = useRef(null);
   const boxRef = useRef(null);
   const cameraRef = useRef(null);
+  const hoverFaceRef = useRef(null);
   const [currentView, setCurrentView] = useState('Front');
 
   const createControlCube = useCallback((scene, onFaceClick) => {
@@ -45,9 +46,35 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
       faceMesh.actionManager.registerAction(
         new ExecuteCodeAction(
           ActionManager.OnPickTrigger,
-          () => onFaceClick(faceNormals[index])
+          () => {
+            if (hoverFaceRef.current) {
+                onFaceClick(hoverFaceRef.current);
+            } else {
+                onFaceClick(faceNormals[index]);
+            }
+          }
         )
       );
+
+      faceMesh.actionManager.registerAction(
+        new ExecuteCodeAction(
+            ActionManager.OnPointerOverTrigger,
+            () => {
+                faceMaterial.emissiveColor = new Color3(0.3, 0.3, 0.3);
+                hoverFaceRef.current = name;
+            }
+        )
+    );
+
+    faceMesh.actionManager.registerAction(
+        new ExecuteCodeAction(
+            ActionManager.OnPointerOutTrigger,
+            () => {
+                faceMaterial.emissiveColor = new Color3(0, 0, 0);
+                hoverFaceRef.current = null;
+            }
+        )
+    );
     });
 
     return cube;
@@ -197,6 +224,13 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
   }, [controlMode, updateCameraControls]);
 
   const getViewFromNormal = (normal) => {
+    if (typeof normal.equalsWithEpsilon !== 'function') {
+        if (hoverFaceRef.current) {
+            return hoverFaceRef.current;
+        } else {
+            return "Front";
+        }
+    }
     if (normal.equalsWithEpsilon(Vector3.Right())) return "Right";
     if (normal.equalsWithEpsilon(Vector3.Left())) return "Left";
     if (normal.equalsWithEpsilon(Vector3.Up())) return "Top";
