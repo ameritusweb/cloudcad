@@ -38,7 +38,7 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
 
       const faceMaterial = new StandardMaterial(name + "Material", scene);
       faceMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5);
-      faceMaterial.alpha = 0.5;
+      faceMaterial.alpha = 0.7;
       faceMesh.material = faceMaterial;
 
       faceMesh.actionManager = new ActionManager(scene);
@@ -63,6 +63,7 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
     sceneRef.current = mainScene;
 
     const camera = new ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2, 10, Vector3.Zero(), mainScene);
+    cameraRef.current = camera;
     camera.attachControl(canvas, true);
 
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), mainScene);
@@ -89,6 +90,7 @@ export const BabylonViewport = ({ currentModelView, onViewChange, controlMode })
 
     const controlCube = createControlCube(controlScene, (normal) => {
       const newView = getViewFromNormal(normal);
+      console.log(newView);
       setCurrentView(newView);
       onViewChange(newView);
     });
