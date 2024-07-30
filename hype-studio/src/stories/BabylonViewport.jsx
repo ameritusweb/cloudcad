@@ -18,7 +18,10 @@ export const BabylonViewport = memo(({
   onViewChange, 
   onSelectionChange, 
   controlMode,
-  planeStates 
+  planeStates,
+  activeView,
+  selectedSketchType,
+  onSketchCreate
 }) => {
   const engineRef = useRef(engine);
   const canvasRef = useRef(canvas);
@@ -28,6 +31,9 @@ export const BabylonViewport = memo(({
   const cameraRef = useRef(null);
   const hoverFaceRef = useRef(null);
   const [currentView, setCurrentView] = useState('Front');
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [startPoint, setStartPoint] = useState(null);
+  const [previewMesh, setPreviewMesh] = useState(null);
   const meshesRef = useRef({});
   const planesRef = useRef({});
   const highlightLayerRef = useRef(null);
@@ -230,6 +236,32 @@ export const BabylonViewport = memo(({
     window.addEventListener("resize", () => {
       engine.resize();
     });
+
+    const handleMainScenePointerMove = (evt) => {
+
+      if (isDrawing && previewMesh) {
+        const pickInfo = mainScene.pick(evt.offsetX, evt.offsetY);
+        if (pickInfo.hit) {
+          updatePreviewMesh(previewMesh, startPoint, pickInfo.pickedPoint, selectedSketchType);
+        }
+      }
+    }
+
+    const handleMainScenePointerUp = (evt) => {
+
+      if (isDrawing && previewMesh) {
+        setIsDrawing(false);
+        
+        // Create the actual sketch
+        const sketchData = getSketchDataFromPreview(previewMesh, selectedSketchType);
+        onSketchCreate(selectedSketchType, sketchData);
+        
+        // Remove preview mesh
+        previewMesh.dispose();
+        setPreviewMesh(null);
+      }
+      
+    }
     
         const handleMainScenePointerDown = (evt) => {
           if (evt.button === 2) {
@@ -239,59 +271,71 @@ export const BabylonViewport = memo(({
   
           const scene = sceneRef.current;
           const pickResult = scene.pick(evt.offsetX, evt.offsetY);
-          let meshes = meshesRef.current;
-          if (pickResult.hit) {
-              let pickedNode = pickResult.pickedMesh;
-              while (pickedNode && !(pickedNode instanceof TransformNode)) {
-                  pickedNode = pickedNode.parent;
-              }
-              
-              if (pickedNode) {
-                  const nodeId = pickedNode.id;
 
-                  // Clear previous selection
-                  if (selectedNodeId && meshes[selectedNodeId]) {
-                      meshUtils.unhighlightMesh(meshes[selectedNodeId]);
-                  }
-          
-                  // Set new selection
-                  setSelectedNodeId(nodeId);
-                  model.selectElement(nodeId);
-                  meshUtils.highlightMesh(scene, pickedNode);
-                  
-                  onSelectionChange(nodeId);
-          
-                  const elementType = nodeId.split('_')[0];
-                  switch (elementType) {
-                      default:
-                      case 'sketch':
-                          handleSketchInteraction(nodeId, pickResult);
-                          break;
-                      case 'extrusion':
-                          handleExtrusionInteraction(nodeId, pickResult);
-                          break;
-                      // Add cases for other element types
-                  }
-              }
+          if (activeView === 'Sketch View' && selectedSketchType && pickResult.hit && pickResult.pickedMesh.name.includes('Plane')) {
+            setIsDrawing(true);
+            setStartPoint(pickResult.pickedPoint);
+            
+            // Create preview mesh
+            const newPreviewMesh = createPreviewMesh(selectedSketchType, pickResult.pickedPoint);
+            setPreviewMesh(newPreviewMesh);
           } else {
-              // Clear selection if clicking on empty space
-              if (selectedNodeId && meshes[selectedNodeId]) {
-                  meshUtils.unhighlightMesh(meshes[selectedNodeId]);
-              }
-              setSelectedNodeId(null);
-              model.selectElement(null);
-              onSelectionChange(null);
+            let meshes = meshesRef.current;
+            if (pickResult.hit) {
+                let pickedNode = pickResult.pickedMesh;
+                while (pickedNode && !(pickedNode instanceof TransformNode)) {
+                    pickedNode = pickedNode.parent;
+                }
+                
+                if (pickedNode) {
+                    const nodeId = pickedNode.id;
+  
+                    // Clear previous selection
+                    if (selectedNodeId && meshes[selectedNodeId]) {
+                        meshUtils.unhighlightMesh(meshes[selectedNodeId]);
+                    }
+            
+                    // Set new selection
+                    setSelectedNodeId(nodeId);
+                    model.selectElement(nodeId);
+                    meshUtils.highlightMesh(scene, pickedNode);
+                    
+                    onSelectionChange(nodeId);
+            
+                    const elementType = nodeId.split('_')[0];
+                    switch (elementType) {
+                        default:
+                        case 'sketch':
+                            handleSketchInteraction(nodeId, pickResult);
+                            break;
+                        case 'extrusion':
+                            handleExtrusionInteraction(nodeId, pickResult);
+                            break;
+                        // Add cases for other element types
+                    }
+                }
+            } else {
+                // Clear selection if clicking on empty space
+                if (selectedNodeId && meshes[selectedNodeId]) {
+                    meshUtils.unhighlightMesh(meshes[selectedNodeId]);
+                }
+                setSelectedNodeId(null);
+                model.selectElement(null);
+                onSelectionChange(null);
+            }
           }
       };
   
       mainScene.onPointerDown = handleMainScenePointerDown;
+      mainScene.onPointerMove = handleMainScenePointerMove;
+      mainScene.onPointerUp = handleMainScenePointerUp;
   
       return () => {
           window.removeEventListener("resize", engine.resize);
-          // engine.dispose();
       };
   }, [createControlCube, onViewChange, handleExtrusionInteraction, handleSketchInteraction, model.elements.sketches, model, 
-      selectedNodeId, onSelectionChange, canvas, engine]);
+      selectedNodeId, activeView, onSelectionChange, canvas, engine, isDrawing, onSketchCreate, previewMesh, selectedSketchType,
+    startPoint]);
 
   const renderModelToScene = useCallback(() => {
     const scene = sceneRef.current;
@@ -451,6 +495,74 @@ export const BabylonViewport = memo(({
     camera.setTarget(Vector3.Zero());
   };
 
+  const createPreviewMesh = (type, startPoint) => {
+    let mesh;
+    if (type === 'circle') {
+      mesh = MeshBuilder.CreateDisc('preview', { radius: 0.1 }, sceneRef.current);
+    } else if (type === 'rectangle') {
+      mesh = MeshBuilder.CreatePlane('preview', { width: 0.1, height: 0.1 }, sceneRef.current);
+    }
+    
+    if (mesh) {
+      mesh.position = startPoint;
+      const material = new StandardMaterial("previewMaterial", sceneRef.current);
+      material.diffuseColor = new Color3(0, 1, 0); // Green color for preview
+      material.alpha = 0.5;
+      mesh.material = material;
+    }
+    
+    return mesh;
+  };
+  
+  const updatePreviewMesh = (mesh, startPoint, endPoint, type) => {
+    if (type === 'circle') {
+      const radius = Vector3.Distance(startPoint, endPoint);
+      mesh.scaling = new Vector3(radius, radius, 1);
+    } else if (type === 'rectangle') {
+      const width = Math.abs(endPoint.x - startPoint.x);
+      const height = Math.abs(endPoint.y - startPoint.y);
+      mesh.scaling = new Vector3(width, height, 1);
+      mesh.position = new Vector3(
+        (startPoint.x + endPoint.x) / 2,
+        (startPoint.y + endPoint.y) / 2,
+        startPoint.z
+      );
+    }
+  };
+  
+  const getSketchDataFromPreview = (previewMesh, type) => {
+    if (type === 'circle') {
+      return {
+        center: previewMesh.position,
+        radius: previewMesh.scaling.x
+      };
+    } else if (type === 'rectangle') {
+      return {
+        center: previewMesh.position,
+        width: previewMesh.scaling.x,
+        height: previewMesh.scaling.y
+      };
+    }
+  };
+
+  const updateCameraForPlane = (plane) => {
+    if (cameraRef.current) {
+      switch (plane) {
+        default:
+        case 'X':
+          cameraRef.current.setPosition(new Vector3(10, 0, 0));
+          break;
+        case 'Y':
+          cameraRef.current.setPosition(new Vector3(0, 10, 0));
+          break;
+        case 'Z':
+          cameraRef.current.setPosition(new Vector3(0, 0, 10));
+          break;
+      }
+      cameraRef.current.setTarget(Vector3.Zero());
+    }
+  };
+
   const alignCamera = (plane) => {
     const camera = cameraRef.current;
     switch (plane) {
@@ -478,7 +590,7 @@ export const BabylonViewport = memo(({
         
         if (state === PlaneState.ALIGNED) {
           highlightLayerRef.current.addMesh(planeMesh, Color3.Yellow());
-          alignCamera(plane);
+          updateCameraForPlane(plane);
         } else {
           highlightLayerRef.current.removeMesh(planeMesh);
         }

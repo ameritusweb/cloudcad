@@ -16,6 +16,7 @@ export const Toolbar = ({ activeView, onItemClick }) => (
       <button
         key={index}
         onClick={() => onItemClick(item.name)}
+        title={item.name}
         className={`p-2 rounded transition-all duration-200 ease-in-out ${
           activeView === item.name 
             ? 'bg-blue-200 outline outline-2 outline-green-500' 

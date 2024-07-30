@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Engine } from '@babylonjs/core';
+import { Engine, Vector3 } from '@babylonjs/core';
 import { Header } from './stories/Header';
 import { Toolbar } from './stories/Toolbar';
 import { LeftPanel } from './stories/LeftPanel';
@@ -28,9 +28,23 @@ const HypeStudio = () => {
     Y: PlaneState.HIDDEN,
     Z: PlaneState.HIDDEN
   });
+  const [selectedSketchType, setSelectedSketchType] = useState(null);
   // New state for the engine
   const [engine, setEngine] = useState(null);
   const canvasRef = useRef(null);
+
+  const handleSketchCreate = (type, sketchData) => {
+    const newSketch = {
+      type,
+      ...sketchData
+    };
+    const sketchId = model.createSketch(newSketch);
+    console.log(`Created new sketch with ID: ${sketchId}`);
+  };
+
+  const handleSketchTypeSelect = (type) => {
+    setSelectedSketchType(type);
+  };
 
   useEffect(() => {
     // Create the engine
@@ -60,9 +74,13 @@ const HypeStudio = () => {
   }, []);
 
   const fetchLeftPanelContent = (viewName) => {
-    fetch(`/api/${viewName.toLowerCase().replace(' ', '-')}`)
-      .then(res => res.json())
-      .then(data => setLeftPanelContent(data));
+    if (viewName === 'Sketch View') {
+      setLeftPanelContent(['Circle', 'Rectangle']);
+    } else {
+      fetch(`/api/${viewName.toLowerCase().replace(' ', '-')}`)
+        .then(res => res.json())
+        .then(data => setLeftPanelContent(data));
+    }
   };
 
   const handleToolbarClick = (viewName) => {
@@ -85,6 +103,26 @@ const HypeStudio = () => {
     console.log(`Control mode changed to ${mode}`);
   };
 
+  const updateCameraForPlane = (plane) => {
+    if (engine) {
+      const scene = engine.scenes[0];
+      const camera = scene.activeCamera;
+      switch (plane) {
+        default:
+        case 'X':
+          camera.setPosition(new Vector3(10, 0, 0));
+          break;
+        case 'Y':
+          camera.setPosition(new Vector3(0, 10, 0));
+          break;
+        case 'Z':
+          camera.setPosition(new Vector3(0, 0, 10));
+          break;
+      }
+      camera.setTarget(Vector3.Zero());
+    }
+  };
+
   const cyclePlaneState = (plane) => {
     setPlaneStates(prevStates => {
       const currentState = prevStates[plane];
@@ -102,6 +140,11 @@ const HypeStudio = () => {
         default:
           newState = PlaneState.HIDDEN;
       }
+      
+      if (newState === PlaneState.ALIGNED) {
+        updateCameraForPlane(plane);
+      }
+      
       return { ...prevStates, [plane]: newState };
     });
   };
@@ -130,7 +173,12 @@ const HypeStudio = () => {
       <Header projectName={projectInfo.name} dimensions={projectInfo.dimensions} />
       <Toolbar activeView={activeView} onItemClick={handleToolbarClick} />
       <div className="flex flex-1">
-        <LeftPanel content={leftPanelContent} />
+      <LeftPanel 
+        content={leftPanelContent}
+        activeView={activeView}
+        onSketchTypeSelect={handleSketchTypeSelect}
+        selectedSketchType={selectedSketchType}
+      />
         <div className="flex-1 relative">
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
           {engine && (
@@ -141,7 +189,10 @@ const HypeStudio = () => {
               onSelectionChange={handleSelectionChange}
               controlMode={controlMode} 
               planeStates={planeStates}
-            />
+              activeView={activeView}
+              selectedSketchType={selectedSketchType}
+              onSketchCreate={handleSketchCreate}
+          />
           )}
           <div className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
             Current View: {currentModelView}

@@ -15,6 +15,19 @@ const createHypeStudioModel = () => ({
   history: [],
   undoneActions: [],
 
+  createSketch(sketchData) {
+    const id = this.addElement('sketches', sketchData);
+    return id;
+  },
+
+  getSketchById(id) {
+    return this.elements.sketches[id];
+  },
+
+  updateSketch(id, updates) {
+    this.updateElement('sketches', id, updates);
+  },
+
   setProjectName(name) {
     this.addToHistory(() => {
       const oldName = this.projectName;
