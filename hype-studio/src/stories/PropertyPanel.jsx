@@ -92,5 +92,7 @@ const getSelectedElement = (model) => {
   if (!model.selectedElementId) return null;
   console.log(model);
   const elementType = model.selectedElementId.split('_')[0];
-  return model.elements[elementType][model.selectedElementId];
+  const elementByType = model.elements[elementType];
+  if (!elementByType) return null;
+  return elementByType[model.selectedElementId];
 };

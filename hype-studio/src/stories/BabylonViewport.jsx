@@ -1,12 +1,25 @@
 import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { 
   Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, UtilityLayerRenderer, ExecuteCodeAction, DynamicTexture,
-  StandardMaterial, Color3, Camera, TransformNode, ActionManager, Matrix, RenderTargetTexture, Viewport, Mesh
+  StandardMaterial, Color3, Camera, TransformNode, ActionManager, HighlightLayer, Matrix, RenderTargetTexture, Viewport, Mesh
 } from '@babylonjs/core';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import * as meshUtils from '../utils/meshUtils';
 
-export const BabylonViewport = memo(({ canvas, engine, onViewChange, onSelectionChange, controlMode }) => {
+const PlaneState = {
+  HIDDEN: 'hidden',
+  VISIBLE: 'visible',
+  ALIGNED: 'aligned'
+};
+
+export const BabylonViewport = memo(({
+  canvas, 
+  engine, 
+  onViewChange, 
+  onSelectionChange, 
+  controlMode,
+  planeStates 
+}) => {
   const engineRef = useRef(engine);
   const canvasRef = useRef(canvas);
   const sceneRef = useRef(null);
@@ -16,6 +29,8 @@ export const BabylonViewport = memo(({ canvas, engine, onViewChange, onSelection
   const hoverFaceRef = useRef(null);
   const [currentView, setCurrentView] = useState('Front');
   const meshesRef = useRef({});
+  const planesRef = useRef({});
+  const highlightLayerRef = useRef(null);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const model = useHypeStudioModel();
 
@@ -138,10 +153,10 @@ export const BabylonViewport = memo(({ canvas, engine, onViewChange, onSelection
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), mainScene);
     light.intensity = 0.7;
 
-    const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, mainScene);
-    const boxMaterial = new StandardMaterial("boxMaterial", mainScene);
-    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
-    box.material = boxMaterial;
+    // const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, mainScene);
+    // const boxMaterial = new StandardMaterial("boxMaterial", mainScene);
+    // boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
+    // box.material = boxMaterial;
 
     // Control scene
     const controlScene = new Scene(engine);
@@ -173,6 +188,38 @@ export const BabylonViewport = memo(({ canvas, engine, onViewChange, onSelection
 
     mainScene.getSketchById = (id) => {
       return model.elements.sketches[id];
+    };
+
+    highlightLayerRef.current = new HighlightLayer("highlightLayer", mainScene);
+
+    const createPlane = (axis) => {
+      const plane = MeshBuilder.CreatePlane(`${axis}Plane`, { size: 10 }, mainScene);
+      const material = new StandardMaterial(`${axis}PlaneMaterial`, mainScene);
+      material.diffuseColor = new Color3(0.5, 0.5, 0.5);
+      material.alpha = 0.5;
+      material.backFaceCulling = true;
+      plane.material = material;
+
+      switch(axis) {
+        case 'X':
+          plane.rotation.y = Math.PI / 2;
+          break;
+        case 'Y':
+          plane.rotation.x = Math.PI / 2;
+          break;
+        default:
+        case 'Z':
+          // No rotation needed
+          break;
+      }
+
+      return plane;
+    };
+
+    planesRef.current = {
+      X: createPlane('X'),
+      Y: createPlane('Y'),
+      Z: createPlane('Z')
     };
 
     engine.runRenderLoop(() => {
@@ -216,6 +263,7 @@ export const BabylonViewport = memo(({ canvas, engine, onViewChange, onSelection
           
                   const elementType = nodeId.split('_')[0];
                   switch (elementType) {
+                      default:
                       case 'sketch':
                           handleSketchInteraction(nodeId, pickResult);
                           break;
@@ -402,6 +450,41 @@ export const BabylonViewport = memo(({ canvas, engine, onViewChange, onSelection
     }
     camera.setTarget(Vector3.Zero());
   };
+
+  const alignCamera = (plane) => {
+    const camera = cameraRef.current;
+    switch (plane) {
+      case 'X':
+        camera.alpha = Math.PI / 2;
+        camera.beta = Math.PI / 2;
+        break;
+      case 'Y':
+        camera.alpha = 0;
+        camera.beta = 0;
+        break;
+      default:
+      case 'Z':
+        camera.alpha = 0;
+        camera.beta = Math.PI / 2;
+        break;
+    }
+  };
+  
+  useEffect(() => {
+    if (sceneRef.current && planesRef.current && cameraRef.current) {
+      Object.entries(planeStates).forEach(([plane, state]) => {
+        const planeMesh = planesRef.current[plane];
+        planeMesh.isVisible = state !== PlaneState.HIDDEN;
+        
+        if (state === PlaneState.ALIGNED) {
+          highlightLayerRef.current.addMesh(planeMesh, Color3.Yellow());
+          alignCamera(plane);
+        } else {
+          highlightLayerRef.current.removeMesh(planeMesh);
+        }
+      });
+    }
+  }, [planeStates]);
 
   return null;
 });

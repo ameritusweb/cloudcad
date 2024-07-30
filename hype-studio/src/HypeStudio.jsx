@@ -5,8 +5,15 @@ import { Toolbar } from './stories/Toolbar';
 import { LeftPanel } from './stories/LeftPanel';
 import { BabylonViewport } from './stories/BabylonViewport';
 import { PropertyPanel } from './stories/PropertyPanel';  // Import the new PropertyPanel
-import { FaSearchPlus, FaHandPaper, FaSyncAlt } from 'react-icons/fa';
+import { FaSearchPlus, FaHandPaper, FaSyncAlt, FaSquare, FaEye, FaCamera } from 'react-icons/fa';
 import { useHypeStudioModel } from './contexts/HypeStudioContext';  // Import the context hook
+
+// Enum for plane states
+const PlaneState = {
+  HIDDEN: 'hidden',
+  VISIBLE: 'visible',
+  ALIGNED: 'aligned'
+};
 
 const HypeStudio = () => {
   const model = useHypeStudioModel();  // Use the HypeStudio model
@@ -16,6 +23,11 @@ const HypeStudio = () => {
   const [currentModelView, setCurrentModelView] = useState('');
   const [currentModelSelection, setCurrentModelSelection] = useState('');
   const [controlMode, setControlMode] = useState('rotate');
+  const [planeStates, setPlaneStates] = useState({
+    X: PlaneState.HIDDEN,
+    Y: PlaneState.HIDDEN,
+    Z: PlaneState.HIDDEN
+  });
   // New state for the engine
   const [engine, setEngine] = useState(null);
   const canvasRef = useRef(null);
@@ -73,6 +85,46 @@ const HypeStudio = () => {
     console.log(`Control mode changed to ${mode}`);
   };
 
+  const cyclePlaneState = (plane) => {
+    setPlaneStates(prevStates => {
+      const currentState = prevStates[plane];
+      let newState;
+      switch (currentState) {
+        case PlaneState.HIDDEN:
+          newState = PlaneState.VISIBLE;
+          break;
+        case PlaneState.VISIBLE:
+          newState = PlaneState.ALIGNED;
+          break;
+        case PlaneState.ALIGNED:
+          newState = PlaneState.HIDDEN;
+          break;
+        default:
+          newState = PlaneState.HIDDEN;
+      }
+      return { ...prevStates, [plane]: newState };
+    });
+  };
+
+  const getButtonStyle = (plane) => {
+    const state = planeStates[plane];
+    let bgColor, icon;
+    switch (state) {
+      case PlaneState.VISIBLE:
+        bgColor = 'bg-blue-500';
+        icon = <FaEye />;
+        break;
+      case PlaneState.ALIGNED:
+        bgColor = 'bg-green-500';
+        icon = <FaCamera />;
+        break;
+      default:
+        bgColor = 'bg-gray-500';
+        icon = <FaSquare />;
+    }
+    return { bgColor, icon };
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-gray-100">
       <Header projectName={projectInfo.name} dimensions={projectInfo.dimensions} />
@@ -88,6 +140,7 @@ const HypeStudio = () => {
               onViewChange={handleViewChange} 
               onSelectionChange={handleSelectionChange}
               controlMode={controlMode} 
+              planeStates={planeStates}
             />
           )}
           <div className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
@@ -112,6 +165,21 @@ const HypeStudio = () => {
             >
               <FaSyncAlt />
             </button>
+          </div>
+          <div className="absolute bottom-2 left-2 flex space-x-2">
+            {['X', 'Y', 'Z'].map(plane => {
+              const { bgColor, icon } = getButtonStyle(plane);
+              return (
+                <button 
+                  key={plane}
+                  onClick={() => cyclePlaneState(plane)}
+                  className={`p-2 rounded ${bgColor} text-white flex items-center justify-center w-12 h-12`}
+                >
+                  {icon}
+                  <span className="ml-1">{plane}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
         <PropertyPanel />  {/* Add the PropertyPanel here */}
