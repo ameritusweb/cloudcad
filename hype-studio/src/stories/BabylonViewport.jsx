@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, memo, useImperativeHandle, forwardRef } from 'react';
 import { 
   Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, UtilityLayerRenderer, ExecuteCodeAction, DynamicTexture,
   StandardMaterial, Color3, Camera, TransformNode, ActionManager, HighlightLayer, Matrix, RenderTargetTexture, Viewport, Mesh
@@ -12,7 +12,7 @@ const PlaneState = {
   ALIGNED: 'aligned'
 };
 
-export const BabylonViewport = memo(({
+export const BabylonViewport = memo(forwardRef(({
   canvas, 
   engine, 
   onViewChange, 
@@ -22,7 +22,7 @@ export const BabylonViewport = memo(({
   activeView,
   selectedSketchType,
   onSketchCreate
-}) => {
+}, ref) => {
   const engineRef = useRef(engine);
   const canvasRef = useRef(canvas);
   const sceneRef = useRef(null);
@@ -565,40 +565,34 @@ export const BabylonViewport = memo(({
     }
   };
 
-  const alignCamera = (plane) => {
-    const camera = cameraRef.current;
-    switch (plane) {
-      case 'X':
-        camera.alpha = Math.PI / 2;
-        camera.beta = Math.PI / 2;
-        break;
-      case 'Y':
-        camera.alpha = 0;
-        camera.beta = 0;
-        break;
-      default:
-      case 'Z':
-        camera.alpha = 0;
-        camera.beta = Math.PI / 2;
-        break;
+  useImperativeHandle(ref, () => ({
+    changePlanesState: (planes) => {
+      planesRef.current = planes;
     }
-  };
+  }));
   
   useEffect(() => {
     if (sceneRef.current && planesRef.current && cameraRef.current) {
       Object.entries(planeStates).forEach(([plane, state]) => {
-        const planeMesh = planesRef.current[plane];
-        planeMesh.isVisible = state !== PlaneState.HIDDEN;
-        
         if (state === PlaneState.ALIGNED) {
-          highlightLayerRef.current.addMesh(planeMesh, Color3.Yellow());
           updateCameraForPlane(plane);
-        } else {
-          highlightLayerRef.current.removeMesh(planeMesh);
         }
       });
     }
+    // if (sceneRef.current && planesRef.current && cameraRef.current) {
+    //   Object.entries(planeStates).forEach(([plane, state]) => {
+    //     const planeMesh = planesRef.current[plane];
+    //     planeMesh.isVisible = state !== PlaneState.HIDDEN;
+        
+    //     if (state === PlaneState.ALIGNED) {
+    //       highlightLayerRef.current.addMesh(planeMesh, Color3.Yellow());
+    //       updateCameraForPlane(plane);
+    //     } else {
+    //       highlightLayerRef.current.removeMesh(planeMesh);
+    //     }
+    //   });
+    // }
   }, [planeStates]);
 
   return null;
-});
+}));

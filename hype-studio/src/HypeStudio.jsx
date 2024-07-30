@@ -7,6 +7,7 @@ import { BabylonViewport } from './stories/BabylonViewport';
 import { PropertyPanel } from './stories/PropertyPanel';  // Import the new PropertyPanel
 import { FaSearchPlus, FaHandPaper, FaSyncAlt, FaSquare, FaEye, FaCamera } from 'react-icons/fa';
 import { useHypeStudioModel } from './contexts/HypeStudioContext';  // Import the context hook
+import { BabylonControls } from './stories/BabylonControls';
 
 // Enum for plane states
 const PlaneState = {
@@ -23,7 +24,7 @@ const HypeStudio = () => {
   const [currentModelView, setCurrentModelView] = useState('');
   const [currentModelSelection, setCurrentModelSelection] = useState('');
   const [controlMode, setControlMode] = useState('rotate');
-  const [planeStates, setPlaneStates] = useState({
+  const planeStatesRef = useRef({
     X: PlaneState.HIDDEN,
     Y: PlaneState.HIDDEN,
     Z: PlaneState.HIDDEN
@@ -33,6 +34,7 @@ const HypeStudio = () => {
   // New state for the engine
   const [engine, setEngine] = useState(null);
   const canvasRef = useRef(null);
+  const viewportRef = useRef(null);
 
   const handleSketchCreate = (type, sketchData) => {
     const newSketch = {
@@ -63,7 +65,7 @@ const HypeStudio = () => {
         newEngine.dispose();
       };
     }
-  }, []);
+  }, [engine]);
 
   useEffect(() => {
     // Fetch project info
@@ -157,33 +159,28 @@ const HypeStudio = () => {
   };
 
   const cyclePlaneState = (plane) => {
-    setPlaneStates(prevStates => {
-      const currentState = prevStates[plane];
-      let newState;
-      switch (currentState) {
-        case PlaneState.HIDDEN:
-          newState = PlaneState.VISIBLE;
-          break;
-        case PlaneState.VISIBLE:
-          newState = PlaneState.ALIGNED;
-          break;
-        case PlaneState.ALIGNED:
-          newState = PlaneState.HIDDEN;
-          break;
-        default:
-          newState = PlaneState.HIDDEN;
-      }
-      
-      if (newState === PlaneState.ALIGNED) {
-        updateCameraForPlane(plane);
-      }
-      
-      return { ...prevStates, [plane]: newState };
-    });
+
+    const currentState = planeStatesRef.current[plane];
+    let newState;
+    switch (currentState) {
+      case PlaneState.HIDDEN:
+        newState = PlaneState.VISIBLE;
+        break;
+      case PlaneState.VISIBLE:
+        newState = PlaneState.ALIGNED;
+        break;
+      case PlaneState.ALIGNED:
+        newState = PlaneState.HIDDEN;
+        break;
+      default:
+        newState = PlaneState.HIDDEN;
+    }
+
+    planeStatesRef.current[plane] = newState;
   };
 
   const getButtonStyle = (plane) => {
-    const state = planeStates[plane];
+    const state = planeStatesRef.current[plane];
     let bgColor, icon;
     switch (state) {
       case PlaneState.VISIBLE:
@@ -218,55 +215,19 @@ const HypeStudio = () => {
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
           {engine && (
             <BabylonViewport 
+              ref={viewportRef}
               engine={engine}
               canvas={canvasRef.current}
               onViewChange={handleViewChange} 
               onSelectionChange={handleSelectionChange}
               controlMode={controlMode} 
-              planeStates={planeStates}
+              planeStates={planeStatesRef.current}
               activeView={activeView}
               selectedSketchType={selectedSketchType}
               onSketchCreate={handleSketchCreate}
           />
           )}
-          <div className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
-            Current View: {currentModelView}
-          </div>
-          <div className="absolute bottom-2 right-2 flex space-x-2">
-            <button 
-              onClick={() => handleControlModeChange('zoom')}
-              className={`p-2 rounded ${controlMode === 'zoom' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
-            >
-              <FaSearchPlus />
-            </button>
-            <button 
-              onClick={() => handleControlModeChange('pan')}
-              className={`p-2 rounded ${controlMode === 'pan' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
-            >
-              <FaHandPaper />
-            </button>
-            <button 
-              onClick={() => handleControlModeChange('rotate')}
-              className={`p-2 rounded ${controlMode === 'rotate' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
-            >
-              <FaSyncAlt />
-            </button>
-          </div>
-          <div className="absolute bottom-2 left-2 flex space-x-2">
-            {['X', 'Y', 'Z'].map(plane => {
-              const { bgColor, icon } = getButtonStyle(plane);
-              return (
-                <button 
-                  key={plane}
-                  onClick={() => cyclePlaneState(plane)}
-                  className={`p-2 rounded ${bgColor} text-white flex items-center justify-center w-12 h-12`}
-                >
-                  {icon}
-                  <span className="ml-1">{plane}</span>
-                </button>
-              );
-            })}
-          </div>
+          <BabylonControls />
         </div>
         <PropertyPanel 
           selectedElement={model.getSketchById(selectedElementId)}
