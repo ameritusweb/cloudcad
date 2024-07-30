@@ -152,6 +152,8 @@ export const BabylonViewport = memo(({
     const mainScene = new Scene(engine);
     sceneRef.current = mainScene;
 
+    mainScene.clearColor = new Color3(0.95, 0.95, 0.95);
+
     const camera = new ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2, 10, Vector3.Zero(), mainScene);
     cameraRef.current = camera;
     camera.attachControl(canvas, true);
@@ -159,10 +161,10 @@ export const BabylonViewport = memo(({
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), mainScene);
     light.intensity = 0.7;
 
-    // const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, mainScene);
-    // const boxMaterial = new StandardMaterial("boxMaterial", mainScene);
-    // boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
-    // box.material = boxMaterial;
+    const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, mainScene);
+    const boxMaterial = new StandardMaterial("boxMaterial", mainScene);
+    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
+    box.material = boxMaterial;
 
     // Control scene
     const controlScene = new Scene(engine);
