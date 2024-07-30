@@ -15,7 +15,7 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
   const cameraRef = useRef(null);
   const hoverFaceRef = useRef(null);
   const [currentView, setCurrentView] = useState('Front');
-  const [meshes, setMeshes] = useState({});
+  const meshesRef = useRef({});
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const model = useHypeStudioModel();
 
@@ -86,7 +86,7 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
     return cube;
   }, []);
 
-  const handleSketchInteraction = (sketchId, pickResult) => {
+  const handleSketchInteraction = useCallback((sketchId, pickResult) => {
     const sketch = model.elements.sketches[sketchId];
     if (sketch) {
       const closestPointIndex = meshUtils.findClosestPointIndex(sketch.geometry, pickResult.pickedPoint);
@@ -104,9 +104,9 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
         );
       }
     }
-  };
+  }, [model]);
 
-  const handleExtrusionInteraction = (extrusionId, pickResult) => {
+  const handleExtrusionInteraction = useCallback((extrusionId, pickResult) => {
     const extrusion = model.elements.extrusions[extrusionId];
     if (extrusion) {
       const startDepth = extrusion.depth;
@@ -121,12 +121,12 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
         }
       );
     }
-  };
+  }, [model]);
 
   useEffect(() => {
 
     if (!engine || !canvas) return;
-    
+
     // Main scene
     const mainScene = new Scene(engine);
     sceneRef.current = mainScene;
@@ -196,6 +196,7 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
   
           const scene = sceneRef.current;
           const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+          let meshes = meshesRef.current;
           if (pickResult.hit) {
               let pickedNode = pickResult.pickedMesh;
               while (pickedNode && !(pickedNode instanceof TransformNode)) {
@@ -204,7 +205,7 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
               
               if (pickedNode) {
                   const nodeId = pickedNode.id;
-          
+
                   // Clear previous selection
                   if (selectedNodeId && meshes[selectedNodeId]) {
                       meshUtils.unhighlightMesh(meshes[selectedNodeId]);
@@ -245,15 +246,14 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
           window.removeEventListener("resize", engine.resize);
           // engine.dispose();
       };
-  }, [createControlCube, onViewChange, currentModelView, model.elements.sketches, 
-      handleSketchInteraction, handleExtrusionInteraction, meshes, model, 
-      selectedNodeId, onSelectionChange]);
+  }, [createControlCube, onViewChange, handleExtrusionInteraction, handleSketchInteraction, currentModelView, model.elements.sketches, model, 
+      selectedNodeId, onSelectionChange, canvas, engine]);
 
   const renderModelToScene = useCallback(() => {
     const scene = sceneRef.current;
     if (!scene) return;
   
-    const newMeshes = { ...meshes };
+    const newMeshes = { ...meshesRef.current };
   
     for (const elementType in model.elements) {
       Object.values(model.elements[elementType]).forEach(element => {
@@ -280,14 +280,14 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
       }
     });
   
-    setMeshes(newMeshes);
-  }, [meshes, model.elements, model.customProperties]);
+    meshesRef.current = newMeshes;
+  }, [model.elements, model.customProperties]);
   
-  // useEffect(() => {
-  //   if (sceneRef.current) {
-  //     renderModelToScene();
-  //   }
-  // }, [renderModelToScene]);
+  useEffect(() => {
+    if (sceneRef.current) {
+      renderModelToScene();
+    }
+  }, [renderModelToScene]);
 
   useEffect(() => {
     if (cameraRef.current) {
