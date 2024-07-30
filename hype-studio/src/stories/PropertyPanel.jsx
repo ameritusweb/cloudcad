@@ -18,7 +18,7 @@ export const PropertyPanel = () => {
   }, [model.selectedElementId, model]);
 
   if (!selectedElement) {
-    return <div>No element selected</div>;
+    return <div className="w-48 bg-white p-2">No element selected</div>;
   }
 
   const handlePropertyChange = (propertyName, value) => {
@@ -44,7 +44,7 @@ export const PropertyPanel = () => {
           });
         }
       } else {
-        model.updateElementProperty(selectedElement.id, propertyName, value);
+        model.updateElement(selectedElement.id.split('_')[0], selectedElement.id, { [propertyName]: value });
       }
     });
     setModifiedProperties({});
@@ -56,33 +56,53 @@ export const PropertyPanel = () => {
     const error = errors[propertyName];
 
     return (
-      <div key={propertyName} className={`property-input ${isModified ? 'modified' : ''} ${error ? 'error' : ''}`}>
-        <label>
+      <div key={propertyName} className={`mb-2 ${isModified ? 'modified' : ''} ${error ? 'error' : ''}`}>
+        <label className="block text-sm font-medium text-gray-700">
           {propertyName}:
           <input
             type={typeof value === 'number' ? 'number' : 'text'}
             value={currentValue}
             onChange={(e) => handlePropertyChange(propertyName, e.target.value)}
-            style={{ backgroundColor: isModified ? '#fffacd' : 'white' }}
+            className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-1 ${isModified ? 'bg-yellow-100' : ''}`}
           />
         </label>
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className="text-red-500 text-xs">{error}</div>}
       </div>
     );
   };
 
+  const renderSketchProperties = () => {
+    switch (selectedElement.type) {
+      case 'circle':
+        return renderPropertyInput('radius', selectedElement.radius || 0);
+      case 'rectangle':
+        return (
+          <>
+            {renderPropertyInput('width', selectedElement.width || 0)}
+            {renderPropertyInput('height', selectedElement.height || 0)}
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="property-panel">
-      <h2>Properties: {selectedElement.name}</h2>
-      {Object.entries(selectedElement).map(([key, value]) => 
-        key !== 'id' && renderPropertyInput(key, value)
-      )}
-      <h3>Custom Properties</h3>
+    <div className="w-48 bg-white p-2">
+      <h2 className="font-bold mb-2">Properties: {selectedElement.name || selectedElement.id}</h2>
+      {renderPropertyInput('name', selectedElement.name || '')}
+      {renderSketchProperties()}
+      <h3 className="font-bold mt-4 mb-2">Custom Properties</h3>
       {Object.entries(model.customProperties[selectedElement.id] || {}).map(([key, value]) => 
         renderPropertyInput(key, value, true)
       )}
       {Object.keys(modifiedProperties).length > 0 && (
-        <button onClick={applyChanges}>Apply Changes</button>
+        <button 
+          onClick={applyChanges}
+          className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Apply Changes
+        </button>
       )}
     </div>
   );
@@ -90,7 +110,6 @@ export const PropertyPanel = () => {
 
 const getSelectedElement = (model) => {
   if (!model.selectedElementId) return null;
-  console.log(model);
   const elementType = model.selectedElementId.split('_')[0];
   const elementByType = model.elements[elementType];
   if (!elementByType) return null;

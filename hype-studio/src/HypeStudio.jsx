@@ -28,6 +28,7 @@ const HypeStudio = () => {
     Y: PlaneState.HIDDEN,
     Z: PlaneState.HIDDEN
   });
+  const [selectedElementId, setSelectedElementId] = useState(null);
   const [selectedSketchType, setSelectedSketchType] = useState(null);
   // New state for the engine
   const [engine, setEngine] = useState(null);
@@ -40,6 +41,7 @@ const HypeStudio = () => {
     };
     const sketchId = model.createSketch(newSketch);
     console.log(`Created new sketch with ID: ${sketchId}`);
+    updateListViewContent(); // Update the list view with the new sketch
   };
 
   const handleSketchTypeSelect = (type) => {
@@ -81,6 +83,37 @@ const HypeStudio = () => {
         .then(res => res.json())
         .then(data => setLeftPanelContent(data));
     }
+  };
+
+  const updateListViewContent = useCallback(() => {
+    const sketchList = Object.values(model.elements.sketches).map(sketch => ({
+      id: sketch.id,
+      name: sketch.name || `Sketch ${sketch.id.split('_')[1]}`,
+      type: sketch.type
+    }));
+    setLeftPanelContent(sketchList);
+  }, [model.elements.sketches]);
+
+  useEffect(() => {
+    if (activeView === 'List View') {
+      updateListViewContent();
+    }
+  }, [activeView, updateListViewContent, model.elements.sketches]);
+
+  useEffect(() => {
+    if (activeView === 'List View') {
+      updateListViewContent();
+    }
+  }, [activeView, updateListViewContent]);
+
+  const handleListItemSelect = (elementId) => {
+    setSelectedElementId(elementId);
+    model.selectElement(elementId);
+  };
+
+  const handlePropertyChange = (elementId, property, value) => {
+    model.updateSketch(elementId, { [property]: value });
+    updateListViewContent(); // Update the list view if the name has changed
   };
 
   const handleToolbarClick = (viewName) => {
@@ -174,11 +207,13 @@ const HypeStudio = () => {
       <Toolbar activeView={activeView} onItemClick={handleToolbarClick} />
       <div className="flex flex-1">
       <LeftPanel 
-        content={leftPanelContent}
-        activeView={activeView}
-        onSketchTypeSelect={handleSketchTypeSelect}
-        selectedSketchType={selectedSketchType}
-      />
+          content={leftPanelContent}
+          activeView={activeView}
+          onSketchTypeSelect={handleSketchTypeSelect}
+          selectedSketchType={selectedSketchType}
+          onListItemSelect={handleListItemSelect}
+          selectedElementId={selectedElementId}
+        />
         <div className="flex-1 relative">
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
           {engine && (
@@ -233,7 +268,10 @@ const HypeStudio = () => {
             })}
           </div>
         </div>
-        <PropertyPanel />  {/* Add the PropertyPanel here */}
+        <PropertyPanel 
+          selectedElement={model.getSketchById(selectedElementId)}
+          onPropertyChange={handlePropertyChange}
+        />
       </div>
       <img src="/images/banner.png" alt="Banner" className="w-48 absolute bottom-2 left-2" />
     </div>

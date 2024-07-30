@@ -1,7 +1,14 @@
 import React from 'react';
 import { FaSquare, FaCircle } from 'react-icons/fa';
 
-export const LeftPanel = ({ content, activeView, onSketchTypeSelect, selectedSketchType }) => (
+export const LeftPanel = ({ 
+  content, 
+  activeView, 
+  onSketchTypeSelect, 
+  selectedSketchType,
+  onListItemSelect,
+  selectedElementId
+}) => (
   <div className="w-48 bg-white p-2 overflow-y-auto">
     <h2 className="font-bold mb-2">{activeView}</h2>
     {activeView === 'Sketch View' ? (
@@ -20,6 +27,19 @@ export const LeftPanel = ({ content, activeView, onSketchTypeSelect, selectedSke
           <FaSquare className="mr-2" />
           Rectangle
         </li>
+      </ul>
+    ) : activeView === 'List View' ? (
+      <ul>
+        {content.map((item) => (
+          <li 
+            key={item.id}
+            onClick={() => onListItemSelect(item.id)}
+            className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedElementId === item.id ? 'bg-blue-100' : ''}`}
+          >
+            {item.type === 'circle' ? <FaCircle className="mr-2" /> : <FaSquare className="mr-2" />}
+            {item.name}
+          </li>
+        ))}
       </ul>
     ) : (
       <ul>
