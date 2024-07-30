@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Engine } from '@babylonjs/core';
 import { Header } from './stories/Header';
 import { Toolbar } from './stories/Toolbar';
@@ -58,15 +58,15 @@ const HypeStudio = () => {
     fetchLeftPanelContent(viewName);
   };
 
-  const handleViewChange = (newView) => {
+  const handleViewChange = useCallback((newView) => {
     setCurrentModelView(newView);
     console.log(`View changed to ${newView}`);
-  };
+  }, []);
 
-  const handleSelectionChange = (newSelection) => {
+  const handleSelectionChange = useCallback((newSelection) => {
     setCurrentModelSelection(newSelection);
     console.log(`Selection changed to ${newSelection}`);
-  }
+  }, []);
 
   const handleControlModeChange = (mode) => {
     setControlMode(mode);
@@ -85,7 +85,6 @@ const HypeStudio = () => {
             <BabylonViewport 
               engine={engine}
               canvas={canvasRef.current}
-              currentModelView={currentModelView} 
               onViewChange={handleViewChange} 
               onSelectionChange={handleSelectionChange}
               controlMode={controlMode} 

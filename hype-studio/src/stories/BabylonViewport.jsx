@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { 
   Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, UtilityLayerRenderer, ExecuteCodeAction, DynamicTexture,
   StandardMaterial, Color3, Camera, TransformNode, ActionManager, Matrix, RenderTargetTexture, Viewport, Mesh
@@ -6,7 +6,7 @@ import {
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import * as meshUtils from '../utils/meshUtils';
 
-export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange, onSelectionChange, controlMode }) => {
+export const BabylonViewport = memo(({ canvas, engine, onViewChange, onSelectionChange, controlMode }) => {
   const engineRef = useRef(engine);
   const canvasRef = useRef(canvas);
   const sceneRef = useRef(null);
@@ -138,10 +138,10 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), mainScene);
     light.intensity = 0.7;
 
-    // const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, mainScene);
-    // const boxMaterial = new StandardMaterial("boxMaterial", mainScene);
-    // boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
-    // box.material = boxMaterial;
+    const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, mainScene);
+    const boxMaterial = new StandardMaterial("boxMaterial", mainScene);
+    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
+    box.material = boxMaterial;
 
     // Control scene
     const controlScene = new Scene(engine);
@@ -183,10 +183,6 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
     window.addEventListener("resize", () => {
       engine.resize();
     });
-
-        if (currentModelView === '') {
-      onViewChange('Front');
-    }
     
         const handleMainScenePointerDown = (evt) => {
           if (evt.button === 2) {
@@ -246,7 +242,7 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
           window.removeEventListener("resize", engine.resize);
           // engine.dispose();
       };
-  }, [createControlCube, onViewChange, handleExtrusionInteraction, handleSketchInteraction, currentModelView, model.elements.sketches, model, 
+  }, [createControlCube, onViewChange, handleExtrusionInteraction, handleSketchInteraction, model.elements.sketches, model, 
       selectedNodeId, onSelectionChange, canvas, engine]);
 
   const renderModelToScene = useCallback(() => {
@@ -408,4 +404,4 @@ export const BabylonViewport = ({ currentModelView, canvas, engine, onViewChange
   };
 
   return null;
-};
+});
