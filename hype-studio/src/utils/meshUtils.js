@@ -3,24 +3,210 @@ import {
   } from '@babylonjs/core';
   
   let highlightLayer;
-  
-  export const manageSketchMesh = (scene, sketch, existingMesh = null) => {
-    try {
-      const points = sketch.geometry.map(point => new Vector3(point.x, point.y, 0));
-      let lines;
-      if (existingMesh) {
-        lines = MeshBuilder.CreateLines("sketch", { points: points, instance: existingMesh });
-      } else {
-        lines = MeshBuilder.CreateLines("sketch", { points: points, updatable: true }, scene);
-        lines.color = new Color3(0, 0, 1); // Blue color for sketches
-      }
-      lines.name = `sketch_${sketch.id}`;
-      return lines;
-    } catch (error) {
-      console.error(`Error managing sketch mesh: ${error.message}`);
-      return null;
+
+  const manageSplineSketchMesh = (scene, sketch, existingMesh = null) => {
+    const points = [];
+    
+    // Use a simple quadratic Bezier curve for demonstration purposes
+    for (let t = 0; t <= 1; t += 0.01) {
+      const x = (1 - t) * (1 - t) * sketch.start.x + 2 * (1 - t) * t * sketch.control.x + t * t * sketch.end.x;
+      const y = (1 - t) * (1 - t) * sketch.start.y + 2 * (1 - t) * t * sketch.control.y + t * t * sketch.end.y;
+      points.push(new Vector3(x, y, 0));
     }
+    
+    let mesh;
+    if (existingMesh) {
+      mesh = MeshBuilder.CreateLines("spline", { points: points, instance: existingMesh });
+    } else {
+      mesh = MeshBuilder.CreateLines("spline", { points: points, updatable: true }, scene);
+      mesh.color = new Color3(0, 0, 1); // Blue color for sketches
+    }
+    
+    return mesh;
   };
+
+  const manageArcSketchMesh = (scene, sketch, existingMesh = null) => {
+    const points = [];
+    const step = (sketch.endAngle - sketch.startAngle) / 64;
+    
+    for (let i = sketch.startAngle; i <= sketch.endAngle; i += step) {
+      points.push(new Vector3(
+        sketch.center.x + sketch.radius * Math.cos(i),
+        sketch.center.y + sketch.radius * Math.sin(i),
+        0
+      ));
+    }
+    
+    let mesh;
+    if (existingMesh) {
+      mesh = MeshBuilder.CreateLines("arc", { points: points, instance: existingMesh });
+    } else {
+      mesh = MeshBuilder.CreateLines("arc", { points: points, updatable: true }, scene);
+      mesh.color = new Color3(0, 0, 1); // Blue color for sketches
+    }
+    
+    return mesh;
+  };
+
+  const manageLineSketchMesh = (scene, sketch, existingMesh = null) => {
+    const points = [
+      new Vector3(sketch.start.x, sketch.start.y, 0),
+      new Vector3(sketch.end.x, sketch.end.y, 0)
+    ];
+    
+    let mesh;
+    if (existingMesh) {
+      mesh = MeshBuilder.CreateLines("line", { points: points, instance: existingMesh });
+    } else {
+      mesh = MeshBuilder.CreateLines("line", { points: points, updatable: true }, scene);
+      mesh.color = new Color3(0, 0, 1); // Blue color for sketches
+    }
+    
+    return mesh;
+  };
+
+  const managePolygonSketchMesh = (scene, sketch, existingMesh = null) => {
+    const options = {
+      shape: sketch.points.map(point => new Vector3(point.x, point.y, 0)),
+      updatable: true
+    };
+    
+    let mesh;
+    if (existingMesh) {
+      existingMesh.dispose();
+      mesh = MeshBuilder.CreatePolygon("polygon", options, scene);
+    } else {
+      mesh = MeshBuilder.CreatePolygon("polygon", options, scene);
+    }
+    
+    mesh.position = new Vector3(0, 0, 0);
+    
+    const material = new StandardMaterial("polygonMaterial", scene);
+    material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+    material.wireframe = true;
+    mesh.material = material;
+    
+    return mesh;
+  };
+
+  const manageEllipseSketchMesh = (scene, sketch, existingMesh = null) => {
+    const options = {
+      diameterX: sketch.radiusX * 2,
+      diameterY: sketch.radiusY * 2,
+      tessellation: 64
+    };
+    
+    let mesh;
+    if (existingMesh) {
+      existingMesh.dispose();
+      mesh = MeshBuilder.CreateDisc("ellipse", options, scene);
+    } else {
+      mesh = MeshBuilder.CreateDisc("ellipse", options, scene);
+    }
+    
+    mesh.position = new Vector3(sketch.center.x, sketch.center.y, 0);
+    mesh.rotation.x = Math.PI / 2; // Rotate to lie flat on the XY plane
+    
+    const material = new StandardMaterial("ellipseMaterial", scene);
+    material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+    material.wireframe = true;
+    mesh.material = material;
+    
+    return mesh;
+  };
+  
+  const manageCircleSketchMesh = (scene, sketch, existingMesh = null) => {
+    const options = {
+      diameter: sketch.radius * 2,
+      thickness: 0.01,
+      tessellation: 64
+    };
+    
+    let mesh;
+    if (existingMesh) {
+      mesh = MeshBuilder.CreateTorus("circle", options, scene);
+      existingMesh.dispose();
+    } else {
+      mesh = MeshBuilder.CreateTorus("circle", options, scene);
+    }
+    
+    mesh.position = new Vector3(sketch.center.x, sketch.center.y, 0);
+    mesh.rotation.x = Math.PI / 2; // Rotate to lie flat on the XY plane
+    
+    const material = new StandardMaterial("circleMaterial", scene);
+    material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+    material.wireframe = true;
+    mesh.material = material;
+    
+    return mesh;
+  };
+
+  const manageRectangleSketchMesh = (scene, sketch, existingMesh = null) => {
+    const options = {
+      width: sketch.width,
+      height: sketch.height,
+      updatable: true
+    };
+    
+    let mesh;
+    if (existingMesh) {
+      mesh = MeshBuilder.CreatePlane("rectangle", options, scene);
+      existingMesh.dispose();
+    } else {
+      mesh = MeshBuilder.CreatePlane("rectangle", options, scene);
+    }
+    
+    mesh.position = new Vector3(sketch.center.x, sketch.center.y, 0);
+    
+    const material = new StandardMaterial("rectangleMaterial", scene);
+    material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+    material.wireframe = true;
+    mesh.material = material;
+    
+    return mesh;
+  };
+
+  export const manageSketchMesh = (scene, sketch, existingMesh = null) => {
+  try {
+    let mesh;
+    switch (sketch.type) {
+      case 'circle':
+        mesh = manageCircleSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'rectangle':
+        mesh = manageRectangleSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'ellipse':
+        mesh = manageEllipseSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'polygon':
+        mesh = managePolygonSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'line':
+        mesh = manageLineSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'arc':
+        mesh = manageArcSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'spline':
+        mesh = manageSplineSketchMesh(scene, sketch, existingMesh);
+        break;
+      default:
+        const points = sketch.geometry.map(point => new Vector3(point.x, point.y, 0));
+        if (existingMesh) {
+          mesh = MeshBuilder.CreateLines("sketch", { points: points, instance: existingMesh });
+        } else {
+          mesh = MeshBuilder.CreateLines("sketch", { points: points, updatable: true }, scene);
+          mesh.color = new Color3(0, 0, 1); // Blue color for sketches
+        }
+    }
+    mesh.name = `sketch_${sketch.id}`;
+    return mesh;
+  } catch (error) {
+    console.error(`Error managing sketch mesh: ${error.message}`);
+    return null;
+  }
+};
   
   export const manageExtrusionMesh = (scene, extrusion, sketchGeometry, customProperties, existingNode = null) => {
     try {
