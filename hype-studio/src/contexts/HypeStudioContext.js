@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import EnhancedZenObservable from '../observables/EnhancedZenObservable';
 
-const HypeStudioContext = createContext(null);
-
-const createHypeStudioModel = () => ({
-  projectName: 'Untitled Project',
+const initialHypeStudioState = {
+  projectName: 'My Project',
+  dimensions: '20mm x 40mm x 20mm',
   units: 'mm',
   elements: {
     sketches: {},
@@ -12,162 +12,162 @@ const createHypeStudioModel = () => ({
   },
   customProperties: {},
   selectedElementId: null,
-  history: [],
-  undoneActions: [],
+  activeView: 'List View',
+  leftPanelContent: [],
+  currentModelView: '',
+  controlMode: 'rotate',
+  planeStates: {
+    X: 'hidden',
+    Y: 'hidden',
+    Z: 'hidden'
+  },
+  selectedSketchType: null,
+};
 
-  createSketch(sketchData) {
+const HypeStudioContext = createContext(null);
+
+const createHypeStudioModel = () => {
+  const model = new EnhancedZenObservable(initialHypeStudioState);
+
+  model.createSketch = function(sketchData) {
     const id = this.addElement('sketches', sketchData);
     return id;
-  },
+  };
 
-  getSketchById(id) {
-    return this.elements.sketches[id];
-  },
+  model.getSketchById = function(id) {
+    return this.getState(`elements.sketches.${id}`);
+  };
 
-  updateSketch(id, updates) {
+  model.updateSketch = function(id, updates) {
     this.updateElement('sketches', id, updates);
-  },
+  };
 
-  setProjectName(name) {
-    this.addToHistory(() => {
-      const oldName = this.projectName;
-      this.projectName = name;
-      return () => { this.projectName = oldName; };
-    });
-    this.notifyUpdate();
-  },
+  model.setProjectName = function(name) {
+    this.setState(state => ({ ...state, projectName: name }));
+  };
 
-  addElement(type, element) {
+  model.addElement = function(type, element) {
     const id = `${type}_${Date.now()}`;
-    this.addToHistory(() => {
-      this.elements[type][id] = { ...element, id };
-      return () => { delete this.elements[type][id]; };
+    this.setState(state => {
+      const newElements = { ...state.elements };
+      newElements[type][id] = { ...element, id };
+      return { ...state, elements: newElements };
     });
-    this.notifyUpdate();
     return id;
-  },
+  };
 
-  updateElement(type, id, updates) {
-    if (!this.elements[type][id]) {
-      console.error(`Element not found: ${type} ${id}`);
-      return;
-    }
-    this.addToHistory(() => {
-      const oldElement = { ...this.elements[type][id] };
-      this.elements[type][id] = { ...oldElement, ...updates };
-      return () => { this.elements[type][id] = oldElement; };
+  model.updateElement = function(type, id, updates) {
+    this.setState(state => {
+      const updatedElements = { ...state.elements };
+      if (!updatedElements[type][id]) {
+        console.error(`Element not found: ${type} ${id}`);
+        return state;
+      }
+      updatedElements[type][id] = { ...updatedElements[type][id], ...updates };
+      return { ...state, elements: updatedElements };
     });
-    this.notifyUpdate();
-  },
+  };
 
-  deleteElement(type, id) {
-    if (!this.elements[type][id]) {
-      console.error(`Element not found: ${type} ${id}`);
-      return;
-    }
-    this.addToHistory(() => {
-      const deletedElement = this.elements[type][id];
-      delete this.elements[type][id];
-      return () => { this.elements[type][id] = deletedElement; };
+  model.deleteElement = function(type, id) {
+    this.setState(state => {
+      const newElements = { ...state.elements };
+      if (!newElements[type][id]) {
+        console.error(`Element not found: ${type} ${id}`);
+        return state;
+      }
+      delete newElements[type][id];
+      return { ...state, elements: newElements };
     });
-    this.notifyUpdate();
-  },
+  };
 
-  selectElement(elementId) {
-    this.selectedElementId = elementId;
-    this.notifyUpdate();
-  },
+  model.selectElement = function(elementId) {
+    this.setState(state => ({ ...state, selectedElementId: elementId }));
+  };
 
-  setCustomProperty(elementId, propertyName, value) {
+  model.setCustomProperty = function(elementId, propertyName, value) {
     if (!this.validateCustomProperty(propertyName, value)) {
       console.error(`Invalid custom property: ${propertyName}`);
       return false;
     }
 
-    this.addToHistory(() => {
-      const oldValue = this.customProperties[elementId]?.[propertyName];
-      if (!this.customProperties[elementId]) {
-        this.customProperties[elementId] = {};
+    this.setState(state => {
+      const newCustomProperties = { ...state.customProperties };
+      if (!newCustomProperties[elementId]) {
+        newCustomProperties[elementId] = {};
       }
-      this.customProperties[elementId][propertyName] = value;
-      return () => {
-        if (oldValue === undefined) {
-          delete this.customProperties[elementId][propertyName];
-        } else {
-          this.customProperties[elementId][propertyName] = oldValue;
-        }
-      };
+      newCustomProperties[elementId][propertyName] = value;
+      return { ...state, customProperties: newCustomProperties };
     });
-    this.notifyUpdate();
     return true;
-  },
+  };
 
-  getCustomProperty(elementId, propertyName) {
-    return this.customProperties[elementId]?.[propertyName];
-  },
+  model.getCustomProperty = function(elementId, propertyName) {
+    const customProperties = this.getState(`customProperties.${elementId}`);
+    return customProperties ? customProperties[propertyName] : undefined;
+  };
 
-  validateCustomProperty(propertyName, value) {
+  model.validateCustomProperty = function(propertyName, value) {
     if (typeof propertyName !== 'string' || propertyName.trim() === '') {
       return false;
     }
 
     // Add more specific validation rules based on your application's requirements
-    // For example:
     if (propertyName === 'color' && (!Array.isArray(value) || value.length !== 3)) {
       return false;
     }
 
     return true;
-  },
+  };
 
-  addToHistory(action) {
+  model.addToHistory = function(action) {
     const undoAction = action();
     this.history.push(undoAction);
     this.undoneActions = []; // Clear redo stack when a new action is performed
-  },
+  };
 
-  undo() {
+  model.undo = function() {
     if (this.history.length === 0) return;
     const undoAction = this.history.pop();
     const redoAction = undoAction();
     this.undoneActions.push(redoAction);
     this.notifyUpdate();
-  },
+  };
 
-  redo() {
+  model.redo = function() {
     if (this.undoneActions.length === 0) return;
     const redoAction = this.undoneActions.pop();
     const undoAction = redoAction();
     this.history.push(undoAction);
     this.notifyUpdate();
-  },
+  };
 
   // Placeholder for update notification
-  notifyUpdate() {
+  model.notifyUpdate = function() {
     // This will be implemented in the provider
-  },
+  };
 
   // Serialization methods
-  toJSON() {
+  model.toJSON = function() {
     return JSON.stringify({
-      projectName: this.projectName,
-      units: this.units,
-      elements: this.elements,
-      customProperties: this.customProperties
+      projectName: this.getState('projectName'),
+      units: this.getState('units'),
+      elements: this.getState('elements'),
+      customProperties: this.getState('customProperties')
     });
-  },
+  };
 
-  fromJSON(json) {
+  model.fromJSON = function(json) {
     const data = JSON.parse(json);
-    this.projectName = data.projectName;
-    this.units = data.units;
-    this.elements = data.elements;
-    this.customProperties = data.customProperties;
-    this.history = [];
-    this.undoneActions = [];
-    this.notifyUpdate();
-  }
-});
+    this.setState(() => ({
+      projectName: data.projectName,
+      units: data.units,
+      elements: data.elements,
+      customProperties: data.customProperties
+    }));
+  };
+
+  return model;
+};
 
 export const HypeStudioProvider = ({ children }) => {
   const [model, setModel] = useState(() => createHypeStudioModel());
@@ -175,6 +175,11 @@ export const HypeStudioProvider = ({ children }) => {
   const notifyUpdate = useCallback(() => {
     setModel(prevModel => ({ ...prevModel }));
   }, []);
+
+  useEffect(() => {
+    const subscription = model.subscribe('', notifyUpdate);
+    return () => subscription.unsubscribe();
+  }, [model, notifyUpdate]);
 
   model.notifyUpdate = notifyUpdate;
 

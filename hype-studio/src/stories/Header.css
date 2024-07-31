@@ -1,0 +1,122 @@
+header {
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 20px,
+      #4c97d2 20px,
+      #4c97d2 44px,
+      #4c97d2 44px
+    );
+    background-size: 100% 50px;
+    padding: 0px;
+    height: 50px;
+    position: relative;
+  }
+  
+  .white-stripes {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 20px,
+      #4c97d2 20px,
+      #4c97d2 40px,
+      #4c97d2 40px
+    );
+    background-size: 100% 50px;
+    padding: 0px;
+    height: 50px;
+    width: 168px;
+  }
+  
+  .black-stripes {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 20px,
+      #000000 20px,
+      #000000 40px,
+      #000000 40px
+    );
+    background-size: 100% 30px;
+    padding: 0px;
+    height: 30px;
+    width: 168px;
+  }
+  
+  .all-black {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background-color: black;
+    height: 30px;
+    width: 140px;
+    color: white;
+  }
+  
+  .all-black > div {
+    padding-left: 15px;
+    font-family: Calibri, sans-serif;
+    font-size: 23px;
+    font-weight: bold;
+  }
+  
+  .all-blue {
+    position: absolute;
+    top: 30px;
+    left: 0px;
+    background-color: white;
+    height: 20px;
+    width: 188px;
+  }
+  
+  .right-side {
+    background-color: #4c97d2;
+    height: 50px;
+    width: 863px;
+    position: absolute;
+    right: 0px;
+    top: 0px;
+  }
+  
+  .right-higher {
+    background-color: #4c97d2;
+    height: 25px;
+    width: 883px;
+    position: absolute;
+    right: 0px;
+    top: 0px;
+  }
+  
+  .white-banner {
+    background-color: white;
+    height: 40px;
+    width: 653px;
+    position: absolute;
+    right: 200px;
+    top: 5px;
+  }
+  
+  .white-banner > div {
+    padding-left: 15px;
+    padding-top: 8px;
+    font-family: Calibri, sans-serif;
+    font-size: 18px;
+    font-weight: 400;
+  }
+
+ .side {
+   position: absolute;
+   right: 0px;
+   top: 50px;
+ }
+ 
+ .side img {
+   height: 50px; /* Adjust this value as needed */
+   width: auto;
+ }

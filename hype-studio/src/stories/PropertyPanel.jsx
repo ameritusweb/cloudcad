@@ -1,56 +1,50 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
+import { useVersioning } from '../hooks/useVersioning';
 
-export const PropertyPanel = () => {
+export const PropertyPanel = memo(() => {
   const model = useHypeStudioModel();
-  const [selectedElement, setSelectedElement] = useState(null);
+  const selectedElementId = useHypeStudioState('selectedElementId', null);
+  const customProperties = useHypeStudioState('customProperties', {});
   const [modifiedProperties, setModifiedProperties] = useState({});
   const [errors, setErrors] = useState({});
 
-  useEffect(() => {
-    if (model.selectedElementId) {
-      setSelectedElement(getSelectedElement(model));
-      setModifiedProperties({});
-      setErrors({});
-    } else {
-      setSelectedElement(null);
-    }
-  }, [model.selectedElementId, model]);
+  // Use versioning hook
+  const version = useVersioning(['selectedElementId', 'elements', 'customProperties']);
 
-  if (!selectedElement) {
-    return <div className="w-48 bg-white p-2">No element selected</div>;
-  }
+  const selectedElement = selectedElementId ? model.getState(`elements.${selectedElementId.split('_')[0]}.${selectedElementId}`) : null;
 
-  const handlePropertyChange = (propertyName, value) => {
-    setModifiedProperties({
-      ...modifiedProperties,
+  const handlePropertyChange = useCallback((propertyName, value) => {
+    setModifiedProperties(prev => ({
+      ...prev,
       [propertyName]: value
-    });
-  };
+    }));
+  }, []);
 
-  const applyChanges = () => {
+  const applyChanges = useCallback(() => {
     Object.entries(modifiedProperties).forEach(([propertyName, value]) => {
-      if (model.customProperties[selectedElement.id] && propertyName in model.customProperties[selectedElement.id]) {
-        const success = model.setCustomProperty(selectedElement.id, propertyName, value);
+      if (customProperties[selectedElementId] && propertyName in customProperties[selectedElementId]) {
+        const success = model.setCustomProperty(selectedElementId, propertyName, value);
         if (!success) {
-          setErrors({
-            ...errors,
+          setErrors(prev => ({
+            ...prev,
             [propertyName]: 'Invalid value'
-          });
+          }));
         } else {
-          setErrors({
-            ...errors,
+          setErrors(prev => ({
+            ...prev,
             [propertyName]: undefined
-          });
+          }));
         }
       } else {
-        model.updateElement(selectedElement.id.split('_')[0], selectedElement.id, { [propertyName]: value });
+        model.updateElement(selectedElementId.split('_')[0], selectedElementId, { [propertyName]: value });
       }
     });
     setModifiedProperties({});
-  };
+  }, [model, selectedElementId, modifiedProperties, customProperties]);
 
-  const renderPropertyInput = (propertyName, value, isCustom = false) => {
+  const renderPropertyInput = useCallback((propertyName, value, isCustom = false) => {
     const currentValue = modifiedProperties[propertyName] !== undefined ? modifiedProperties[propertyName] : value;
     const isModified = modifiedProperties[propertyName] !== undefined;
     const error = errors[propertyName];
@@ -69,9 +63,10 @@ export const PropertyPanel = () => {
         {error && <div className="text-red-500 text-xs">{error}</div>}
       </div>
     );
-  };
+  }, [modifiedProperties, errors, handlePropertyChange]);
 
-  const renderSketchProperties = () => {
+  const renderSketchProperties = useCallback(() => {
+    if (!selectedElement) return null;
     switch (selectedElement.type) {
       case 'circle':
         return renderPropertyInput('radius', selectedElement.radius || 0);
@@ -85,15 +80,19 @@ export const PropertyPanel = () => {
       default:
         return null;
     }
-  };
+  }, [selectedElement, renderPropertyInput]);
+
+  if (!selectedElement) {
+    return <div className="w-48 bg-white p-2">No element selected</div>;
+  }
 
   return (
-    <div className="w-48 bg-white p-2">
+    <div className="w-48 bg-white p-2" id={`property-panel-${version}`}>
       <h2 className="font-bold mb-2">Properties: {selectedElement.name || selectedElement.id}</h2>
       {renderPropertyInput('name', selectedElement.name || '')}
       {renderSketchProperties()}
       <h3 className="font-bold mt-4 mb-2">Custom Properties</h3>
-      {Object.entries(model.customProperties[selectedElement.id] || {}).map(([key, value]) => 
+      {Object.entries(customProperties[selectedElementId] || {}).map(([key, value]) => 
         renderPropertyInput(key, value, true)
       )}
       {Object.keys(modifiedProperties).length > 0 && (
@@ -106,12 +105,4 @@ export const PropertyPanel = () => {
       )}
     </div>
   );
-};
-
-const getSelectedElement = (model) => {
-  if (!model.selectedElementId) return null;
-  const elementType = model.selectedElementId.split('_')[0];
-  const elementByType = model.elements[elementType];
-  if (!elementByType) return null;
-  return elementByType[model.selectedElementId];
-};
+});

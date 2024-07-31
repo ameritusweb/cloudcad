@@ -1,3 +1,5 @@
+// src/utils/meshUtils.js
+
 import { 
     Vector3, MeshBuilder, StandardMaterial, Color3, HighlightLayer, TransformNode
   } from '@babylonjs/core';
@@ -166,6 +168,14 @@ import {
     return mesh;
   };
 
+  export const createSketchMesh = (scene, sketch) => {
+    return manageSketchMesh(scene, sketch);
+  };
+
+  export const createExtrusionMesh = (scene, extrusion, baseSketch) => {
+    return manageExtrusionMesh(scene, extrusion, baseSketch.geometry, extrusion.customProperties);
+  };
+
   export const manageSketchMesh = (scene, sketch, existingMesh = null) => {
   try {
     let mesh;
@@ -270,16 +280,20 @@ import {
   
   export const manageElementMesh = (scene, element, elementType, existingNode = null, customProperties = null) => {
     switch (elementType) {
-      case 'sketches':
-        return manageSketchMesh(scene, element, existingNode);
-      case 'extrusions':
-        const sketch = scene.getSketchById(element.baseSketchId); // You'll need to implement this method
-        return manageExtrusionMesh(scene, element, sketch.geometry, customProperties, existingNode);
+       case 'sketches':
+      return createSketchMesh(scene, element);
+    case 'extrusions':
+      const baseSketch = scene.getSketchById(element.baseSketchId);
+      return createExtrusionMesh(scene, element, baseSketch);
       // Add cases for other element types
       default:
         console.error(`Unknown element type: ${elementType}`);
         return null;
     }
+  };
+
+  export const clearMeshes = (meshes) => {
+    Object.values(meshes).forEach(mesh => disposeMesh(mesh));
   };
   
   export const disposeMesh = (mesh) => {
