@@ -36,21 +36,13 @@ const HypeStudio = React.memo(() => {
   }, [model]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-gray-100">
+    <div className="h-full w-full bg-gray-100">
       <Header />
       <Toolbar />
       <div className="flex flex-1">
         <LeftPanel />
         <div className="flex-1 relative">
           <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
-          {engine && (
-            <BabylonViewport 
-              ref={viewportRef}
-              engine={engine}
-              canvas={canvasRef.current}
-              onSketchCreate={handleSketchCreate}
-            />
-          )}
           <BabylonControls />
         </div>
         <PropertyPanel />

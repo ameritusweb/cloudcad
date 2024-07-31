@@ -60,9 +60,9 @@ header {
   }
   
   .all-black > div {
-    padding-left: 15px;
+    padding-left: 20px;
     font-family: Calibri, sans-serif;
-    font-size: 23px;
+    font-size: 20px;
     font-weight: bold;
   }
   
@@ -78,7 +78,7 @@ header {
   .right-side {
     background-color: #4c97d2;
     height: 50px;
-    width: 863px;
+    width: 833px;
     position: absolute;
     right: 0px;
     top: 0px;
@@ -87,7 +87,7 @@ header {
   .right-higher {
     background-color: #4c97d2;
     height: 25px;
-    width: 883px;
+    width: 853px;
     position: absolute;
     right: 0px;
     top: 0px;
@@ -98,7 +98,7 @@ header {
     height: 40px;
     width: 653px;
     position: absolute;
-    right: 200px;
+    right: 180px;
     top: 5px;
   }
   
@@ -117,6 +117,6 @@ header {
  }
  
  .side img {
-   height: 50px; /* Adjust this value as needed */
+   height: 155px; /* Adjust this value as needed */
    width: auto;
  }

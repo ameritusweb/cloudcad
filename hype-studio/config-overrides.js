@@ -1,5 +1,9 @@
 // config-overrides.js
-module.exports = function override(config, env) {
-    // Custom overrides here
-    return config;
-  };
+const { override, addWebpackModuleRule } = require('customize-cra');
+
+module.exports = override(
+  addWebpackModuleRule({
+    test: /\.svg$/,
+    use: ['@svgr/webpack'],
+  })
+);

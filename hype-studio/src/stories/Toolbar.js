@@ -1,16 +1,22 @@
 import React, { memo } from 'react';
-import { FaList, FaPencilAlt, FaCube, FaGlobe, FaDrawPolygon, FaRuler } from 'react-icons/fa';
+import MyListIcon from '../assets/list.svg';
+import MySketchIcon from '../assets/sketch.svg';
+import MyImportExportIcon from '../assets/import-export.svg';
+import MyExtrudeIcon from '../assets/extrude.svg';
+import MyDimensionIcon from '../assets/dimension.svg';
+import MyFilletChamferIcon from '../assets/chamfer.svg';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';
+import './Toolbar.css';
 
 const toolbarItems = [
-  { icon: FaList, name: 'List View' },
-  { icon: FaPencilAlt, name: 'Sketch View' },
-  { icon: FaCube, name: 'Extrude View' },
-  { icon: FaGlobe, name: 'Import/Export View' },
-  { icon: FaDrawPolygon, name: 'Fillet/Chamfer View' },
-  { icon: FaRuler, name: 'Dimension Tool View' },
+  { icon: MyListIcon, name: 'List View' },
+  { icon: MySketchIcon, name: 'Sketch View' },
+  { icon: MyExtrudeIcon, name: 'Extrude View' },
+  { icon: MyImportExportIcon, name: 'Import/Export View' },
+  { icon: MyFilletChamferIcon, name: 'Fillet/Chamfer View' },
+  { icon: MyDimensionIcon, name: 'Dimension Tool View' },
 ];
 
 export const Toolbar = memo(() => {
@@ -37,7 +43,7 @@ export const Toolbar = memo(() => {
             : 'hover:bg-blue-100'
         }`}
       >
-        <item.icon />
+        <item.icon className="icon-small" />
       </button>
     ))}
   </div>

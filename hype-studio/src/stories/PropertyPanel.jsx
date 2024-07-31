@@ -83,11 +83,11 @@ export const PropertyPanel = memo(() => {
   }, [selectedElement, renderPropertyInput]);
 
   if (!selectedElement) {
-    return <div className="w-48 bg-white p-2">No element selected</div>;
+    return <div className="w-48 bg-white p-2 z-10">No element selected</div>;
   }
 
   return (
-    <div className="w-48 bg-white p-2" id={`property-panel-${version}`}>
+    <div className="w-48 bg-white p-2 z-10" id={`property-panel-${version}`}>
       <h2 className="font-bold mb-2">Properties: {selectedElement.name || selectedElement.id}</h2>
       {renderPropertyInput('name', selectedElement.name || '')}
       {renderSketchProperties()}

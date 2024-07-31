@@ -115,6 +115,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
         const elementType = selectedNodeId.split('_')[0];
         let dragCallback;
         switch (elementType) {
+          default:
           case 'sketch':
             dragCallback = handleSketchInteraction(modelRef.current, selectedNodeId, pickResult);
             break;
