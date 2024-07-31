@@ -24,11 +24,12 @@ import * as meshUtils from './meshUtils';
     return { scene, camera };
   };
   
-  export const setupControlScene = (engine) => {
+  export const setupControlScene = (engine, canvas) => {
     const scene = new Scene(engine);
     scene.autoClear = false;
     scene.detachControl();
-  
+    scene.attachControl(canvas, true);
+
     const camera = new ArcRotateCamera("controlCamera", Math.PI / 4, Math.PI / 3, 10, Vector3.Zero(), scene);
     camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
     camera.orthoTop = 1;
@@ -231,6 +232,36 @@ import * as meshUtils from './meshUtils';
         break;
       case 'Z':
         camera.setPosition(new Vector3(0, 0, 10));
+        break;
+    }
+    camera.setTarget(Vector3.Zero());
+  };
+
+  export const updateCameraPosition = (camera, view) => {
+    if (!camera) return;
+
+    console.log("Updating camera position for view:", view);  // Debug log
+    
+    switch (view) {
+      case "Front":
+        camera.setPosition(new Vector3(0, 0, -10));
+        break;
+      case "Back":
+        camera.setPosition(new Vector3(0, 0, 10));
+        break;
+      case "Left":
+        camera.setPosition(new Vector3(-10, 0, 0));
+        break;
+      case "Right":
+        camera.setPosition(new Vector3(10, 0, 0));
+        break;
+      case "Top":
+        camera.setPosition(new Vector3(0, 10, 0));
+        break;
+      case "Bottom":
+        camera.setPosition(new Vector3(0, -10, 0));
+        break;
+      default:
         break;
     }
     camera.setTarget(Vector3.Zero());

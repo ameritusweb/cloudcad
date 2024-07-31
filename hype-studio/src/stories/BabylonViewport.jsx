@@ -16,6 +16,7 @@ import {
   handleSketchInteraction,
   handleExtrusionInteraction,
   updateCameraForPlane,
+  updateCameraPosition,
   renderScene
 } from '../utils/babylonUtils';
 import { usePointerEvents } from '../hooks/usePointerEvents';
@@ -46,7 +47,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
     cameraRef.current = camera;
 
     // Control scene setup
-    const { scene: controlScene } = setupControlScene(engine);
+    const { scene: controlScene } = setupControlScene(engine, canvas);
     controlSceneRef.current = controlScene;
 
     createControlCube(controlScene, (normal) => {
@@ -54,6 +55,8 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       currentViewRef.current = newView;
       modelRef.current.setState(state => ({ ...state, currentModelView: newView }));
     });
+
+    modelRef.current.setState(state => ({ ...state, currentModelView: currentViewRef.current }));
 
     highlightLayerRef.current = new HighlightLayer("highlightLayer", scene);
 
@@ -73,6 +76,11 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       updatePlaneVisibility(planesRef.current, newPlaneStates, (plane) => updateCameraForPlane(camera, plane))
     );
 
+    const currentModelViewSubscription = modelRef.current.subscribe('currentModelView', (newCurrentModelView) => {
+      currentViewRef.current = newCurrentModelView;
+      updateCameraPosition(cameraRef.current, newCurrentModelView);
+    });
+
     const renderSubscription = modelRef.current.subscribe('', () => {
       meshesRef.current = renderScene(scene, modelRef.current, meshesRef.current);
     });
@@ -89,6 +97,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
         controlModeSubscription.unsubscribe();
         planeStatesSubscription.unsubscribe();
         renderSubscription.unsubscribe();
+        currentModelViewSubscription.unsubscribe();
         window.removeEventListener("resize", engine.resize);
         scene.dispose();
         controlScene.dispose();

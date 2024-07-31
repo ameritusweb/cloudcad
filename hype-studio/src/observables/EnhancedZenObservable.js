@@ -75,6 +75,14 @@ class EnhancedZenObservable {
   }
 
   notifyObservers(key, value, diff) {
+    // Notify exact matches
+    this.notifyExactObservers(key, value, diff);
+
+    // Notify partial matches
+    this.notifyPartialObservers(key, value, diff);
+  }
+
+  notifyExactObservers(key, value, diff) {
     const regularObservers = this.regularObservers.get(key);
     const diffObservers = this.diffObservers.get(key);
 
@@ -83,6 +91,24 @@ class EnhancedZenObservable {
     }
     if (diffObservers) {
       diffObservers.forEach(observer => observer.next(diff));
+    }
+  }
+
+  notifyPartialObservers(key, value, diff) {
+    for (const [observerKey, observers] of this.regularObservers.entries()) {
+      if (key.startsWith(observerKey) && key !== observerKey) {
+        observers.forEach(observer => observer.next(this.getState(observerKey)));
+      }
+    }
+
+    for (const [observerKey, observers] of this.diffObservers.entries()) {
+      if (key.startsWith(observerKey) && key !== observerKey) {
+        observers.forEach(observer => observer.next({
+          type: 'nested',
+          path: key.slice(observerKey.length + 1),
+          value: diff
+        }));
+      }
     }
   }
 
