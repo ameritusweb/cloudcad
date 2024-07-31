@@ -1,8 +1,9 @@
 import React, { memo } from 'react';
-import { FaList } from 'react-icons/fa';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import './Header.css'; // We'll create this file for the styles
 import sideImage from '../assets/side.png';
+import UndoIcon from '../assets/left-arrow.svg';
+import RedoIcon from '../assets/right-arrow.svg';
 import { useVersioning } from '../hooks/useVersioning';
 
 export const Header = memo(() => {
@@ -23,6 +24,12 @@ export const Header = memo(() => {
       <div className="right-higher"></div>
       <div className="white-banner">
         <div>{`${projectName} - ${dimensions}`}</div>
+        <div className="undo">
+          <UndoIcon className="undo-icon"/>
+        </div>
+        <div className="redo">
+          <RedoIcon className="redo-icon"/>
+        </div>
       </div>
       <div className="side">
         <img src={sideImage} alt="Side" />

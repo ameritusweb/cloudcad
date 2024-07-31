@@ -120,3 +120,25 @@ header {
    height: 155px; /* Adjust this value as needed */
    width: auto;
  }
+
+ .undo {
+  position:absolute;
+  right: 27px;
+  top: -14px;
+ }
+
+ .redo {
+  position:absolute;
+  right: 0px;
+  top: -8px;
+ }
+
+ .undo-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.redo-icon {
+  width: 44px;
+  height: 44px;
+}

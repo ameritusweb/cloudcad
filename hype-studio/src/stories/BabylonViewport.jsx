@@ -38,7 +38,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
   const currentViewRef = useRef('Front');
 
   useEffect(() => {
-    if (!engine || !canvas) return;
+    if (!engine || !canvas || !engine.isEngineActive) return;
 
     // Main scene setup
     const { scene, camera } = setupMainScene(engine, canvas);
@@ -78,19 +78,21 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
     });
 
     engine.runRenderLoop(() => {
-      scene.render();
-      controlScene.render();
+      sceneRef.current.render();
+      controlSceneRef.current.render();
     });
 
     window.addEventListener("resize", () => engine.resize());
 
     return () => {
-      controlModeSubscription.unsubscribe();
-      planeStatesSubscription.unsubscribe();
-      renderSubscription.unsubscribe();
-      window.removeEventListener("resize", engine.resize);
-      scene.dispose();
-      controlScene.dispose();
+      if (engine.isEngineActive) {
+        controlModeSubscription.unsubscribe();
+        planeStatesSubscription.unsubscribe();
+        renderSubscription.unsubscribe();
+        window.removeEventListener("resize", engine.resize);
+        scene.dispose();
+        controlScene.dispose();
+      }
     };
   }, [engine, canvas]);
 

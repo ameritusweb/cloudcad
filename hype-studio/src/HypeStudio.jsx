@@ -12,21 +12,23 @@ const HypeStudio = React.memo(() => {
   const model = useHypeStudioModel();
   const [engine, setEngine] = useState(null);
   const canvasRef = useRef(null);
-  const viewportRef = useRef(null);
 
   useEffect(() => {
-    if (canvasRef.current && !engine) {
+    if (canvasRef.current) {
       const newEngine = new Engine(canvasRef.current, true);
       setEngine(newEngine);
+      newEngine.isEngineActive = true;
 
       window.addEventListener('resize', () => newEngine.resize());
 
       return () => {
         window.removeEventListener('resize', () => newEngine.resize());
+        newEngine.isEngineActive = false;
         newEngine.dispose();
+        setEngine(null);
       };
     }
-  }, [engine]);
+  }, []);
 
   const handleSketchCreate = useCallback((type, sketchData) => {
     const newSketch = { type, ...sketchData };
@@ -42,7 +44,8 @@ const HypeStudio = React.memo(() => {
       <div className="flex flex-1">
         <LeftPanel />
         <div className="flex-1 relative">
-          <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+          <canvas className="border-2 border-gray-300" ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+          {engine && (<BabylonViewport engine={engine} canvas={canvasRef.current} />)}
           <BabylonControls />
         </div>
         <PropertyPanel />

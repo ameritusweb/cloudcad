@@ -83,7 +83,10 @@ export const PropertyPanel = memo(() => {
   }, [selectedElement, renderPropertyInput]);
 
   if (!selectedElement) {
-    return <div className="w-48 bg-white p-2 z-10">No element selected</div>;
+    return <div className='w-48 bg-white p-2 z-10'>
+      <h2 className="font-bold mb-2 p-2">Properties View</h2>
+      <div className="w-48 bg-white p-2">No element selected</div>
+      </div>;
   }
 
   return (

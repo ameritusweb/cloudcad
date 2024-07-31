@@ -16,6 +16,11 @@ import * as meshUtils from './meshUtils';
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
     light.intensity = 0.7;
   
+    const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, scene);
+    const boxMaterial = new StandardMaterial("boxMaterial", scene);
+    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
+    box.material = boxMaterial;
+
     return { scene, camera };
   };
   
@@ -183,7 +188,7 @@ import * as meshUtils from './meshUtils';
   };
   
   export const handleSketchInteraction = (model, sketchId, pickResult) => {
-    const sketch = model.elements.sketches[sketchId];
+    const sketch = model.state.elements.sketches[sketchId];
     if (sketch) {
       const closestPointIndex = meshUtils.findClosestPointIndex(sketch.geometry, pickResult.pickedPoint);
       if (closestPointIndex !== -1) {
@@ -201,7 +206,7 @@ import * as meshUtils from './meshUtils';
   };
   
   export const handleExtrusionInteraction = (model, extrusionId, pickResult) => {
-    const extrusion = model.elements.extrusions[extrusionId];
+    const extrusion = model.state.elements.extrusions[extrusionId];
     if (extrusion) {
       const startDepth = extrusion.depth;
       const startY = pickResult.pickedPoint.y;
@@ -217,6 +222,7 @@ import * as meshUtils from './meshUtils';
   
   export const updateCameraForPlane = (camera, plane) => {
     switch (plane) {
+      default:
       case 'X':
         camera.setPosition(new Vector3(10, 0, 0));
         break;
@@ -236,14 +242,14 @@ import * as meshUtils from './meshUtils';
     meshes = {};
   
     // Render sketches
-    Object.values(model.elements.sketches).forEach(sketch => {
+    Object.values(model.state.elements.sketches).forEach(sketch => {
       const mesh = meshUtils.createSketchMesh(scene, sketch);
       meshes[sketch.id] = mesh;
     });
   
     // Render extrusions
-    Object.values(model.elements.extrusions).forEach(extrusion => {
-      const mesh = meshUtils.createExtrusionMesh(scene, extrusion, model.elements.sketches[extrusion.baseSketchId]);
+    Object.values(model.state.elements.extrusions).forEach(extrusion => {
+      const mesh = meshUtils.createExtrusionMesh(scene, extrusion, model.state.elements.sketches[extrusion.baseSketchId]);
       meshes[extrusion.id] = mesh;
     });
   

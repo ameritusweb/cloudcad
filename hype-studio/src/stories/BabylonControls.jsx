@@ -79,7 +79,7 @@ export const BabylonControls = memo(() => {
       <div id={`babylon-controls-${version}`} className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
         Current View: {currentModelView}
       </div>
-      <div className="absolute bottom-[2rem] right-2 flex space-x-2">
+      <div className="absolute bottom-[0.5rem] right-2 flex space-x-2">
         <button 
           onClick={() => handleControlModeChange('zoom')}
           className={`p-2 rounded ${controlMode === 'zoom' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
@@ -99,7 +99,7 @@ export const BabylonControls = memo(() => {
           <FaSyncAlt />
         </button>
       </div>
-      <div className="absolute bottom-[2rem] left-2 flex space-x-2">
+      <div className="absolute bottom-[0.5rem] left-2 flex space-x-2">
         {['X', 'Y', 'Z'].map(plane => {
           const { bgColor, icon } = getButtonStyle(plane);
           return (
