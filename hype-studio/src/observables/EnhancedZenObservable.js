@@ -3,8 +3,8 @@ import Observable from 'zen-observable';
 class EnhancedZenObservable {
   constructor(initialState = {}) {
     this.state = initialState;
-    this.regularObservables = new Map();
-    this.diffObservables = new Map();
+    this.regularObservers = new Map();
+    this.diffObservers = new Map();
     this.history = [JSON.parse(JSON.stringify(initialState))];
     this.currentIndex = 0;
     this.initializeObservables(this.state);
@@ -13,11 +13,11 @@ class EnhancedZenObservable {
   initializeObservables(state, prefix = '') {
     for (const key in state) {
       const fullKey = prefix ? `${prefix}.${key}` : key;
-      if (!this.regularObservables.has(fullKey)) {
-        this.regularObservables.set(fullKey, new Observable(() => {}));
+      if (!this.regularObservers.has(fullKey)) {
+        this.regularObservers.set(fullKey, []);
       }
-      if (!this.diffObservables.has(fullKey)) {
-        this.diffObservables.set(fullKey, new Observable(() => {}));
+      if (!this.diffObservers.has(fullKey)) {
+        this.diffObservers.set(fullKey, []);
       }
       if (typeof state[key] === 'object' && state[key] !== null) {
         this.initializeObservables(state[key], fullKey);
@@ -75,14 +75,14 @@ class EnhancedZenObservable {
   }
 
   notifyObservers(key, value, diff) {
-    const regularObservable = this.regularObservables.get(key);
-    const diffObservable = this.diffObservables.get(key);
-    
-    if (regularObservable) {
-      regularObservable.next(value);
+    const regularObservers = this.regularObservers.get(key);
+    const diffObservers = this.diffObservers.get(key);
+
+    if (regularObservers) {
+      regularObservers.forEach(observer => observer.next(value));
     }
-    if (diffObservable) {
-      diffObservable.next(diff);
+    if (diffObservers) {
+      diffObservers.forEach(observer => observer.next(diff));
     }
   }
 
@@ -128,40 +128,33 @@ class EnhancedZenObservable {
   }
 
   subscribe(key, callback, useDiff = false) {
-    let observable = useDiff ? this.diffObservables.get(key) : this.regularObservables.get(key);
-    
-    if (!observable) {
-      console.warn(`Warning: No observable found for key: '${key}'. Creating a new observable.`);
-      observable = new Observable(() => {});
-      if (useDiff) {
-        this.diffObservables.set(key, observable);
-      } else {
-        this.regularObservables.set(key, observable);
-      }
-      
-      // Initialize the state for this key if it doesn't exist
-      if (this.getState(key) === undefined) {
-        console.warn(`Warning: Initializing state for '${key}' with undefined value.`);
-        this.setState((state) => {
-          const keys = key.split('.');
-          let current = state;
-          for (let i = 0; i < keys.length - 1; i++) {
-            if (!(keys[i] in current)) {
-              current[keys[i]] = {};
-            }
-            current = current[keys[i]];
-          }
-          current[keys[keys.length - 1]] = undefined;
-          return state;
-        });
-      }
-    }
-  
-    return observable.subscribe({
+    const observer = {
       next: callback,
       error: (err) => console.error(`Subscription error for key '${key}':`, err),
       complete: () => console.log(`Subscription to '${key}' completed`)
-    });
+    };
+
+    if (useDiff) {
+      if (!this.diffObservers.has(key)) {
+        this.diffObservers.set(key, []);
+      }
+      this.diffObservers.get(key).push(observer);
+    } else {
+      if (!this.regularObservers.has(key)) {
+        this.regularObservers.set(key, []);
+      }
+      this.regularObservers.get(key).push(observer);
+    }
+
+    return {
+      unsubscribe: () => {
+        if (useDiff) {
+          this.diffObservers.set(key, this.diffObservers.get(key).filter(obs => obs !== observer));
+        } else {
+          this.regularObservers.set(key, this.regularObservers.get(key).filter(obs => obs !== observer));
+        }
+      }
+    };
   }
 
   undo() {

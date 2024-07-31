@@ -173,15 +173,15 @@ export const HypeStudioProvider = ({ children }) => {
   const [model, setModel] = useState(() => createHypeStudioModel());
 
   const notifyUpdate = useCallback(() => {
-    setModel(prevModel => ({ ...prevModel }));
-  }, []);
+    // Force a re-render without changing the model reference
+    model.version = (model.version || 0) + 1;
+    setModel(model);
+  }, [model]);
 
-  useEffect(() => {
-    const subscription = model.subscribe('', notifyUpdate);
-    return () => subscription.unsubscribe();
+  // Set notifyUpdate only once when the component mounts
+  React.useEffect(() => {
+    model.notifyUpdate = notifyUpdate;
   }, [model, notifyUpdate]);
-
-  model.notifyUpdate = notifyUpdate;
 
   return (
     <HypeStudioContext.Provider value={model}>
