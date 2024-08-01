@@ -1,4 +1,4 @@
-import React, { useRef, useState, memo } from 'react';
+import React, { useEffect, useState, memo } from 'react';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';
@@ -20,6 +20,18 @@ export const BabylonControls = memo(() => {
     Y: PlaneState.HIDDEN,
     Z: PlaneState.HIDDEN
   });
+
+  const [cameraInfo, setCameraInfo] = useState(model.getState('camera'));
+
+  useEffect(() => {
+    const subscription = model.subscribe('camera', (newCameraInfo) => {
+      setCameraInfo(newCameraInfo);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [model]);
+
+  const { position, target } = cameraInfo;
 
   const version = useVersioning(['currentModelView', 'controlMode', 'planeStates']);
 
@@ -137,6 +149,16 @@ export const BabylonControls = memo(() => {
             </button>
           );
         })}
+      </div>
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white p-2 rounded shadow">
+        {position !== null && target !== null && (
+          <>
+            <div>Camera Position:</div>
+            <div>X: {position.x.toFixed(2)}, Y: {position.y.toFixed(2)}, Z: {position.z.toFixed(2)}</div>
+            <div>Camera Target:</div>
+            <div>X: {target.x.toFixed(2)}, Y: {target.y.toFixed(2)}, Z: {target.z.toFixed(2)}</div>
+          </>
+        )}
       </div>
     </>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, memo } from 'react';
+import { useEffect, useRef, useCallback, memo } from 'react';
 import { HighlightLayer } from '@babylonjs/core';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
@@ -39,6 +39,26 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
   const startPointRef = useRef(null);
   const previewMeshRef = useRef(null);
   const currentViewRef = useRef('Front');
+
+  const updateCameraInfo = useCallback(() => {
+    if (cameraRef.current) {
+      modelRef.current.setState(state => ({
+        ...state,
+        camera: {
+          position: {
+            x: cameraRef.current.position.x,
+            y: cameraRef.current.position.y,
+            z: cameraRef.current.position.z
+          },
+          target: {
+            x: cameraRef.current.target.x,
+            y: cameraRef.current.target.y,
+            z: cameraRef.current.target.z
+          }}
+        }
+      ));
+    }
+  }, [modelRef]);
 
   useEffect(() => {
     if (!engine || !canvas || !engine.isEngineActive) return;
@@ -87,6 +107,10 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       meshesRef.current = renderScene(scene, modelRef.current, meshesRef.current);
     });
 
+    scene.registerBeforeRender(() => {
+      updateCameraInfo();
+    });
+
     engine.runRenderLoop(() => {
       sceneRef.current.render();
       controlSceneRef.current.render();
@@ -105,7 +129,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
         controlScene.dispose();
       }
     };
-  }, [engine, canvas]);
+  }, [engine, canvas, updateCameraInfo]);
 
   const handlePointerDown = useCallback((evt, pickResult) => {
     if (evt.button === 2) {

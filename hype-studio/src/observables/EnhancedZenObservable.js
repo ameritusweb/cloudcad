@@ -114,27 +114,32 @@ class EnhancedZenObservable {
 
   computeDiff(oldObj, newObj) {
     const diff = {};
-    for (const key in newObj) {
-      if (!(key in oldObj)) {
-        diff[key] = { type: 'replace', value: newObj[key] };
-      } else if (typeof newObj[key] === 'object' && newObj[key] !== null) {
-        if (Array.isArray(newObj[key])) {
-          diff[key] = { type: 'array', value: this.computeArrayDiff(oldObj[key], newObj[key]) };
+    const allKeys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
+
+    for (const key of allKeys) {
+      const oldValue = oldObj[key];
+      const newValue = newObj[key];
+
+      if (oldValue === newValue) continue;
+
+      if (oldValue === null || newValue === null) {
+        diff[key] = { type: 'replace', value: newValue };
+      } else if (typeof oldValue !== typeof newValue) {
+        diff[key] = { type: 'replace', value: newValue };
+      } else if (typeof newValue === 'object') {
+        if (Array.isArray(newValue)) {
+          diff[key] = { type: 'array', value: this.computeArrayDiff(oldValue, newValue) };
         } else {
-          const nestedDiff = this.computeDiff(oldObj[key], newObj[key]);
+          const nestedDiff = this.computeDiff(oldValue, newValue);
           if (Object.keys(nestedDiff).length > 0) {
             diff[key] = { type: 'object', value: nestedDiff };
           }
         }
-      } else if (oldObj[key] !== newObj[key]) {
-        diff[key] = { type: 'replace', value: newObj[key] };
+      } else {
+        diff[key] = { type: 'replace', value: newValue };
       }
     }
-    for (const key in oldObj) {
-      if (!(key in newObj)) {
-        diff[key] = { type: 'replace', value: undefined };
-      }
-    }
+
     return diff;
   }
 
