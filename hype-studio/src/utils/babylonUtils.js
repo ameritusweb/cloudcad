@@ -6,20 +6,22 @@ import {
   } from '@babylonjs/core';
 import * as meshUtils from './meshUtils';
   
-  export const setupMainScene = (engine, canvas) => {
+  export const setupMainScene = (engine, canvas, meshesRef) => {
     const scene = new Scene(engine);
     scene.clearColor = new Color3(0.95, 0.95, 0.95);
   
     const camera = new ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2, 10, Vector3.Zero(), scene);
     camera.attachControl(canvas, true);
   
-    const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
-    light.intensity = 0.7;
+    const light = new HemisphericLight("light", new Vector3(0, 1, -1), scene);
+    light.intensity = 0.4;
   
     const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, scene);
     const boxMaterial = new StandardMaterial("boxMaterial", scene);
-    boxMaterial.diffuseColor = new Color3(0.4, 0.4, 0.4);
+    boxMaterial.emissiveColor = new Color3(0.4, 0.4, 0.4);
     box.material = boxMaterial;
+
+    // meshesRef.current['extrusions_1'] = box;
 
     return { scene, camera };
   };
@@ -51,6 +53,9 @@ import * as meshUtils from './meshUtils';
     camera.inputs.clear();
   
     switch (controlMode) {
+      case 'pointer':
+      case 'drawing':
+      case 'dimension':
       case 'zoom':
         camera.inputs.addMouseWheel();
         break;

@@ -42,7 +42,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
     if (!engine || !canvas || !engine.isEngineActive) return;
 
     // Main scene setup
-    const { scene, camera } = setupMainScene(engine, canvas);
+    const { scene, camera } = setupMainScene(engine, canvas, meshesRef);
     sceneRef.current = scene;
     cameraRef.current = camera;
 
@@ -108,6 +108,11 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
   const handlePointerDown = useCallback((evt, pickResult) => {
     if (evt.button === 2) {
       evt.preventDefault();
+      return;
+    }
+
+    const controlMode = modelRef.current.state.controlMode;
+    if (controlMode === 'rotate' || controlMode === 'pan' || controlMode === 'zoom') {
       return;
     }
 
