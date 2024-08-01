@@ -6,7 +6,6 @@ import { createControlCube, getViewFromNormal } from '../utils/sceneUtils';
 import {
   setupMainScene,
   setupControlScene,
-  updateCameraControls,
   createPlane,
   updatePlaneVisibility,
   createPreviewMesh,
@@ -15,10 +14,13 @@ import {
   handleMeshSelection,
   handleSketchInteraction,
   handleExtrusionInteraction,
-  updateCameraForPlane,
-  updateCameraPosition,
   renderScene
 } from '../utils/babylonUtils';
+import {
+  updateCameraControls,
+  updateCameraForPlane,
+  updateCameraPosition
+} from '../utils/cameraUtils';
 import { usePointerEvents } from '../hooks/usePointerEvents';
 
 export const BabylonViewport = memo(({ engine, canvas }) => {

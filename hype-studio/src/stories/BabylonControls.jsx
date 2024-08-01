@@ -76,49 +76,49 @@ export const BabylonControls = memo(() => {
 
   return (
     <>
-      <div id={`babylon-controls-${version}`} className="absolute top-2 right-2 text-white bg-black bg-opacity-50 p-2 rounded">
+      <div id={`babylon-controls-${version}`} className="absolute top-2 right-2 text-white bg-black hover:bg-opacity-100 bg-opacity-50 p-2 rounded">
         Current View: {currentModelView}
       </div>
       <div className="absolute bottom-[0.5rem] right-2 flex space-x-2">
       <button 
           title={'Pointer Mode'}
           onClick={() => handleControlModeChange('pointer')}
-          className={`p-2 rounded ${controlMode === 'pointer' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+          className={`p-2 rounded ${controlMode === 'pointer' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
         >
           <FaMousePointer />
         </button>
         <button 
           title={'Drawing Mode'}
           onClick={() => handleControlModeChange('drawing')}
-          className={`p-2 rounded ${controlMode === 'drawing' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+          className={`p-2 rounded ${controlMode === 'drawing' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
         >
           <FaPencilAlt />
         </button>
         <button 
           title={'Dimension Mode'}
           onClick={() => handleControlModeChange('dimension')}
-          className={`p-2 rounded ${controlMode === 'dimension' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+          className={`p-2 rounded ${controlMode === 'dimension' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
         >
           <FaRuler />
         </button>
         <button 
           title={'Zoom'}
           onClick={() => handleControlModeChange('zoom')}
-          className={`p-2 rounded ${controlMode === 'zoom' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+          className={`p-2 rounded ${controlMode === 'zoom' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
         >
           <FaSearchPlus />
         </button>
         <button 
           title={'Pan'}
           onClick={() => handleControlModeChange('pan')}
-          className={`p-2 rounded ${controlMode === 'pan' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+          className={`p-2 rounded ${controlMode === 'pan' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
         >
           <FaHandPaper />
         </button>
         <button 
           title={'Rotate'}
           onClick={() => handleControlModeChange('rotate')}
-          className={`p-2 rounded ${controlMode === 'rotate' ? 'bg-blue-500' : 'bg-gray-500'} text-white`}
+          className={`p-2 rounded ${controlMode === 'rotate' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
         >
           <FaSyncAlt />
         </button>
@@ -130,7 +130,7 @@ export const BabylonControls = memo(() => {
             <button 
               key={plane}
               onClick={() => onCyclePlaneState(plane)}
-              className={`p-2 rounded ${bgColor} text-white flex items-center justify-center w-12 h-12`}
+              className={`p-2 rounded ${bgColor} text-white flex items-center hover:bg-opacity-100 bg-opacity-50 justify-center w-12 h-12`}
             >
               {icon}
               <span className="ml-1">{plane}</span>
