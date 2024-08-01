@@ -73,7 +73,7 @@ import * as meshUtils from './meshUtils';
     const material = new StandardMaterial(`${axis}PlaneMaterial`, scene);
     material.diffuseColor = new Color3(0.5, 0.5, 0.5);
     material.alpha = 0.5;
-    material.backFaceCulling = true;
+    material.backFaceCulling = false;
     plane.material = material;
   
     switch(axis) {
@@ -88,6 +88,8 @@ import * as meshUtils from './meshUtils';
         // No rotation needed
         break;
     }
+
+    plane.isVisible = false;
   
     return plane;
   };
@@ -165,8 +167,8 @@ import * as meshUtils from './meshUtils';
         const nodeId = pickedNode.id;
   
         // Clear previous selection
-        if (model.selectedElementId && meshes[model.selectedElementId]) {
-          meshUtils.unhighlightMesh(meshes[model.selectedElementId]);
+        if (model.state.selectedElementId && meshes[model.state.selectedElementId]) {
+          meshUtils.unhighlightMesh(meshes[model.state.selectedElementId]);
         }
   
         // Set new selection
@@ -179,8 +181,8 @@ import * as meshUtils from './meshUtils';
       }
     } else {
       // Clear selection if clicking on empty space
-      if (model.selectedElementId && meshes[model.selectedElementId]) {
-        meshUtils.unhighlightMesh(meshes[model.selectedElementId]);
+      if (model.state.selectedElementId && meshes[model.state.selectedElementId]) {
+        meshUtils.unhighlightMesh(meshes[model.state.selectedElementId]);
       }
       model.selectElement(null);
       onSelectionChange(null);
