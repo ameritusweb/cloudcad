@@ -38,7 +38,7 @@ const HypeStudio = React.memo(() => {
   }, [model]);
 
   return (
-    <div className="h-full w-full bg-gray-100">
+    <div className="h-full w-full">
       <Header />
       <Toolbar />
       <div className="flex flex-1">
