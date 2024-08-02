@@ -5,6 +5,11 @@ import MyImportExportIcon from '../assets/import-export.svg';
 import MyExtrudeIcon from '../assets/extrude.svg';
 import MyDimensionIcon from '../assets/dimension.svg';
 import MyFilletChamferIcon from '../assets/chamfer.svg';
+import MyMirroringIcon from '../assets/mirror.svg';
+import MyPatternIcon from '../assets/pattern.svg';
+import MyFormulaIcon from '../assets/formula.svg';
+import MyShapeIcon from '../assets/shape.svg';
+import MyStructuralAnalysisIcon from '../assets/analysis.svg';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';
@@ -15,8 +20,11 @@ const toolbarItems = [
   { icon: MySketchIcon, name: 'Sketch View' },
   { icon: MyExtrudeIcon, name: 'Extrude View' },
   { icon: MyImportExportIcon, name: 'Import/Export View' },
-  { icon: MyFilletChamferIcon, name: 'Fillet/Chamfer View' },
-  { icon: MyDimensionIcon, name: 'Dimension Tool View' },
+  { icon: MyShapeIcon, name: 'Shape Tool View' },
+  { icon: MyMirroringIcon, name: 'Mirroring View' },
+  { icon: MyPatternIcon, name: 'Pattern View' },
+  { icon: MyFormulaIcon, name: 'Formula View' },
+  { icon: MyStructuralAnalysisIcon, name: 'Structural Analysis View' }
 ];
 
 export const Toolbar = memo(() => {

@@ -22,6 +22,11 @@ export const Header = memo(() => {
       <div className="all-blue"></div>
       <div className="right-side"></div>
       <div className="right-higher"></div>
+      <div className="white-stripes-right"></div>
+      <div className="white-stripes-right-2"></div>
+      <div className="white-stripes-right-3"></div>
+      <div className="white-stripes-right-4"></div>
+      <div className="white-stripes-right-5"></div>
       <div className="white-banner">
         <div>{`${projectName} - ${dimensions}`}</div>
         <div className="undo">

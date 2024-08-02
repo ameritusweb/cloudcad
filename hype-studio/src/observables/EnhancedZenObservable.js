@@ -1,28 +1,87 @@
-import Observable from 'zen-observable';
+import ZenObservable from 'zen-observable';
+import { computeDiff as computeDiffUtil, computeArrayDiff as computeArrayDiffUtil } from '../utils/observableUtils';
+
+class EnhancedSubscription {
+  constructor(subscribe) {
+    this._zenObservable = new ZenObservable(subscribe);
+    this._subscriptions = new Map();
+    this._parentObservable = null;
+  }
+
+  subscribe(observerOrNext, error, complete) {
+    let observer;
+    if (typeof observerOrNext === 'function') {
+      observer = {
+        next: observerOrNext,
+        error: error || (() => {}),
+        complete: complete || (() => {})
+      };
+    } else {
+      observer = observerOrNext;
+    }
+
+    const subscription = this._zenObservable.subscribe(observer);
+    this._subscriptions.set(subscription, observer);
+
+    return {
+      then: this,
+      unsubscribe: () => {
+        subscription.unsubscribe();
+        this._subscriptions.delete(subscription);
+      }
+    };
+  }
+
+  map(project) {
+    const mapped = new EnhancedSubscription(observer => 
+      this._zenObservable.subscribe({
+        next: value => observer.next(project(value)),
+        error: error => observer.error(error),
+        complete: () => observer.complete()
+      })
+    );
+    mapped._parentObservable = this;
+    return mapped;
+  }
+
+  filter(predicate) {
+    const filtered = new EnhancedSubscription(observer => 
+      this._zenObservable.subscribe({
+        next: value => predicate(value) && observer.next(value),
+        error: error => observer.error(error),
+        complete: () => observer.complete()
+      })
+    );
+    filtered._parentObservable = this;
+    return filtered;
+  }
+
+  notify(value) {
+    this._subscriptions.forEach((observer) => {
+      observer.next(value);
+    });
+  }
+
+  notifyError(error) {
+    this._subscriptions.forEach((observer) => {
+      observer.error(error);
+    });
+  }
+
+  notifyComplete() {
+    this._subscriptions.forEach((observer) => {
+      observer.complete();
+    });
+  }
+}
 
 class EnhancedZenObservable {
   constructor(initialState = {}) {
     this.state = initialState;
-    this.regularObservers = new Map();
-    this.diffObservers = new Map();
     this.history = [JSON.parse(JSON.stringify(initialState))];
     this.currentIndex = 0;
-    this.initializeObservables(this.state);
-  }
-
-  initializeObservables(state, prefix = '') {
-    for (const key in state) {
-      const fullKey = prefix ? `${prefix}.${key}` : key;
-      if (!this.regularObservers.has(fullKey)) {
-        this.regularObservers.set(fullKey, []);
-      }
-      if (!this.diffObservers.has(fullKey)) {
-        this.diffObservers.set(fullKey, []);
-      }
-      if (typeof state[key] === 'object' && state[key] !== null) {
-        this.initializeObservables(state[key], fullKey);
-      }
-    }
+    this.observables = new Map();
+    this.diffObservables = new Map();
   }
 
   setState(updater, recordHistory = true) {
@@ -76,111 +135,60 @@ class EnhancedZenObservable {
 
   notifyObservers(key, value, diff) {
     // Notify exact matches
-    this.notifyExactObservers(key, value, diff);
+    if (this.observables.has(key)) {
+      const observable = this.observables.get(key);
+      observable.notify(value);
+    }
+    if (this.diffObservables.has(key)) {
+      const diffObservable = this.diffObservables.get(key);
+      diffObservable.notify(diff);
+    }
 
     // Notify partial matches
-    this.notifyPartialObservers(key, value, diff);
-  }
-
-  notifyExactObservers(key, value, diff) {
-    const regularObservers = this.regularObservers.get(key);
-    const diffObservers = this.diffObservers.get(key);
-
-    if (regularObservers) {
-      regularObservers.forEach(observer => observer.next(value));
-    }
-    if (diffObservers) {
-      diffObservers.forEach(observer => observer.next(diff));
-    }
-  }
-
-  notifyPartialObservers(key, value, diff) {
-    for (const [observerKey, observers] of this.regularObservers.entries()) {
+    for (const [observerKey, observable] of this.observables.entries()) {
       if (key.startsWith(observerKey) && key !== observerKey) {
-        observers.forEach(observer => observer.next(this.getState(observerKey)));
+        observable.notify(this.getState(observerKey));
       }
     }
-
-    for (const [observerKey, observers] of this.diffObservers.entries()) {
+    for (const [observerKey, diffObservable] of this.diffObservables.entries()) {
       if (key.startsWith(observerKey) && key !== observerKey) {
-        observers.forEach(observer => observer.next({
+        diffObservable.notify({
           type: 'nested',
           path: key.slice(observerKey.length + 1),
           value: diff
-        }));
+        });
       }
     }
   }
 
   computeDiff(oldObj, newObj) {
-    const diff = {};
-    for (const key in newObj) {
-      if (!(key in oldObj)) {
-        diff[key] = { type: 'replace', value: newObj[key] };
-      } else if (typeof newObj[key] === 'object' && newObj[key] !== null) {
-        if (Array.isArray(newObj[key])) {
-          diff[key] = { type: 'array', value: this.computeArrayDiff(oldObj[key], newObj[key]) };
-        } else {
-          const nestedDiff = this.computeDiff(oldObj[key], newObj[key]);
-          if (Object.keys(nestedDiff).length > 0) {
-            diff[key] = { type: 'object', value: nestedDiff };
-          }
-        }
-      } else if (oldObj[key] !== newObj[key]) {
-        diff[key] = { type: 'replace', value: newObj[key] };
-      }
-    }
-    for (const key in oldObj) {
-      if (!(key in newObj)) {
-        diff[key] = { type: 'replace', value: undefined };
-      }
-    }
-    return diff;
+    return computeDiffUtil(oldObj, newObj);
   }
 
   computeArrayDiff(oldArray, newArray) {
-    const diff = { removed: [], added: [], changed: [] };
-    const maxLength = Math.max(oldArray.length, newArray.length);
-    for (let i = 0; i < maxLength; i++) {
-      if (i >= oldArray.length) {
-        diff.added.push({ index: i, value: newArray[i] });
-      } else if (i >= newArray.length) {
-        diff.removed.push({ index: i });
-      } else if (JSON.stringify(oldArray[i]) !== JSON.stringify(newArray[i])) {
-        diff.changed.push({ index: i, value: this.computeDiff(oldArray[i], newArray[i]) });
-      }
-    }
-    return diff;
+    return computeArrayDiffUtil(oldArray, newArray);
   }
 
   subscribe(key, callback, useDiff = false) {
-    const observer = {
-      next: callback,
-      error: (err) => console.error(`Subscription error for key '${key}':`, err),
-      complete: () => console.log(`Subscription to '${key}' completed`)
-    };
-
-    if (useDiff) {
-      if (!this.diffObservers.has(key)) {
-        this.diffObservers.set(key, []);
-      }
-      this.diffObservers.get(key).push(observer);
-    } else {
-      if (!this.regularObservers.has(key)) {
-        this.regularObservers.set(key, []);
-      }
-      this.regularObservers.get(key).push(observer);
+    if (typeof key !== 'string') {
+      console.error('Invalid key for subscribe method');
+      return new EnhancedSubscription(() => {}).subscribe(() => {});
     }
 
-    return {
-      unsubscribe: () => {
-        if (useDiff) {
-          this.diffObservers.set(key, this.diffObservers.get(key).filter(obs => obs !== observer));
-        } else {
-          this.regularObservers.set(key, this.regularObservers.get(key).filter(obs => obs !== observer));
-        }
+    const observables = useDiff ? this.diffObservables : this.observables;
+
+    // Create observables for all parts of the path
+    const parts = key.split('.');
+    let currentKey = '';
+    for (const part of parts) {
+      currentKey = currentKey ? `${currentKey}.${part}` : part;
+      if (!observables.has(currentKey)) {
+        observables.set(currentKey, new EnhancedSubscription(() => {}));
       }
-    };
+    }
+
+    const subscription = observables.get(key);
+    return subscription.subscribe(callback);
   }
 
   undo() {

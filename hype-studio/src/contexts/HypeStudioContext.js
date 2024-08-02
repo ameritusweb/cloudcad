@@ -10,6 +10,10 @@ const initialHypeStudioState = {
     extrusions: {},
     // Add other element types as needed
   },
+  camera: {
+    position: null,
+    target: null
+  },
   customProperties: {},
   selectedElementId: null,
   activeView: 'List View',

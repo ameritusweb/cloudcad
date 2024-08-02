@@ -38,13 +38,13 @@ const HypeStudio = React.memo(() => {
   }, [model]);
 
   return (
-    <div className="h-full w-full bg-gray-100">
+    <div className="h-full w-full" style={{ minWidth: '1150px' }}>
       <Header />
       <Toolbar />
       <div className="flex flex-1">
         <LeftPanel />
-        <div className="flex-1 relative">
-          <canvas className="border-2 border-gray-300" ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+        <div className="flex-1 relative pb-[48px]">
+          <canvas className="border-2 border-gray-300 outline-none" ref={canvasRef} style={{ width: '100%', height: '100%' }} />
           {engine && (<BabylonViewport engine={engine} canvas={canvasRef.current} />)}
           <BabylonControls />
         </div>

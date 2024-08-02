@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, memo } from 'react';
+import { useEffect, useRef, useCallback, memo } from 'react';
 import { HighlightLayer } from '@babylonjs/core';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
@@ -6,7 +6,6 @@ import { createControlCube, getViewFromNormal } from '../utils/sceneUtils';
 import {
   setupMainScene,
   setupControlScene,
-  updateCameraControls,
   createPlane,
   updatePlaneVisibility,
   createPreviewMesh,
@@ -15,10 +14,13 @@ import {
   handleMeshSelection,
   handleSketchInteraction,
   handleExtrusionInteraction,
-  updateCameraForPlane,
-  updateCameraPosition,
   renderScene
 } from '../utils/babylonUtils';
+import {
+  updateCameraControls,
+  updateCameraForPlane,
+  updateCameraPosition
+} from '../utils/cameraUtils';
 import { usePointerEvents } from '../hooks/usePointerEvents';
 
 export const BabylonViewport = memo(({ engine, canvas }) => {
@@ -81,10 +83,10 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       updateCameraPosition(cameraRef.current, newCurrentModelView);
     });
 
-    const renderSubscription = modelRef.current.subscribe('', () => {
+    const renderSubscription = modelRef.current.subscribe('elements', () => {
       meshesRef.current = renderScene(scene, modelRef.current, meshesRef.current);
     });
-
+  
     engine.runRenderLoop(() => {
       sceneRef.current.render();
       controlSceneRef.current.render();
@@ -171,6 +173,24 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       modelRef.current.createSketch({ type: selectedSketchType, ...sketchData });
       previewMeshRef.current.dispose();
       previewMeshRef.current = null;
+    }
+
+    if (cameraRef.current) {
+      modelRef.current.setState(state => ({
+        ...state,
+        camera: {
+          position: {
+            x: cameraRef.current.position.x,
+            y: cameraRef.current.position.y,
+            z: cameraRef.current.position.z
+          },
+          target: {
+            x: cameraRef.current.target.x,
+            y: cameraRef.current.target.y,
+            z: cameraRef.current.target.z
+          }}
+        }
+      ));
     }
   }, [selectedSketchType]);
 
