@@ -1,0 +1,1654 @@
+import cadquery as cq
+
+def create_circular_sketch_on_face(workplane, face, circle_diameter):
+    # Select the face
+    face_workplane = workplane.workplane(offset=0).face(face)
+    
+    # Create the circular sketch
+    sketch = face_workplane.circle(circle_diameter / 2)
+    
+    return sketch
+
+def perform_extrude_cut(workplane, sketch, cut_depth):
+    # Perform the cut
+    result = workplane.cut(sketch.extrude(-cut_depth))
+    
+    return result
+
+def circular_cut_on_face(workplane, face_selector, circle_diameter, cut_depth):
+    # Create the circular sketch
+    sketch = create_circular_sketch_on_face(workplane, face_selector, circle_diameter)
+    
+    # Perform the cut
+    result = perform_extrude_cut(workplane, sketch, cut_depth)
+    
+    return result
+
+def create_concentric_circles_sketch(workplane, face, outer_diameter, inner_diameter):
+    if outer_diameter <= inner_diameter:
+        raise ValueError("Outer diameter must be greater than inner diameter")
+
+    # Select the face
+    face_workplane = workplane.workplane(offset=0).face(face)
+    
+    # Create the outer circle
+    sketch = face_workplane.circle(outer_diameter / 2)
+    
+    # Create the inner circle
+    sketch = sketch.circle(inner_diameter / 2)
+    
+    return sketch
+
+def extrude_between_circles(workplane, face, outer_diameter, inner_diameter, extrude_height):
+    # Create the sketch
+    sketch = create_concentric_circles_sketch(workplane, face, outer_diameter, inner_diameter)
+    
+    # Extrude the area between circles
+    result = sketch.extrude(extrude_height)
+    
+    return result
+/* ================================================================================ */
+import cadquery as cq
+import numpy as np
+
+def mirror_feature(workplane, feature, mirror_plane):
+    # Assume feature is a CadQuery object
+    mirrored = feature.mirror(mirror_plane.origin, mirror_plane.normal)
+    return workplane.union(mirrored)
+
+def mirror_body(workplane, body, mirror_plane):
+    # Assume body is a CadQuery Workplane object
+    mirrored = body.mirror(mirror_plane.origin, mirror_plane.normal)
+    return workplane.union(mirrored)
+
+def mirror_sketch(sketch, mirror_line):
+    # Assume sketch is a list of points
+    mirrored_points = []
+    for point in sketch:
+        mirrored_point = mirror_point(point, mirror_line)
+        mirrored_points.append(mirrored_point)
+    return mirrored_points
+
+def mirror_point(point, mirror_line):
+    # Mirror a point across a line
+    x1, y1 = mirror_line[0]
+    x2, y2 = mirror_line[1]
+    x, y = point
+
+    dx = x2 - x1
+    dy = y2 - y1
+
+    a = (dx * dx - dy * dy) / (dx * dx + dy * dy)
+    b = 2 * dx * dy / (dx * dx + dy * dy)
+
+    x_new = a * (x - x1) + b * (y - y1) + x1
+    y_new = b * (x - x1) - a * (y - y1) + y1
+
+    return (x_new, y_new)
+
+def create_mirror_plane(origin, normal):
+    return cq.Plane(origin, normal)
+
+def apply_mirror_operation(model, mirror_type, object_to_mirror, mirror_plane):
+    if mirror_type == 'feature':
+        return mirror_feature(model, object_to_mirror, mirror_plane)
+    elif mirror_type == 'body':
+        return mirror_body(model, object_to_mirror, mirror_plane)
+    elif mirror_type == 'sketch':
+        mirror_line = (mirror_plane.origin[:2], (mirror_plane.origin + mirror_plane.normal)[:2])
+        return mirror_sketch(object_to_mirror, mirror_line)
+    else:
+        raise ValueError(f"Unknown mirror type: {mirror_type}")
+/* ================================================================================ */
+import json
+import uuid
+from cadquery import Workplane, Sketch
+
+class ModelManager:
+    _instance = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        self.models = {}
+        self.history = {}
+
+    def create_new_model(self):
+        from ..models.parametric_model import ParametricModel
+        model_id = str(uuid.uuid4())
+        self.models[model_id] = ParametricModel()
+        self.history[model_id] = []
+        return model_id
+
+    def get_model(self, model_id):
+        return self.models.get(model_id)
+
+    def add_parameter(self, model_id, name, value):
+        model = self.get_model(model_id)
+        if model:
+            model.add_parameter(name, value)
+            self._add_to_history(model_id, 'add_parameter', {'name': name, 'value': value})
+
+    def update_parameter(self, model_id, name, value):
+        model = self.get_model(model_id)
+        if model:
+            old_value = model.parameters.get(name)
+            model.update_parameter(name, value)
+            self._add_to_history(model_id, 'update_parameter', {'name': name, 'old_value': old_value, 'new_value': value})
+
+    def add_feature(self, model_id, feature_type, *args, **kwargs):
+        model = self.get_model(model_id)
+        if model:
+            feature_id = model.add_feature(feature_type, *args, **kwargs)
+            self._add_to_history(model_id, 'add_feature', {'feature_type': feature_type, 'args': args, 'kwargs': kwargs})
+            return feature_id
+
+    def remove_feature(self, model_id, feature_id):
+        model = self.get_model(model_id)
+        if model:
+            removed_feature = model.remove_feature(feature_id)
+            self._add_to_history(model_id, 'remove_feature', {'feature_id': feature_id, 'feature_data': removed_feature})
+
+    def perform_circular_cut(self, model_id, face_selector, radius, depth):
+        model = self.get_model(model_id)
+        if model:
+            result = model.circular_cut(face_selector, radius, depth)
+            self._add_to_history(model_id, 'circular_cut', {'face_selector': face_selector, 'radius': radius, 'depth': depth})
+            return result
+
+    def perform_concentric_extrude(self, model_id, face_selector, outer_radius, inner_radius, height):
+        model = self.get_model(model_id)
+        if model:
+            result = model.concentric_extrude(face_selector, outer_radius, inner_radius, height)
+            self._add_to_history(model_id, 'concentric_extrude', {
+                'face_selector': face_selector,
+                'outer_radius': outer_radius,
+                'inner_radius': inner_radius,
+                'height': height
+            })
+            return result
+
+    def perform_mirror(self, model_id, mirror_plane, keep_original=True):
+        model = self.get_model(model_id)
+        if model:
+            result = model.mirror(mirror_plane, keep_original)
+            self._add_to_history(model_id, 'mirror', {'mirror_plane': mirror_plane, 'keep_original': keep_original})
+            return result
+
+    def perform_structural_analysis(self, model_id, material_properties, loads, constraints):
+        from ..routes.structural_analysis import StructuralAnalysis
+        model = self.get_model(model_id)
+        if model:
+            analyzer = StructuralAnalysis(model)
+            results, failure_points = analyzer.perform_analysis(material_properties, loads, constraints)
+            self._add_to_history(model_id, 'structural_analysis', {
+                'material_properties': material_properties,
+                'loads': loads,
+                'constraints': constraints
+            })
+            return results, failure_points
+
+    def undo(self, model_id):
+        if self.history[model_id]:
+            action = self.history[model_id].pop()
+            self._reverse_action(model_id, action)
+
+    def redo(self, model_id):
+        # Implementation depends on how you store redo information
+        pass
+
+    def _add_to_history(self, model_id, action_type, action_data):
+        self.history[model_id].append({'type': action_type, 'data': action_data})
+
+    def _reverse_action(self, model_id, action):
+        model = self.get_model(model_id)
+        if model:
+            if action['type'] == 'add_parameter':
+                model.remove_parameter(action['data']['name'])
+            elif action['type'] == 'update_parameter':
+                model.update_parameter(action['data']['name'], action['data']['old_value'])
+            elif action['type'] == 'add_feature':
+                model.remove_last_feature()
+            elif action['type'] == 'remove_feature':
+                model.add_feature(action['data']['feature_data'])
+            # Add more reverse actions for other operation types
+
+    def export_model(self, model_id):
+        model = self.get_model(model_id)
+        if model:
+            export_data = {
+                "modelId": model_id,
+                "parameters": model.parameters,
+                "features": [
+                    {
+                        "id": feature['id'],
+                        "type": feature['type'],
+                        "args": feature['args'],
+                        "kwargs": feature['kwargs']
+                    } for feature in model.features
+                ],
+                "structuralAnalysis": {
+                    "results": model.analysis_results if hasattr(model, 'analysis_results') else None,
+                    "failurePoints": model.failure_points if hasattr(model, 'failure_points') else None
+                }
+            }
+            return json.dumps(export_data, indent=2)
+
+    def import_model(self, json_data):
+        import_data = json.loads(json_data)
+        model_id = self.create_new_model()
+        model = self.get_model(model_id)
+
+        for name, value in import_data["parameters"].items():
+            model.add_parameter(name, value)
+
+        for feature in import_data["features"]:
+            model.add_feature(feature["type"], *feature["args"], **feature["kwargs"])
+
+        if "structuralAnalysis" in import_data:
+            model.analysis_results = import_data["structuralAnalysis"]["results"]
+            model.failure_points = import_data["structuralAnalysis"]["failurePoints"]
+
+        model.rebuild()
+        return model_id
+
+    def get_model_data(self, model_id):
+        model = self.get_model(model_id)
+        if model:
+            return {
+                "id": model_id,
+                "parameters": model.parameters,
+                "features": [
+                    {
+                        "id": feature['id'],
+                        "type": feature['type'],
+                        "args": feature['args'],
+                        "kwargs": feature['kwargs']
+                    } for feature in model.features
+                ],
+                "boundingBox": model.bounding_box(),
+                "vertices": model.vertices(),
+                "edges": model.edges(),
+                "faces": model.faces()
+            }
+/* ================================================================================ */
+import cadquery as cq
+
+def create_cylinder(workplane, radius, height):
+    return workplane.cylinder(height, radius)
+
+def circular_cut(workplane, radius, depth):
+    return workplane.faces(">Z").circle(radius).cutBlind(-depth)
+
+def concentric_extrude(workplane, outer_radius, inner_radius, height):
+    return workplane.faces(">Z").circle(outer_radius).circle(inner_radius).extrude(height)
+
+def mirror_feature(workplane, mirror_plane):
+    return workplane.mirror(mirror_plane.origin, mirror_plane.normal)
+
+# Add more parametric feature functions as needed
+/* ================================================================================ */
+from flask import Blueprint
+
+main = Blueprint('main', __name__)
+
+@main.route('/api/test')
+def test():
+    return {'message': 'Test route is working!'}
+
+# Import other route files here
+# from . import cad_operations, structural_analysis, etc.
+/* ================================================================================ */
+import cadquery as cq
+
+class ParametricModel:
+    def __init__(self):
+        self.parameters = {}
+        self.features = []
+        self.workplane = cq.Workplane("XY")
+
+    def add_parameter(self, name, value):
+        self.parameters[name] = value
+
+    def update_parameter(self, name, value):
+        if name in self.parameters:
+            self.parameters[name] = value
+            self.rebuild()
+        else:
+            raise ValueError(f"Parameter {name} does not exist")
+
+    def add_feature(self, feature_func, *args, **kwargs):
+        feature_id = len(self.features)
+        self.features.append({
+            'id': feature_id,
+            'func': feature_func,
+            'args': args,
+            'kwargs': kwargs,
+            'visible': True,
+            'color': (0.7, 0.7, 0.7)  # Default color (light gray)
+        })
+        return feature_id
+
+    def set_feature_visibility(self, feature_id, visible):
+        if 0 <= feature_id < len(self.features):
+            self.features[feature_id]['visible'] = visible
+            self.rebuild()
+        else:
+            raise ValueError(f"Invalid feature ID: {feature_id}")
+
+    def set_feature_color(self, feature_id, color):
+        if 0 <= feature_id < len(self.features):
+            self.features[feature_id]['color'] = color
+            self.rebuild()
+        else:
+            raise ValueError(f"Invalid feature ID: {feature_id}")
+
+    def rebuild(self):
+        self.workplane = cq.Workplane("XY")
+        for feature in self.features:
+            if feature['visible']:
+                func = feature['func']
+                args = [self.parameters.get(arg, arg) for arg in feature['args']]
+                kwargs = {k: self.parameters.get(v, v) for k, v in feature['kwargs'].items()}
+                self.workplane = func(self.workplane, *args, **kwargs)
+
+    def get_model(self):
+        return self.workplane
+
+    def get_features(self):
+        return [{'id': f['id'], 'visible': f['visible'], 'color': f['color']} for f in self.features]
+/* ================================================================================ */
+from flask import Blueprint
+
+main = Blueprint('main', __name__)
+
+@main.route('/api/test')
+def test():
+    return {'message': 'Test route is working!'}
+
+# Import other route files here
+# from . import cad_operations, structural_analysis, etc.
+/* ================================================================================ */
+from flask import request, jsonify
+from .model_manager import ModelManager
+from .parametric_feature_functions import circular_cut, concentric_extrude, mirror_feature
+
+@app.route('/api/add_feature', methods=['POST'])
+def add_feature():
+    data = request.json
+    model_id = data.get('modelId')
+    feature_type = data.get('featureType')
+    parameters = data.get('parameters', {})
+
+    if not all([model_id, feature_type]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager = ModelManager.get_instance()
+        
+        if feature_type == 'circular_cut':
+            model_manager.add_feature(model_id, circular_cut, parameters['radius'], parameters['depth'])
+        elif feature_type == 'concentric_extrude':
+            model_manager.add_feature(model_id, concentric_extrude, parameters['outerRadius'], parameters['innerRadius'], parameters['height'])
+        elif feature_type == 'mirror':
+            model_manager.add_feature(model_id, mirror_feature, parameters['mirrorPlane'])
+        else:
+            return jsonify({"success": False, "error": f"Unknown feature type: {feature_type}"}), 400
+
+        model_manager.rebuild_model(model_id)
+        updated_model_data = model_manager.get_model_data(model_id)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+/* ================================================================================ */
+from flask import Blueprint, request, jsonify
+from .structural_analysis import StructuralAnalysis
+
+structural_analysis = Blueprint('structural_analysis', __name__)
+
+@structural_analysis.route('/analyze', methods=['POST'])
+def analyze():
+    data = request.json
+    model_id = data.get('modelId')
+    material_properties = data.get('materialProperties')
+    loads = data.get('loads')
+    constraints = data.get('constraints')
+
+    if not all([model_id, material_properties, loads, constraints]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        analysis = StructuralAnalysis(model_id)
+        results = analysis.perform_analysis(material_properties, loads, constraints)
+        return jsonify({"success": True, "results": results})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+/* ================================================================================ */
+import cadquery as cq
+from flask import Blueprint, request, jsonify
+from ..cad.model_manager import ModelManager
+from ..cad.parametric_feature_functions import circular_cut, concentric_extrude, mirror_feature
+
+# Create a Blueprint
+cad_operations = Blueprint('cad_operations', __name__)
+
+# Initialize the ModelManager singleton
+model_manager = ModelManager.get_instance()
+
+# Route to create a new model
+@cad_operations.route('/create_new_model', methods=['POST'])
+def create_new_model():
+    try:
+        model_id = model_manager.create_new_model()
+        return jsonify({"success": True, "modelId": model_id})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+# Route to perform a circular cut on a model
+@cad_operations.route('/circular_cut', methods=['POST'])
+def circular_cut():
+    data = request.json
+    model_id = data.get('modelId')
+    face_selector = data.get('faceSelector')
+    radius = data.get('radius')
+    depth = data.get('depth')
+
+    if not all([model_id, face_selector, radius, depth]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager.add_feature(model_id, circular_cut, radius, depth)
+        model_manager.rebuild_model(model_id)
+        updated_model_data = model_manager.get_model_data(model_id)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+# Route to perform a concentric extrude on a model
+@cad_operations.route('/concentric_extrude', methods=['POST'])
+def concentric_extrude():
+    data = request.json
+    model_id = data.get('modelId')
+    face_selector = data.get('faceSelector')
+    outer_radius = data.get('outerRadius')
+    inner_radius = data.get('innerRadius')
+    height = data.get('height')
+
+    if not all([model_id, face_selector, outer_radius, inner_radius, height]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager.add_feature(model_id, concentric_extrude, outer_radius, inner_radius, height)
+        model_manager.rebuild_model(model_id)
+        updated_model_data = model_manager.get_model_data(model_id)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+# Route to mirror features of a model
+@cad_operations.route('/mirror', methods=['POST'])
+def mirror():
+    data = request.json
+    model_id = data.get('modelId')
+    mirror_plane = data.get('mirrorPlane')
+    keep_original = data.get('keepOriginal', True)
+    align_to_axis = data.get('alignToAxis')
+    partial_features = data.get('partialFeatures', {})
+
+    if not all([model_id, mirror_plane]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager.add_feature(model_id, mirror_feature, mirror_plane)
+        model_manager.rebuild_model(model_id)
+        updated_model_data = model_manager.get_model_data(model_id)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+# Route to update a parameter in the model
+@cad_operations.route('/update_parameter', methods=['POST'])
+def update_parameter():
+    data = request.json
+    model_id = data.get('modelId')
+    parameter_name = data.get('parameterName')
+    new_value = data.get('newValue')
+
+    if not all([model_id, parameter_name, new_value]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager.update_parameter(model_id, parameter_name, new_value)
+        model_manager.rebuild_model(model_id)
+        updated_model_data = model_manager.get_model_data(model_id)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+# Route to get parameters of the model
+@cad_operations.route('/get_parameters/<int:model_id>', methods=['GET'])
+def get_parameters(model_id):
+    try:
+        model = model_manager.parametric_models[model_id]
+        return jsonify({"success": True, "parameters": model.parameters})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+# Route to get features of the model
+@cad_operations.route('/get_features/<int:model_id>', methods=['GET'])
+def get_features(model_id):
+    try:
+        model = model_manager.parametric_models[model_id]
+        return jsonify({"success": True, "features": model.get_features()})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+/* ================================================================================ */
+from flask import request, jsonify
+from .model_manager import ModelManager
+from .cad_exceptions import CADOperationError
+
+@app.route('/api/circular_cut', methods=['POST'])
+def circular_cut():
+    data = request.json
+    object_id = data.get('objectId')
+    face_selector = data.get('faceSelector')
+    circle_diameter = data.get('circleDiameter')
+    cut_depth = data.get('cutDepth')
+
+    if not all([object_id, face_selector, circle_diameter, cut_depth]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager = ModelManager.get_instance()
+        updated_model_data = model_manager.apply_circular_cut(object_id, face_selector, circle_diameter, cut_depth)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except CADOperationError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"An unexpected error occurred: {str(e)}")
+        return jsonify({"success": False, "error": "An unexpected error occurred. Please try again later."}), 500
+/* ================================================================================ */
+from flask import request, jsonify
+from .model_manager import ModelManager
+from .cad_exceptions import CADOperationError
+
+@app.route('/api/concentric_extrude', methods=['POST'])
+def concentric_extrude():
+    data = request.json
+    object_id = data.get('objectId')
+    face_selector = data.get('faceSelector')
+    outer_diameter = data.get('outerDiameter')
+    inner_diameter = data.get('innerDiameter')
+    extrude_height = data.get('extrudeHeight')
+
+    if not all([object_id, face_selector, outer_diameter, inner_diameter, extrude_height]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager = ModelManager.get_instance()
+        updated_model_data = model_manager.apply_concentric_extrude(
+            object_id, face_selector, outer_diameter, inner_diameter, extrude_height
+        )
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except CADOperationError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"An unexpected error occurred: {str(e)}")
+        return jsonify({"success": False, "error": "An unexpected error occurred. Please try again later."}), 500
+/* ================================================================================ */
+from flask import Blueprint, request, jsonify, send_file
+from .model_manager import ModelManager
+import io
+import json
+
+export_import = Blueprint('export_import', __name__)
+
+@export_import.route('/export_model/<int:model_id>', methods=['GET'])
+def export_model(model_id):
+    try:
+        model_manager = ModelManager.get_instance()
+        export_data = model_manager.export_model(model_id)
+        
+        # Create a BytesIO object
+        bytes_io = io.BytesIO(export_data.encode('utf-8'))
+        
+        # Send the file
+        return send_file(
+            bytes_io,
+            mimetype='application/json',
+            as_attachment=True,
+            attachment_filename=f'model_{model_id}.json'
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+@export_import.route('/import_model', methods=['POST'])
+def import_model():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"success": False, "error": "No selected file"}), 400
+    if file:
+        try:
+            json_data = file.read().decode('utf-8')
+            # Validate JSON structure
+            json.loads(json_data)  # This will raise an exception if JSON is invalid
+            
+            model_manager = ModelManager.get_instance()
+            model_id = model_manager.import_model(json_data)
+            model_data = model_manager.get_model_data(model_id)
+            return jsonify({"success": True, "modelId": model_id, "modelData": model_data})
+        except json.JSONDecodeError:
+            return jsonify({"success": False, "error": "Invalid JSON format"}), 400
+        except ValueError as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"success": False, "error": f"An unexpected error occurred: {str(e)}"}), 500
+
+/* ================================================================================ */
+from flask import Blueprint, request, jsonify
+from .model_manager import ModelManager
+
+feature_management = Blueprint('feature_management', __name__)
+
+@feature_management.route('/get_features/<int:model_id>', methods=['GET'])
+def get_features(model_id):
+    try:
+        model_manager = ModelManager.get_instance()
+        features = model_manager.get_features(model_id)
+        return jsonify({"success": True, "features": features})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+@feature_management.route('/set_feature_visibility', methods=['POST'])
+def set_feature_visibility():
+    data = request.json
+    model_id = data.get('modelId')
+    feature_id = data.get('featureId')
+    visible = data.get('visible')
+
+    if not all([model_id, feature_id is not None, visible is not None]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager = ModelManager.get_instance()
+        model_manager.set_feature_visibility(model_id, feature_id, visible)
+        updated_model_data = model_manager.get_model_data(model_id)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+@feature_management.route('/set_feature_color', methods=['POST'])
+def set_feature_color():
+    data = request.json
+    model_id = data.get('modelId')
+    feature_id = data.get('featureId')
+    color = data.get('color')
+
+    if not all([model_id, feature_id is not None, color]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager = ModelManager.get_instance()
+        model_manager.set_feature_color(model_id, feature_id, color)
+        updated_model_data = model_manager.get_model_data(model_id)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+/* ================================================================================ */
+from flask import Blueprint, request, jsonify
+from .model_manager import ModelManager
+import json
+
+export_import = Blueprint('export_import', __name__)
+
+@export_import.route('/import_model', methods=['POST'])
+def import_model():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"success": False, "error": "No selected file"}), 400
+    if file:
+        try:
+            json_data = file.read().decode('utf-8')
+            # Validate JSON structure
+            json.loads(json_data)  # This will raise an exception if JSON is invalid
+            
+            model_manager = ModelManager.get_instance()
+            model_id = model_manager.import_model(json_data)
+            model_data = model_manager.get_model_data(model_id)
+            return jsonify({"success": True, "modelId": model_id, "modelData": model_data})
+        except json.JSONDecodeError:
+            return jsonify({"success": False, "error": "Invalid JSON format"}), 400
+        except ValueError as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"success": False, "error": f"An unexpected error occurred: {str(e)}"}), 500
+/* ================================================================================ */
+from flask import request, jsonify
+from .model_manager import ModelManager
+from .mirror_operation import MirrorOperation
+from .cad_exceptions import CADOperationError
+
+@app.route('/api/mirror', methods=['POST'])
+def mirror():
+    data = request.json
+    object_ids = data.get('objectIds')
+    mirror_plane = data.get('mirrorPlane')
+    keep_original = data.get('keepOriginal', True)
+    align_to_axis = data.get('alignToAxis')
+    partial_features = data.get('partialFeatures', {})
+
+    if not all([object_ids, mirror_plane]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager = ModelManager.get_instance()
+        objects_to_mirror = [model_manager.get_object(obj_id) for obj_id in object_ids]
+        
+        mirror_op = MirrorOperation(
+            'complex',  # Use 'complex' type for objects that might include circular cuts or concentric extrudes
+            objects_to_mirror,
+            mirror_plane,
+            keep_original,
+            align_to_axis,
+            partial_features
+        )
+
+        updated_model_data = model_manager.apply_mirror_operation(mirror_op)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except CADOperationError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"An unexpected error occurred: {str(e)}")
+        return jsonify({"success": False, "error": "An unexpected error occurred. Please try again later."}), 500
+/* ================================================================================ */
+import numpy as np
+from ..cad.model_manager import ModelManager
+
+class StructuralAnalysis:
+    def __init__(self, model_id):
+        self.model_manager = ModelManager.get_instance()
+        self.model = self.model_manager.get_model(model_id)
+
+    def prepare_inp_file(self, material_properties, loads, constraints):
+        # Convert our model to CalculiX input format
+        # This is a simplified version and would need to be expanded
+        inp_content = "*NODE\n"
+        for i, vertex in enumerate(self.model.vertices().vals(), 1):
+            inp_content += f"{i}, {vertex.X}, {vertex.Y}, {vertex.Z}\n"
+
+        inp_content += "*ELEMENT, TYPE=C3D8R\n"
+        # Add element definitions here
+
+        inp_content += "*MATERIAL, NAME=MATERIAL1\n"
+        inp_content += f"*ELASTIC\n{material_properties['young_modulus']}, {material_properties['poisson_ratio']}\n"
+
+        inp_content += "*BOUNDARY\n"
+        for constraint in constraints:
+            inp_content += f"{constraint['node']}, {constraint['dof']}, {constraint['value']}\n"
+
+        inp_content += "*STEP\n*STATIC\n"
+        inp_content += "*CLOAD\n"
+        for load in loads:
+            inp_content += f"{load['node']}, {load['direction']}, {load['magnitude']}\n"
+
+        inp_content += "*NODE PRINT, NSET=NALL\nU\n*EL PRINT, ELSET=EALL\nS\n*END STEP"
+
+        with open('model.inp', 'w') as f:
+            f.write(inp_content)
+
+    def run_analysis(self):
+        # Run CalculiX
+        subprocess.run(["ccx", "model"])
+
+    def process_results(self):
+        # Process the .frd file generated by CalculiX
+        # This is a simplified version and would need to be expanded
+        results = {}
+        with open('model.frd', 'r') as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines):
+                if line.strip().startswith('1PSTRESS'):
+                    # Extract stress values
+                    stress_values = [float(val) for val in lines[i+1].split()]
+                    results[f'node_{i}'] = {
+                        'stress': max(stress_values)
+                    }
+        return results
+
+    def perform_analysis(self, material_properties, loads, constraints):
+        self.prepare_inp_file(material_properties, loads, constraints)
+        self.run_analysis()
+        return self.process_results()
+
+    def generate_recommendations(self, failure_point, material_properties):
+        recommendations = []
+        
+        # Recommendation based on safety factor
+        if failure_point['safety_factor'] < 1:
+            recommendations.append("Critical: Immediate redesign required. The part is likely to fail under the given load.")
+        elif failure_point['safety_factor'] < 1.5:
+            recommendations.append("Increase the thickness or change the geometry of this area to improve the safety factor.")
+        
+        # Recommendation based on stress concentration
+        if failure_point['stress'] > 0.8 * material_properties['yield_strength']:
+            recommendations.append("Consider adding fillets or chamfers to reduce stress concentration in this area.")
+        
+        # Recommendation based on material
+        if failure_point['stress'] > 0.5 * material_properties['yield_strength']:
+            recommendations.append("Consider using a stronger material with a higher yield strength in this area.")
+        
+        # Recommendation for load redistribution
+        recommendations.append("Analyze the load path and consider redistributing the load to reduce stress in this area.")
+        
+        return recommendations
+
+    def identify_failure_points(self, results, material_properties):
+        failure_points = []
+        for node, data in results.items():
+            safety_factor = material_properties['yield_strength'] / data['stress']
+            if safety_factor < 2:  # Consider points with safety factor < 2 as potential failure points
+                severity = 1 - (safety_factor / 2)  # Normalize severity between 0 and 1
+                failure_point = {
+                    'node': node,
+                    'position': data['position'],
+                    'stress': data['stress'],
+                    'safety_factor': safety_factor,
+                    'severity': severity
+                }
+                failure_point['recommendations'] = self.generate_recommendations(failure_point, material_properties)
+                failure_points.append(failure_point)
+
+        # Sort failure points by severity (highest to lowest)
+        failure_points.sort(key=lambda x: x['severity'], reverse=True)
+        return failure_points[:5]  # Return top 5 most severe points
+
+    def perform_analysis(self, material_properties, loads, constraints):
+        self.prepare_inp_file(material_properties, loads, constraints)
+        self.run_analysis()
+        results = self.process_results()
+        failure_points = self.identify_failure_points(results, material_properties)
+        return results, failure_points
+/* ================================================================================ */
+from flask import request, jsonify
+from .model_manager import ModelManager
+
+@app.route('/api/update_parameter', methods=['POST'])
+def update_parameter():
+    data = request.json
+    model_id = data.get('modelId')
+    parameter_name = data.get('parameterName')
+    new_value = data.get('newValue')
+
+    if not all([model_id, parameter_name, new_value]):
+        return jsonify({"success": False, "error": "Missing required parameters"}), 400
+
+    try:
+        model_manager = ModelManager.get_instance()
+        model_manager.update_parameter(model_id, parameter_name, new_value)
+        model_manager.rebuild_model(model_id)
+        updated_model_data = model_manager.get_model_data(model_id)
+        return jsonify({"success": True, "updatedModel": updated_model_data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+/* ================================================================================ */
+from flask import Blueprint
+
+main = Blueprint('main', __name__)
+
+@main.route('/api/test')
+def test():
+    return {'message': 'Test route is working!'}
+/* ================================================================================ */
+class ReversedCircularCutOperation:
+    def __init__(self, object_id):
+        self.object_id = object_id
+
+    def apply(self, model_manager):
+        # In a real system, you'd restore the cut volume here
+        print(f"Reversed circular cut on object {self.object_id}")
+        return model_manager.get_object(self.object_id)
+
+class CircularCutOperation:
+    def __init__(self, object_id, face_selector, circle_diameter, cut_depth):
+        self.object_id = object_id
+        self.face_selector = face_selector
+        self.circle_diameter = circle_diameter
+        self.cut_depth = cut_depth
+
+    def apply(self, model_manager):
+        return model_manager.apply_circular_cut(self.object_id, self.face_selector, self.circle_diameter, self.cut_depth)
+
+    def reverse(self):
+        # Reversing a cut is complex and might require storing the cut volume
+        # For simplicity, we'll just note that this operation was reversed
+        # In a real CAD system, you'd need to implement proper reversal
+        return ReversedCircularCutOperation(self.object_id)
+/* ================================================================================ */
+class ConcentricExtrudeOperation:
+    def __init__(self, object_id, face_selector, outer_diameter, inner_diameter, extrude_height):
+        self.object_id = object_id
+        self.face_selector = face_selector
+        self.outer_diameter = outer_diameter
+        self.inner_diameter = inner_diameter
+        self.extrude_height = extrude_height
+
+    def apply(self, model_manager):
+        return model_manager.apply_concentric_extrude(
+            self.object_id, self.face_selector, self.outer_diameter, self.inner_diameter, self.extrude_height
+        )
+
+    def reverse(self):
+        # Reversing an extrude operation would require cutting the extruded volume
+        # For simplicity, we'll just note that this operation was reversed
+        # In a real CAD system, you'd need to implement proper reversal
+        return ReversedConcentricExtrudeOperation(self.object_id)
+
+class ReversedConcentricExtrudeOperation:
+    def __init__(self, object_id):
+        self.object_id = object_id
+
+    def apply(self, model_manager):
+        # In a real system, you'd remove the extruded volume here
+        print(f"Reversed concentric extrude on object {self.object_id}")
+        return model_manager.get_object(self.object_id)
+/* ================================================================================ */
+import cadquery as cq
+from flask import request, jsonify, send_file
+import tempfile
+import os
+
+@app.route('/api/export_step', methods=['POST'])
+def export_step():
+    data = request.json
+    model_data = data['model']
+
+    try:
+        # Recreate the model from the data
+        # This is a placeholder - you'll need to implement the actual model recreation
+        model = recreate_model(model_data)
+
+        # Export the model to a STEP file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.step') as temp_file:
+            model.exportStep(temp_file.name)
+            temp_filename = temp_file.name
+
+        # Send the file to the client
+        return send_file(temp_filename, as_attachment=True, attachment_filename='export.step')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        # Clean up the temporary file
+        if 'temp_filename' in locals():
+            os.unlink(temp_filename)
+/* ================================================================================ */
+import cadquery as cq
+from flask import request, jsonify
+
+@app.route('/api/extrude', methods=['POST'])
+def extrude():
+    data = request.json
+    sketch_data = data['sketch']
+    extrusion_distance = data['distance']
+
+    # Create a workplane and add the sketch
+    result = (
+        cq.Workplane("XY")
+        .moveTo(sketch_data[0]['x'], sketch_data[0]['y'])
+        .polyline([(p['x'], p['y']) for p in sketch_data[1:]])
+        .close()
+        .extrude(extrusion_distance)
+    )
+
+    # Convert the result to a mesh or other format that can be sent to the frontend
+    # This is a placeholder - you'll need to implement the actual conversion
+    mesh_data = convert_to_mesh(result)
+
+    return jsonify({"mesh": mesh_data})
+/* ================================================================================ */
+import cadquery as cq
+from flask import request, jsonify
+
+@app.route('/api/fillet', methods=['POST'])
+def fillet():
+    data = request.json
+    model_data = data['model']
+    edges = data['edges']
+    radius = data['radius']
+
+    # Recreate the model from the data
+    # This is a placeholder - you'll need to implement the actual model recreation
+    model = recreate_model(model_data)
+
+    # Apply fillet
+    result = model.edges(edges).fillet(radius)
+
+    # Convert the result to a mesh or other format that can be sent to the frontend
+    # This is a placeholder - you'll need to implement the actual conversion
+    mesh_data = convert_to_mesh(result)
+
+    return jsonify({"mesh": mesh_data})
+/* ================================================================================ */
+import ezdxf
+from flask import request, jsonify
+
+@app.route('/api/import_dxf', methods=['POST'])
+def import_dxf():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if file and file.filename.endswith('.dxf'):
+        try:
+            doc = ezdxf.readfile(file)
+            msp = doc.modelspace()
+            entities = []
+            for e in msp:
+                if e.dxftype() == 'LINE':
+                    entities.append({
+                        'type': 'LINE',
+                        'start': list(e.dxf.start),
+                        'end': list(e.dxf.end)
+                    })
+                elif e.dxftype() == 'CIRCLE':
+                    entities.append({
+                        'type': 'CIRCLE',
+                        'center': list(e.dxf.center),
+                        'radius': e.dxf.radius
+                    })
+                # Add more entity types as needed
+            return jsonify({"entities": entities})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return jsonify({"error": "Invalid file type"}), 400
+/* ================================================================================ */
+from flask import request, jsonify
+from OCC.Core.STEPControl import STEPControl_Reader
+from OCC.Core.IFSelect import IFSelect_RetDone
+from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
+from OCC.Core.BRep import BRep_Tool
+from OCC.Core.TopExp import TopExp_Explorer
+from OCC.Core.TopAbs import TopAbs_FACE
+from OCC.Core.TopoDS import topods_Face
+import tempfile
+import os
+
+@app.route('/api/import_step', methods=['POST'])
+def import_step():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if file and file.filename.endswith('.step') or file.filename.endswith('.stp'):
+        try:
+            # Save the uploaded file temporarily
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.step') as temp_file:
+                file.save(temp_file.name)
+                temp_filename = temp_file.name
+
+            # Read the STEP file
+            step_reader = STEPControl_Reader()
+            status = step_reader.ReadFile(temp_filename)
+
+            if status == IFSelect_RetDone:
+                step_reader.TransferRoot()
+                shape = step_reader.Shape()
+
+                # Mesh the shape
+                mesh = BRepMesh_IncrementalMesh(shape, 0.1)
+                mesh.Perform()
+
+                # Extract mesh data
+                explorer = TopExp_Explorer(shape, TopAbs_FACE)
+                faces = []
+
+                while explorer.More():
+                    face = topods_Face(explorer.Current())
+                    location = BRep_Tool.Location(face)
+                    triangulation = BRep_Tool.Triangulation(face, location)
+                    
+                    if triangulation is not None:
+                        vertices = [triangulation.Node(i+1).Transformed(location.Transformation()) for i in range(triangulation.NbNodes())]
+                        triangles = [triangulation.Triangle(i+1) for i in range(triangulation.NbTriangles())]
+                        
+                        face_data = {
+                            "vertices": [[v.X(), v.Y(), v.Z()] for v in vertices],
+                            "triangles": [[t.Value(1)-1, t.Value(2)-1, t.Value(3)-1] for t in triangles]
+                        }
+                        faces.append(face_data)
+
+                    explorer.Next()
+
+                # Clean up the temporary file
+                os.unlink(temp_filename)
+
+                return jsonify({"faces": faces})
+            else:
+                return jsonify({"error": "Failed to read STEP file"}), 500
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return jsonify({"error": "Invalid file type"}), 400
+/* ================================================================================ */
+import cadquery as cq
+
+class MirrorOperation:
+    def __init__(self, mirror_type, objects, mirror_plane, keep_original, align_to_axis, partial_features=None):
+        self.mirror_type = mirror_type
+        self.objects = objects
+        self.mirror_plane = mirror_plane
+        self.keep_original = keep_original
+        self.align_to_axis = align_to_axis
+        self.partial_features = partial_features
+
+    def apply(self, model):
+        mirrored_objects = []
+        for obj in self.objects:
+            if self.partial_features and obj in self.partial_features:
+                mirrored = self.mirror_partial_feature(obj, self.partial_features[obj])
+            else:
+                mirrored = obj.mirror(self.mirror_plane.origin, self.mirror_plane.normal)
+            
+            if self.align_to_axis:
+                mirrored = self.align_to_axis(mirrored, self.align_to_axis)
+            mirrored_objects.append(mirrored)
+        
+        result = model
+        for mirrored in mirrored_objects:
+            result = result.union(mirrored)
+        
+        if self.keep_original:
+            for obj in self.objects:
+                result = result.union(obj)
+        
+        return result
+
+    def mirror_partial_feature(self, obj, feature_selectors):
+        # Clone the object
+        cloned_obj = obj.clone()
+        
+        # Apply feature selectors to get the partial feature
+        for selector in feature_selectors:
+            cloned_obj = cloned_obj.selectors(selector)
+        
+        # Mirror the partial feature
+        mirrored_partial = cloned_obj.mirror(self.mirror_plane.origin, self.mirror_plane.normal)
+        
+        # Union the mirrored partial feature with the original object
+        return obj.union(mirrored_partial)
+
+    def align_to_axis(self, obj, axis):
+        if axis == 'x':
+            return obj.rotateAboutCenter((0, 90, 0))
+        elif axis == 'y':
+            return obj.rotateAboutCenter((90, 0, 0))
+        elif axis == 'z':
+            return obj
+        else:
+            raise ValueError(f"Invalid axis: {axis}")
+
+    def reverse(self):
+        return MirrorOperation(
+            self.mirror_type,
+            self.objects,
+            self.mirror_plane,
+            not self.keep_original,
+            self.align_to_axis,
+            self.partial_features
+        )
+/* ================================================================================ */
+import cadquery as cq
+import json
+from .parametric_feature_functions import circular_cut, concentric_extrude, mirror_feature
+
+class ParametricModel:
+    def __init__(self):
+        self.parameters = {}
+        self.features = []
+        self.workplane = cq.Workplane("XY")
+
+    def add_parameter(self, name, value):
+        self.parameters[name] = value
+
+    def update_parameter(self, name, value):
+        if name in self.parameters:
+            self.parameters[name] = value
+            self.rebuild()
+        else:
+            raise ValueError(f"Parameter {name} does not exist")
+
+    def add_feature(self, feature_func, *args, **kwargs):
+        feature_id = len(self.features)
+        self.features.append({
+            'id': feature_id,
+            'func': feature_func,
+            'args': args,
+            'kwargs': kwargs,
+            'visible': True,
+            'color': (0.7, 0.7, 0.7)  # Default color (light gray)
+        })
+        return feature_id
+
+    def set_feature_visibility(self, feature_id, visible):
+        if 0 <= feature_id < len(self.features):
+            self.features[feature_id]['visible'] = visible
+            self.rebuild()
+        else:
+            raise ValueError(f"Invalid feature ID: {feature_id}")
+
+    def set_feature_color(self, feature_id, color):
+        if 0 <= feature_id < len(self.features):
+            self.features[feature_id]['color'] = color
+            self.rebuild()
+        else:
+            raise ValueError(f"Invalid feature ID: {feature_id}")
+
+    def rebuild(self):
+        self.workplane = cq.Workplane("XY")
+        for feature in self.features:
+            if feature['visible']:
+                func = feature['func']
+                args = [self.parameters.get(arg, arg) for arg in feature['args']]
+                kwargs = {k: self.parameters.get(v, v) for k, v in feature['kwargs'].items()}
+                self.workplane = func(self.workplane, *args, **kwargs)
+
+    def get_model(self):
+        return self.workplane
+
+    def get_features(self):
+        return [{'id': f['id'], 'visible': f['visible'], 'color': f['color']} for f in self.features]
+
+
+class ModelManager:
+    _instance = None
+
+    @staticmethod
+    def get_instance():
+        if ModelManager._instance is None:
+            ModelManager._instance = ModelManager()
+        return ModelManager._instance
+
+    def __init__(self):
+        if ModelManager._instance is not None:
+            raise Exception("This class is a singleton!")
+        else:
+            ModelManager._instance = self
+        self.parametric_models = {}
+        self.current_model_id = 0
+
+    def create_new_model(self):
+        self.current_model_id += 1
+        self.parametric_models[self.current_model_id] = ParametricModel()
+        return self.current_model_id
+
+    def get_model(self, model_id):
+        return self.parametric_models[model_id].get_model()
+
+    def add_feature(self, model_id, feature_func, *args, **kwargs):
+        return self.parametric_models[model_id].add_feature(feature_func, *args, **kwargs)
+
+    def set_feature_visibility(self, model_id, feature_id, visible):
+        self.parametric_models[model_id].set_feature_visibility(feature_id, visible)
+
+    def set_feature_color(self, model_id, feature_id, color):
+        self.parametric_models[model_id].set_feature_color(feature_id, color)
+
+    def update_parameter(self, model_id, parameter_name, new_value):
+        self.parametric_models[model_id].update_parameter(parameter_name, new_value)
+
+    def rebuild_model(self, model_id):
+        self.parametric_models[model_id].rebuild()
+
+    def get_features(self, model_id):
+        return self.parametric_models[model_id].get_features()
+
+    def get_model_data(self, model_id):
+        model = self.get_model(model_id)
+        features = self.get_features(model_id)
+        return {
+            "id": model_id,
+            "parameters": self.parametric_models[model_id].parameters,
+            "features": features,
+            "boundingBox": model.BoundingBox().toTuple(),
+            "vertices": model.vertices().vals(),
+            "faces": [
+                {
+                    "id": str(id(face)),
+                    "type": face.type(),
+                    "boundingBox": face.BoundingBox().toTuple()
+                }
+                for face in model.faces().vals()
+            ],
+            "edges": [
+                {
+                    "id": str(id(edge)),
+                    "type": edge.type(),
+                    "length": edge.Length()
+                }
+                for edge in model.edges().vals()
+            ]
+        }
+
+    def export_model(self, model_id):
+        model = self.parametric_models[model_id]
+        export_data = {
+            "modelId": model_id,
+            "parameters": model.parameters,
+            "features": []
+        }
+
+        for feature in model.features:
+            export_feature = {
+                "id": feature['id'],
+                "type": feature['func'].__name__,
+                "args": feature['args'],
+                "kwargs": feature['kwargs'],
+                "visible": feature['visible'],
+                "color": feature['color']
+            }
+            export_data["features"].append(export_feature)
+
+        return json.dumps(export_data, indent=2)
+
+    def import_model(self, json_data):
+        import_data = json.loads(json_data)
+        new_model = ParametricModel()
+
+        # Import parameters
+        for name, value in import_data.get("parameters", {}).items():
+            new_model.add_parameter(name, value)
+
+        # Import features
+        for feature in import_data.get("features", []):
+            feature_type = feature.get("type")
+            if feature_type == "circular_cut":
+                feature_func = circular_cut
+            elif feature_type == "concentric_extrude":
+                feature_func = concentric_extrude
+            elif feature_type == "mirror_feature":
+                feature_func = mirror_feature
+            else:
+                raise ValueError(f"Unknown feature type: {feature_type}")
+
+            args = feature.get("args", [])
+            kwargs = feature.get("kwargs", {})
+            
+            # Add feature
+            feature_id = new_model.add_feature(feature_func, *args, **kwargs)
+            
+            # Set visibility
+            visibility = feature.get("visible", True)
+            new_model.set_feature_visibility(feature_id, visibility)
+            
+            # Set color
+            color = feature.get("color", (0.7, 0.7, 0.7))
+            new_model.set_feature_color(feature_id, color)
+
+        new_model.rebuild()
+        model_id = self.create_new_model()
+        self.parametric_models[model_id] = new_model
+        return model_id
+
+/* ================================================================================ */
+import os
+import subprocess
+from .model_manager import ModelManager
+
+class StructuralAnalysis:
+    def __init__(self, model_id):
+        self.model_manager = ModelManager.get_instance()
+        self.model = self.model_manager.get_model(model_id)
+
+    def prepare_inp_file(self, material_properties, loads, constraints):
+        # Convert our model to CalculiX input format
+        # This is a simplified version and would need to be expanded
+        inp_content = "*NODE\n"
+        for i, vertex in enumerate(self.model.vertices().vals(), 1):
+            inp_content += f"{i}, {vertex.X}, {vertex.Y}, {vertex.Z}\n"
+
+        inp_content += "*ELEMENT, TYPE=C3D8R\n"
+        # Add element definitions here
+
+        inp_content += "*MATERIAL, NAME=MATERIAL1\n"
+        inp_content += f"*ELASTIC\n{material_properties['young_modulus']}, {material_properties['poisson_ratio']}\n"
+
+        inp_content += "*BOUNDARY\n"
+        for constraint in constraints:
+            inp_content += f"{constraint['node']}, {constraint['dof']}, {constraint['value']}\n"
+
+        inp_content += "*STEP\n*STATIC\n"
+        inp_content += "*CLOAD\n"
+        for load in loads:
+            inp_content += f"{load['node']}, {load['direction']}, {load['magnitude']}\n"
+
+        inp_content += "*NODE PRINT, NSET=NALL\nU\n*EL PRINT, ELSET=EALL\nS\n*END STEP"
+
+        with open('model.inp', 'w') as f:
+            f.write(inp_content)
+
+    def run_analysis(self):
+        # Run CalculiX
+        subprocess.run(["ccx", "model"])
+
+    def process_results(self):
+        # Process the .frd file generated by CalculiX
+        # This is a simplified version and would need to be expanded
+        results = {}
+        with open('model.frd', 'r') as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines):
+                if line.strip().startswith('1PSTRESS'):
+                    # Extract stress values
+                    stress_values = [float(val) for val in lines[i+1].split()]
+                    results[f'node_{i}'] = {
+                        'stress': max(stress_values)
+                    }
+        return results
+
+    def perform_analysis(self, material_properties, loads, constraints):
+        self.prepare_inp_file(material_properties, loads, constraints)
+        self.run_analysis()
+        return self.process_results()
+/* ================================================================================ */
+from flask import Blueprint
+
+main = Blueprint('main', __name__)
+
+@main.route('/api/test')
+def test():
+    return {'message': 'Test route is working!'}
+
+# Import other route files here
+# from . import cad_operations, structural_analysis, etc.
+/* ================================================================================ */
+
+/* ================================================================================ */
+from flask import Flask, jsonify
+from flask_cors import CORS
+
+def create_app():
+    app = Flask(__name__)
+    
+    # Configure CORS
+    CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000", "supports_credentials": True}})
+        
+    # Import the routes blueprint from the submodule
+    from .routes.cad_operations import cad_operations as cad_operations_blueprint  # Note the dot notation
+    app.register_blueprint(cad_operations_blueprint, url_prefix='/api')
+
+    # Import and register blueprints
+    from .routes import main as main_blueprint
+    app.register_blueprint(main_blueprint)
+
+    return app
+/* ================================================================================ */
+import os
+from dotenv import load_dotenv
+
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, '.env'))
+
+class Config:
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'sqlite:///' + os.path.join(basedir, 'app.db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB max-limit for file uploads
+    ALLOWED_EXTENSIONS = {'json', 'step', 'stp'}
+    CALCULIX_PATH = os.environ.get('CALCULIX_PATH') or '/usr/bin/ccx'
+
+class DevelopmentConfig(Config):
+    DEBUG = True
+
+class TestingConfig(Config):
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'test.db')
+
+class ProductionConfig(Config):
+    DEBUG = False
+    # Add any production-specific settings here
+
+config = {
+    'development': DevelopmentConfig,
+    'testing': TestingConfig,
+    'production': ProductionConfig,
+    'default': DevelopmentConfig
+}
+/* ================================================================================ */
+cd backend
+
+python -m venv venv
+
+venv\Scripts\activate
+
+pip install -r requirements.txt
+
+python run.py
+/* ================================================================================ */
+from app import create_app
+
+app = create_app()
+
+if __name__ == '__main__':
+    app.run(port=5000, debug=True)
+/* ================================================================================ */
+import unittest
+from .model_manager import ModelManager
+from .circular_cut_operations import circular_cut_on_face
+import cadquery as cq
+
+class TestCircularCutFunctionality(unittest.TestCase):
+    def setUp(self):
+        self.model_manager = ModelManager.get_instance()
+        self.model_manager.model = cq.Workplane('XY').cylinder(10, 20)  # Create a simple cylinder
+
+    def test_circular_cut(self):
+        result = circular_cut_on_face(self.model_manager.model, ">Z", 5, 2)
+        self.assertEqual(len(result.faces().vals()), 5)  # Original 3 faces + 2 new faces from cut
+
+    def test_circular_cut_too_deep(self):
+        with self.assertRaises(ValueError):
+            circular_cut_on_face(self.model_manager.model, ">Z", 5, 25)  # Cut deeper than cylinder height
+
+    def test_circular_cut_invalid_face(self):
+        with self.assertRaises(ValueError):
+            circular_cut_on_face(self.model_manager.model, "invalid_selector", 5, 2)
+
+    def test_model_manager_circular_cut(self):
+        object_id = id(self.model_manager.model)
+        updated_model_data = self.model_manager.apply_circular_cut(object_id, ">Z", 5, 2)
+        self.assertIn('objects', updated_model_data)
+        self.assertEqual(len(updated_model_data['objects']), 1)
+        self.assertEqual(len(updated_model_data['objects'][0]['faces']), 5)
+
+if __name__ == '__main__':
+    unittest.main()
+/* ================================================================================ */
+import unittest
+from .model_manager import ModelManager
+from .concentric_extrude_operations import extrude_between_circles
+import cadquery as cq
+
+class TestConcentricExtrudeFunctionality(unittest.TestCase):
+    def setUp(self):
+        self.model_manager = ModelManager.get_instance()
+        self.model_manager.model = cq.Workplane('XY').cylinder(10, 20)  # Create a simple cylinder
+
+    def test_concentric_extrude(self):
+        result = extrude_between_circles(self.model_manager.model, ">Z", 8, 4, 2)
+        self.assertEqual(len(result.faces().vals()), 8)  # Original 3 faces + 5 new faces from extrude
+
+    def test_concentric_extrude_invalid_diameters(self):
+        with self.assertRaises(ValueError):
+            extrude_between_circles(self.model_manager.model, ">Z", 4, 8, 2)  # Inner diameter larger than outer
+
+    def test_concentric_extrude_invalid_face(self):
+        with self.assertRaises(ValueError):
+            extrude_between_circles(self.model_manager.model, "invalid_selector", 8, 4, 2)
+
+    def test_model_manager_concentric_extrude(self):
+        object_id = id(self.model_manager.model)
+        updated_model_data = self.model_manager.apply_concentric_extrude(object_id, ">Z", 8, 4, 2)
+        self.assertIn('objects', updated_model_data)
+        self.assertEqual(len(updated_model_data['objects']), 1)
+        self.assertEqual(len(updated_model_data['objects'][0]['faces']), 8)
+
+if __name__ == '__main__':
+    unittest.main()
+	
+/* ================================================================================ */
+import unittest
+from .model_manager import ModelManager
+from .advanced_mirroring_logic import MirrorOperation, MirrorOperationError
+import cadquery as cq
+
+class TestMirroringFunctionality(unittest.TestCase):
+    def setUp(self):
+        self.model_manager = ModelManager.get_instance()
+        self.model_manager.model = cq.Workplane('XY').box(1, 1, 1)
+
+    def test_simple_mirror(self):
+        mirror_plane = cq.Plane.XY
+        mirror_op = MirrorOperation('body', [self.model_manager.model], mirror_plane, True, None, None)
+        result = mirror_op.apply(self.model_manager.model)
+        self.assertEqual(len(result.solids().vals()), 2)
+
+    def test_partial_mirror(self):
+        box = cq.Workplane('XY').box(1, 1, 1).faces(">Z").circle(0.2).extrude(0.5)
+        self.model_manager.model = box
+        mirror_plane = cq.Plane.XY
+        partial_features = {id(box): ['faces(">Z")']}
+        mirror_op = MirrorOperation('feature', [box], mirror_plane, True, None, partial_features)
+        result = mirror_op.apply(self.model_manager.model)
+        self.assertEqual(len(result.faces().vals()), 10)  # Original 6 faces + 4 new faces from partial mirror
+
+    def test_invalid_mirror(self):
+        mirror_plane = cq.Plane.XY.move(cq.Vector(0.5, 0.5, 0.5))
+        with self.assertRaises(MirrorOperationError):
+            mirror_op = MirrorOperation('body', [self.model_manager.model], mirror_plane, True, None, None)
+            mirror_op.apply(self.model_manager.model)
+
+    def test_undo_redo(self):
+        initial_solid_count = len(self.model_manager.model.solids().vals())
+        mirror_plane = cq.Plane.XY
+        mirror_op = MirrorOperation('body', [self.model_manager.model], mirror_plane, True, None, None)
+        self.model_manager.apply_mirror_operation(mirror_op)
+        self.assertEqual(len(self.model_manager.model.solids().vals()), initial_solid_count * 2)
+        
+        self.model_manager.undo()
+        self.assertEqual(len(self.model_manager.model.solids().vals()), initial_solid_count)
+        
+        self.model_manager.redo()
+        self.assertEqual(len(self.model_manager.model.solids().vals()), initial_solid_count * 2)
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,0 +1,1971 @@
+module.exports = {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  }
+/* ================================================================================ */
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>React App</title></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div></body></html>
+/* ================================================================================ */
+
+/* ================================================================================ */
+import React, { useState, useEffect } from 'react';
+import { UserFeedbackProvider } from './contexts/UserFeedbackContext';
+import AdvancedCADControlPanel from './components/panel/AdvancedCadControlPanel/AdvancedCadControlPanel';
+import ThreeDView from './components/panel/ThreeDView/ThreeDView';
+import StructuralAnalysisControls from './components/panel/StructuralAnalysisControls/StructuralAnalysisControls';
+import ParameterAdjustmentControls from './components/panel/ParameterAdjustmentControls/ParameterAdjustmentControls';
+import FailurePointsDisplay from './components/panel/FailurePointsDisplay/FailurePointsDisplay';
+import ExportImportControls from './components/panel/EnhancedExportImportControls/EnhancedExportImportControls';
+
+function App() {
+  const [currentModelId, setCurrentModelId] = useState(null);
+  const [modelData, setModelData] = useState(null);
+  const [analysisResults, setAnalysisResults] = useState(null);
+  const [failurePoints, setFailurePoints] = useState(null);
+
+  useEffect(() => {
+    // Fetch initial model data when the app loads
+    // This is a placeholder and should be replaced with actual API call
+    const fetchInitialModel = async () => {
+      // const response = await fetch('/api/initial-model');
+      // const data = await response.json();
+      // setCurrentModelId(data.modelId);
+      // setModelData(data.modelData);
+    };
+    fetchInitialModel();
+  }, []);
+
+  const handleModelUpdate = (modelId, updatedModelData) => {
+    setCurrentModelId(modelId);
+    setModelData(updatedModelData);
+  };
+
+  const handleAnalysisComplete = (results, failures) => {
+    setAnalysisResults(results);
+    setFailurePoints(failures);
+  };
+
+  const handleModelImport = (modelId, importedModelData) => {
+    setCurrentModelId(modelId);
+    setModelData(importedModelData);
+    setAnalysisResults(null);
+    setFailurePoints(null);
+  };
+
+  /*
+                <AdvancedCADControlPanel
+                  currentModelId={currentModelId}
+                  onModelUpdate={handleModelUpdate}
+                />
+                <ParameterAdjustmentControls
+                  modelId={currentModelId}
+                  onModelUpdate={handleModelUpdate}
+                />
+                <StructuralAnalysisControls
+                  modelId={currentModelId}
+                  onAnalysisComplete={handleAnalysisComplete}
+                />
+                <ExportImportControls
+                  modelId={currentModelId}
+                  onModelImported={handleModelImport}
+                />
+  */
+
+  return (
+    <UserFeedbackProvider>
+      <div className="min-h-screen bg-base-100 text-base-content">
+        <header className="navbar bg-primary text-primary-content">
+          <div className="flex-1">
+            <span className="text-lg font-bold">CloudCad</span>
+          </div>
+        </header>
+        <main className="container mx-auto p-4 flex flex-col md:flex-row">
+          <div className="w-full md:w-1/3 pr-4">
+            <div className="card bg-base-200 shadow-xl">
+              <div className="card-body">
+              <AdvancedCADControlPanel
+                  currentModelId={currentModelId}
+                  onModelUpdate={handleModelUpdate}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="w-full md:w-2/3 mt-4 md:mt-0">
+            <div className="card bg-base-200 shadow-xl">
+              <div className="card-body">
+                <ThreeDView
+                  modelData={modelData}
+                  analysisResults={analysisResults}
+                  failurePoints={failurePoints}
+                />
+              </div>
+            </div>
+            {failurePoints && (
+              <div className="mt-4 card bg-base-200 shadow-xl">
+                <div className="card-body">
+                  <FailurePointsDisplay failurePoints={failurePoints} />
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    </UserFeedbackProvider>
+  );
+}
+
+export default App;
+/* ================================================================================ */
+class ModelManager {
+    constructor() {
+      this.parts = [];
+      this.history = [];
+    }
+  
+    addPart(part) {
+      this.parts.push(part);
+      this.history.push({ action: 'add', part });
+    }
+  
+    removePart(partId) {
+      const index = this.parts.findIndex(p => p.id === partId);
+      if (index !== -1) {
+        const removedPart = this.parts.splice(index, 1)[0];
+        this.history.push({ action: 'remove', part: removedPart });
+      }
+    }
+  
+    modifyPart(partId, modification) {
+      const part = this.parts.find(p => p.id === partId);
+      if (part) {
+        const oldState = { ...part };
+        Object.assign(part, modification);
+        this.history.push({ action: 'modify', partId, oldState, newState: { ...part } });
+      }
+    }
+  
+    undo() {
+      const lastAction = this.history.pop();
+      if (lastAction) {
+        switch (lastAction.action) {
+          case 'add':
+            this.removePart(lastAction.part.id);
+            break;
+          case 'remove':
+            this.parts.push(lastAction.part);
+            break;
+          case 'modify':
+            const part = this.parts.find(p => p.id === lastAction.partId);
+            if (part) {
+              Object.assign(part, lastAction.oldState);
+            }
+            break;
+        }
+      }
+    }
+  
+    exportModel() {
+      return JSON.stringify(this.parts);
+    }
+  
+    importModel(jsonString) {
+      this.parts = JSON.parse(jsonString);
+      this.history = [];
+    }
+  }
+  
+  export default ModelManager;
+/* ================================================================================ */
+import React, { useState, useContext } from 'react';
+import { UserFeedbackContext } from '../../../contexts/UserFeedbackContext';
+import CircularCutControls from '../ParametricCircularCutControls/ParametricCircularCutControls';
+import ConcentricExtrudeControls from '../ParametricConcentricExtrudeControls/ParametricConcentricExtrudeControls';
+import EnhancedMirrorControls from '../EnhancedMirrorControls/EnhancedMirrorControls';
+import ParameterAdjustmentControls from '../ParameterAdjustmentControls/ParameterAdjustmentControls';
+import StructuralAnalysisControls from '../StructuralAnalysisControls/StructuralAnalysisControls';
+import ExportImportControls from '../EnhancedExportImportControls/EnhancedExportImportControls';
+import ApiService from '../../../services/ApiService';
+
+const AdvancedCadControlPanel = ({ currentModelId, onModelUpdate }) => {
+  const [currentOperation, setCurrentOperation] = useState(null);
+  const { showMessage, showError } = useContext(UserFeedbackContext);
+
+  const handleNewModel = async () => {
+    try {
+      const data = await ApiService.createModel();
+      if (data.success) {
+        onModelUpdate(data.modelId, data.modelData);
+        showMessage('New model created');
+      } else {
+        showError('Failed to create new model');
+      }
+    } catch (error) {
+      showError('Error creating new model');
+    }
+  };
+
+  const handleOperationComplete = (updatedModelData) => {
+    onModelUpdate(currentModelId, updatedModelData);
+    showMessage('Operation completed successfully');
+    setCurrentOperation(null);
+  };
+
+  const handleAnalysisComplete = (results, failures) => {
+    // This function would be passed down to StructuralAnalysisControls
+    // and then up to the parent component to update the 3D view
+    onModelUpdate(currentModelId, null, results, failures);
+    showMessage('Structural analysis completed successfully');
+  };
+
+  const handleModelImport = (modelId, importedModelData) => {
+    onModelUpdate(modelId, importedModelData);
+    showMessage('Model imported successfully');
+  };
+
+  return (
+    <div className="bg-base-200 p-4 rounded-lg shadow-lg">
+      <h2 className="text-2xl font-bold mb-4">CAD Control Panel</h2>
+      
+      <div className="mb-4">
+        <button onClick={handleNewModel} className="btn btn-primary w-full">
+          Create New Model
+        </button>
+      </div>
+
+      {currentModelId && (
+        <>
+          <div className="mb-4">
+            <select 
+              onChange={(e) => setCurrentOperation(e.target.value)} 
+              className="select select-bordered w-full"
+            >
+              <option value="">Select Operation</option>
+              <option value="circularCut">Circular Cut</option>
+              <option value="concentricExtrude">Concentric Circles Extrude</option>
+              <option value="mirror">Mirror</option>
+              <option value="parameterAdjustment">Adjust Parameters</option>
+              <option value="structuralAnalysis">Structural Analysis</option>
+            </select>
+          </div>
+          
+
+          {currentOperation === 'circularCut' && (
+            <CircularCutControls
+              modelId={currentModelId}
+              onOperationComplete={handleOperationComplete}
+            />
+          )}
+
+          {currentOperation === 'concentricExtrude' && (
+            <ConcentricExtrudeControls
+              modelId={currentModelId}
+              onOperationComplete={handleOperationComplete}
+            />
+          )}
+
+          {currentOperation === 'mirror' && (
+            <EnhancedMirrorControls
+              modelId={currentModelId}
+              onOperationComplete={handleOperationComplete}
+            />
+          )}
+
+          {currentOperation === 'parameterAdjustment' && (
+            <ParameterAdjustmentControls
+              modelId={currentModelId}
+              onModelUpdate={handleOperationComplete}
+            />
+          )}
+
+          {currentOperation === 'structuralAnalysis' && (
+            <StructuralAnalysisControls
+              modelId={currentModelId}
+              onAnalysisComplete={handleAnalysisComplete}
+            />
+          )}
+
+          <div className="mt-4">
+            <ExportImportControls
+              modelId={currentModelId}
+              onModelImported={handleModelImport}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default AdvancedCadControlPanel;
+/* ================================================================================ */
+import React, { useContext, useState } from 'react';
+import axios from 'axios';
+import { UserFeedbackContext } from '../../../contexts/UserFeedbackContext';
+
+const EnhancedExportImportControls = ({ modelId, onModelImported }) => {
+  const { showMessage, showError } = useContext(UserFeedbackContext);
+  const [importDetails, setImportDetails] = useState(null);
+
+  const handleExport = async () => {
+    try {
+      const response = await axios.get(`/api/export_model/${modelId}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `model_${modelId}.json`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      showMessage('Model exported successfully. You can now edit the JSON file if desired.');
+    } catch (error) {
+      showError('Error exporting model: ' + error.message);
+    }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const response = await axios.post('/api/import_model', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        if (response.data.success) {
+          onModelImported(response.data.modelId, response.data.modelData);
+          showMessage('Model imported successfully');
+          setImportDetails(response.data.modelData);
+        } else {
+          showError('Failed to import model: ' + response.data.error);
+        }
+      } catch (error) {
+        showError('Error importing model: ' + error.message);
+      }
+    }
+  };
+
+  return (
+    <div>
+      <h3>Export/Import Model</h3>
+      <button onClick={handleExport}>Export Model</button>
+      <input
+        type="file"
+        accept=".json"
+        onChange={handleImport}
+        style={{ display: 'none' }}
+        id="import-file"
+      />
+      <label htmlFor="import-file">
+        <button as="span">Import Model</button>
+      </label>
+      {importDetails && (
+        <div>
+          <h4>Import Details:</h4>
+          <p>Number of features: {importDetails.features.length}</p>
+          <p>Parameters: {JSON.stringify(importDetails.parameters)}</p>
+          <p>Features:</p>
+          <ul>
+            {importDetails.features.map((feature, index) => (
+              <li key={index}>
+                Type: {feature.type}, Visible: {feature.visible.toString()}, 
+                Color: {JSON.stringify(feature.color)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EnhancedExportImportControls;
+/* ================================================================================ */
+import React, { useState, useEffect, useContext } from 'react';
+import axios from 'axios';
+import { UserFeedbackContext } from './UserFeedbackUtility';
+
+const EnhancedFeatureManagementControls = ({ modelId, onModelUpdate }) => {
+  const [features, setFeatures] = useState([]);
+  const { showMessage, showError } = useContext(UserFeedbackContext);
+
+  useEffect(() => {
+    fetchFeatures();
+  }, [modelId]);
+
+  const fetchFeatures = async () => {
+    try {
+      const response = await axios.get(`/api/get_features/${modelId}`);
+      setFeatures(response.data.features);
+    } catch (error) {
+      showError('Error fetching features: ' + error.message);
+    }
+  };
+
+  const handleVisibilityChange = async (featureId, visible) => {
+    try {
+      const response = await axios.post('/api/set_feature_visibility', {
+        modelId,
+        featureId,
+        visible
+      });
+
+      if (response.data.success) {
+        onModelUpdate(response.data.updatedModel);
+        setFeatures(response.data.updatedModel.features);
+        showMessage(`Feature ${featureId} visibility updated`);
+      } else {
+        showError('Failed to update feature visibility: ' + response.data.error);
+      }
+    } catch (error) {
+      showError('Error updating feature visibility: ' + error.message);
+    }
+  };
+
+  const handleColorChange = async (featureId, color) => {
+    try {
+      const response = await axios.post('/api/set_feature_color', {
+        modelId,
+        featureId,
+        color
+      });
+
+      if (response.data.success) {
+        onModelUpdate(response.data.updatedModel);
+        setFeatures(response.data.updatedModel.features);
+        showMessage(`Feature ${featureId} color updated`);
+      } else {
+        showError('Failed to update feature color: ' + response.data.error);
+      }
+    } catch (error) {
+      showError('Error updating feature color: ' + error.message);
+    }
+  };
+
+  return (
+    <div>
+      <h3>Feature Management</h3>
+      {features.map(feature => (
+        <div key={feature.id}>
+          <label>
+            <input
+              type="checkbox"
+              checked={feature.visible}
+              onChange={(e) => handleVisibilityChange(feature.id, e.target.checked)}
+            />
+            Feature {feature.id}
+          </label>
+          <input
+            type="color"
+            value={`#${feature.color.map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('')}`}
+            onChange={(e) => handleColorChange(feature.id, e.target.value.match(/[A-Za-z0-9]{2}/g).map(v => parseInt(v, 16) / 255))}
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default EnhancedFeatureManagementControls;
+/* ================================================================================ */
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const EnhancedMirrorControls = ({ scene, onOperationComplete }) => {
+  const [objectIds, setObjectIds] = useState([]);
+  const [mirrorPlane, setMirrorPlane] = useState({ origin: [0, 0, 0], normal: [1, 0, 0] });
+  const [keepOriginal, setKeepOriginal] = useState(true);
+  const [alignToAxis, setAlignToAxis] = useState(null);
+  const [partialFeatures, setPartialFeatures] = useState({});
+
+  useEffect(() => {
+    // Populate objectIds with all available objects in the scene
+    const availableObjects = scene.meshes.filter(mesh => !mesh.isGround).map(mesh => mesh.id);
+    setObjectIds(availableObjects);
+  }, [scene]);
+
+  const handleMirror = async () => {
+    try {
+      const response = await axios.post('/api/mirror', {
+        objectIds,
+        mirrorPlane,
+        keepOriginal,
+        alignToAxis,
+        partialFeatures
+      });
+
+      if (response.data.success) {
+        onOperationComplete(response.data.updatedModel);
+      } else {
+        console.error('Failed to perform mirror operation:', response.data.error);
+      }
+    } catch (error) {
+      console.error('Error performing mirror operation:', error);
+    }
+  };
+
+  return (
+    <div>
+      <h3>Mirror Operation</h3>
+      <div>
+        <h4>Select Objects to Mirror</h4>
+        {objectIds.map(id => (
+          <label key={id}>
+            <input
+              type="checkbox"
+              checked={objectIds.includes(id)}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setObjectIds([...objectIds, id]);
+                } else {
+                  setObjectIds(objectIds.filter(objId => objId !== id));
+                }
+              }}
+            />
+            {id}
+          </label>
+        ))}
+      </div>
+      <div>
+        <h4>Mirror Plane</h4>
+        <input
+          type="text"
+          placeholder="Origin (x,y,z)"
+          value={mirrorPlane.origin.join(',')}
+          onChange={(e) => setMirrorPlane({...mirrorPlane, origin: e.target.value.split(',').map(Number)})}
+        />
+        <input
+          type="text"
+          placeholder="Normal (x,y,z)"
+          value={mirrorPlane.normal.join(',')}
+          onChange={(e) => setMirrorPlane({...mirrorPlane, normal: e.target.value.split(',').map(Number)})}
+        />
+      </div>
+      <div>
+        <label>
+          <input
+            type="checkbox"
+            checked={keepOriginal}
+            onChange={(e) => setKeepOriginal(e.target.checked)}
+          />
+          Keep Original
+        </label>
+      </div>
+      <div>
+        <h4>Align to Axis</h4>
+        <select value={alignToAxis || ''} onChange={(e) => setAlignToAxis(e.target.value || null)}>
+          <option value="">None</option>
+          <option value="x">X Axis</option>
+          <option value="y">Y Axis</option>
+          <option value="z">Z Axis</option>
+        </select>
+      </div>
+      <button onClick={handleMirror}>Apply Mirror</button>
+    </div>
+  );
+};
+
+export default EnhancedMirrorControls;
+/* ================================================================================ */
+import React, { useEffect, useRef } from 'react';
+import * as BABYLON from 'babylonjs';
+
+const EnhancedMirrorPreview = ({ scene, mirrorType, mirrorPlane, objects, keepOriginal, alignToAxis }) => {
+  const previewMeshesRef = useRef([]);
+  const mirrorPlaneVisualizationRef = useRef(null);
+
+  useEffect(() => {
+    if (scene && mirrorPlane && objects.length > 0) {
+      // Clear previous preview
+      clearPreview();
+
+      // Create mirror plane visualization
+      const planeVisualization = BABYLON.MeshBuilder.CreatePlane("mirrorPlane", { size: 10 }, scene);
+      planeVisualization.position = new BABYLON.Vector3(...mirrorPlane.origin);
+      planeVisualization.lookAt(new BABYLON.Vector3(...mirrorPlane.normal).add(planeVisualization.position));
+      const planeMaterial = new BABYLON.StandardMaterial("planeMaterial", scene);
+      planeMaterial.diffuseColor = new BABYLON.Color3(0.5, 0.5, 1);
+      planeMaterial.alpha = 0.5;
+      planeVisualization.material = planeMaterial;
+      mirrorPlaneVisualizationRef.current = planeVisualization;
+
+      // Create mirrored copies
+      objects.forEach(obj => {
+        const mirroredMesh = obj.clone("mirroredMesh");
+        mirroredMesh.material = new BABYLON.StandardMaterial("previewMaterial", scene);
+        mirroredMesh.material.diffuseColor = new BABYLON.Color3(0, 1, 1); // Cyan color for preview
+        mirroredMesh.material.alpha = 0.5; // Semi-transparent
+
+        // Apply mirroring transformation
+        const mirrorMatrix = BABYLON.Matrix.ReflectionToRef(
+          BABYLON.Plane.FromPositionAndNormal(
+            new BABYLON.Vector3(...mirrorPlane.origin),
+            new BABYLON.Vector3(...mirrorPlane.normal)
+          ),
+          new BABYLON.Matrix()
+        );
+        mirroredMesh.setPivotMatrix(mirrorMatrix);
+
+        // Apply axis alignment if specified
+        if (alignToAxis) {
+          const alignmentMatrix = getAlignmentMatrix(alignToAxis);
+          mirroredMesh.setPivotMatrix(mirroredMesh.getPivotMatrix().multiply(alignmentMatrix));
+        }
+
+        previewMeshesRef.current.push(mirroredMesh);
+      });
+
+      // If not keeping original, hide original objects
+      if (!keepOriginal) {
+        objects.forEach(obj => obj.setEnabled(false));
+      }
+    }
+
+    return () => {
+      clearPreview();
+    };
+  }, [scene, mirrorType, mirrorPlane, objects, keepOriginal, alignToAxis]);
+
+  const clearPreview = () => {
+    previewMeshesRef.current.forEach(mesh => mesh.dispose());
+    previewMeshesRef.current = [];
+    if (mirrorPlaneVisualizationRef.current) {
+      mirrorPlaneVisualizationRef.current.dispose();
+      mirrorPlaneVisualizationRef.current = null;
+    }
+    objects.forEach(obj => obj.setEnabled(true));
+  };
+
+  const getAlignmentMatrix = (axis) => {
+    switch (axis) {
+      case 'x':
+        return BABYLON.Matrix.RotationY(Math.PI / 2);
+      case 'y':
+        return BABYLON.Matrix.RotationX(Math.PI / 2);
+      case 'z':
+        return BABYLON.Matrix.Identity();
+      default:
+        return BABYLON.Matrix.Identity();
+    }
+  };
+
+  return null; // This component doesn't render anything directly
+};
+
+export default EnhancedMirrorPreview;
+/* ================================================================================ */
+import React from 'react';
+
+const FailurePointsDisplay = ({ failurePoints }) => {
+  const getSeverityColor = (severity) => {
+    // Convert severity (0-1) to a color scale (green to red)
+    const r = Math.round(severity * 255);
+    const g = Math.round((1 - severity) * 255);
+    return `rgb(${r}, ${g}, 0)`;
+  };
+
+  return (
+    <div>
+      <h3>Potential Failure Points</h3>
+      {failurePoints.map((point, index) => (
+        <div key={index} style={{ marginBottom: '20px', border: '1px solid #ccc', padding: '15px', borderRadius: '5px' }}>
+          <h4 style={{ color: getSeverityColor(point.severity) }}>
+            Point {index + 1} (Severity: {(point.severity * 100).toFixed(2)}%)
+          </h4>
+          <p>Node: {point.node}</p>
+          <p>Position: ({point.position.x.toFixed(2)}, {point.position.y.toFixed(2)}, {point.position.z.toFixed(2)})</p>
+          <p>Stress: {point.stress.toFixed(2)} MPa</p>
+          <p>Safety Factor: {point.safety_factor.toFixed(2)}</p>
+          <p>Explanation: This point has a safety factor of {point.safety_factor.toFixed(2)}, 
+             which is below the recommended minimum of 2.0. The stress at this point is 
+             {point.stress.toFixed(2)} MPa, which is {((point.stress / point.safety_factor) * 100).toFixed(2)}% 
+             of the material's yield strength.</p>
+          <h5>Recommendations:</h5>
+          <ul>
+            {point.recommendations.map((rec, recIndex) => (
+              <li key={recIndex}>{rec}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default FailurePointsDisplay;
+/* ================================================================================ */
+import React, { useState, useEffect } from 'react';
+import * as BABYLON from 'babylonjs';
+
+const MirrorPlaneSelector = ({ scene, onPlaneSelected }) => {
+  const [planeType, setPlaneType] = useState('face');
+  const [customPlane, setCustomPlane] = useState({ origin: [0, 0, 0], normal: [0, 1, 0] });
+
+  useEffect(() => {
+    if (planeType === 'face') {
+      enableFaceSelection(scene, (mesh, faceId) => {
+        const normal = mesh.getFacetNormal(faceId);
+        const origin = mesh.getFacetPosition(faceId);
+        onPlaneSelected({ origin: origin.asArray(), normal: normal.asArray() });
+      });
+    } else if (planeType === 'custom') {
+      // Add visual helpers for custom plane definition
+      const originSphere = BABYLON.MeshBuilder.CreateSphere("originSphere", { diameter: 0.1 }, scene);
+      const normalLine = BABYLON.MeshBuilder.CreateLines("normalLine", {
+        points: [
+          new BABYLON.Vector3(...customPlane.origin),
+          new BABYLON.Vector3(
+            customPlane.origin[0] + customPlane.normal[0],
+            customPlane.origin[1] + customPlane.normal[1],
+            customPlane.origin[2] + customPlane.normal[2]
+          )
+        ]
+      }, scene);
+
+      return () => {
+        originSphere.dispose();
+        normalLine.dispose();
+      };
+    }
+  }, [planeType, customPlane, scene, onPlaneSelected]);
+
+  const handlePlaneTypeChange = (e) => {
+    setPlaneType(e.target.value);
+  };
+
+  const handleCustomPlaneChange = (type, index, value) => {
+    setCustomPlane(prev => {
+      const newPlane = { ...prev };
+      newPlane[type][index] = parseFloat(value);
+      return newPlane;
+    });
+  };
+
+  const handleCustomPlaneSubmit = () => {
+    onPlaneSelected(customPlane);
+  };
+
+  return (
+    <div>
+      <select value={planeType} onChange={handlePlaneTypeChange}>
+        <option value="face">Select Face</option>
+        <option value="custom">Custom Plane</option>
+      </select>
+      {planeType === 'custom' && (
+        <div>
+          <div>
+            Origin: 
+            <input type="number" value={customPlane.origin[0]} onChange={(e) => handleCustomPlaneChange('origin', 0, e.target.value)} />
+            <input type="number" value={customPlane.origin[1]} onChange={(e) => handleCustomPlaneChange('origin', 1, e.target.value)} />
+            <input type="number" value={customPlane.origin[2]} onChange={(e) => handleCustomPlaneChange('origin', 2, e.target.value)} />
+          </div>
+          <div>
+            Normal: 
+            <input type="number" value={customPlane.normal[0]} onChange={(e) => handleCustomPlaneChange('normal', 0, e.target.value)} />
+            <input type="number" value={customPlane.normal[1]} onChange={(e) => handleCustomPlaneChange('normal', 1, e.target.value)} />
+            <input type="number" value={customPlane.normal[2]} onChange={(e) => handleCustomPlaneChange('normal', 2, e.target.value)} />
+          </div>
+          <button onClick={handleCustomPlaneSubmit}>Set Custom Plane</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MirrorPlaneSelector;
+/* ================================================================================ */
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const ParameterAdjustmentControls = ({ modelId, onModelUpdate }) => {
+  const [parameters, setParameters] = useState({});
+
+  useEffect(() => {
+    // Fetch initial parameters
+    fetchParameters();
+  }, [modelId]);
+
+  const fetchParameters = async () => {
+    try {
+      const response = await axios.get(`/api/get_parameters/${modelId}`);
+      setParameters(response.data.parameters);
+    } catch (error) {
+      console.error('Error fetching parameters:', error);
+    }
+  };
+
+  const handleParameterChange = async (name, value) => {
+    try {
+      const response = await axios.post('/api/update_parameter', {
+        modelId,
+        parameterName: name,
+        newValue: value
+      });
+
+      if (response.data.success) {
+        onModelUpdate(response.data.updatedModel);
+        setParameters(prevParams => ({ ...prevParams, [name]: value }));
+      } else {
+        console.error('Failed to update parameter:', response.data.error);
+      }
+    } catch (error) {
+      console.error('Error updating parameter:', error);
+    }
+  };
+
+  return (
+    <div>
+      <h3>Adjust Parameters</h3>
+      {Object.entries(parameters).map(([name, value]) => (
+        <div key={name}>
+          <label>{name}: </label>
+          <input
+            type="number"
+            value={value}
+            onChange={(e) => handleParameterChange(name, parseFloat(e.target.value))}
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default ParameterAdjustmentControls;
+/* ================================================================================ */
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const ParametricCircularCutControls = ({ modelId, onOperationComplete }) => {
+  const [radius, setRadius] = useState(1);
+  const [depth, setDepth] = useState(1);
+
+  const handleCircularCut = async () => {
+    try {
+      const response = await axios.post('/api/add_feature', {
+        modelId,
+        featureType: 'circular_cut',
+        parameters: {
+          radius,
+          depth
+        }
+      });
+
+      if (response.data.success) {
+        onOperationComplete(response.data.updatedModel);
+      } else {
+        console.error('Failed to perform circular cut:', response.data.error);
+      }
+    } catch (error) {
+      console.error('Error performing circular cut:', error);
+    }
+  };
+
+  return (
+    <div>
+      <h3>Circular Cut</h3>
+      <input
+        type="number"
+        placeholder="Radius"
+        value={radius}
+        onChange={(e) => setRadius(parseFloat(e.target.value))}
+      />
+      <input
+        type="number"
+        placeholder="Depth"
+        value={depth}
+        onChange={(e) => setDepth(parseFloat(e.target.value))}
+      />
+      <button onClick={handleCircularCut}>Apply Circular Cut</button>
+    </div>
+  );
+};
+
+export default ParametricCircularCutControls;
+/* ================================================================================ */
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const ParametricConcentricExtrudeControls = ({ modelId, onOperationComplete }) => {
+  const [outerRadius, setOuterRadius] = useState(5);
+  const [innerRadius, setInnerRadius] = useState(3);
+  const [height, setHeight] = useState(1);
+
+  const handleConcentricExtrude = async () => {
+    try {
+      const response = await axios.post('/api/add_feature', {
+        modelId,
+        featureType: 'concentric_extrude',
+        parameters: {
+          outerRadius,
+          innerRadius,
+          height
+        }
+      });
+
+      if (response.data.success) {
+        onOperationComplete(response.data.updatedModel);
+      } else {
+        console.error('Failed to perform concentric extrude:', response.data.error);
+      }
+    } catch (error) {
+      console.error('Error performing concentric extrude:', error);
+    }
+  };
+
+  return (
+    <div>
+      <h3>Concentric Extrude</h3>
+      <input
+        type="number"
+        placeholder="Outer Radius"
+        value={outerRadius}
+        onChange={(e) => setOuterRadius(parseFloat(e.target.value))}
+      />
+      <input
+        type="number"
+        placeholder="Inner Radius"
+        value={innerRadius}
+        onChange={(e) => setInnerRadius(parseFloat(e.target.value))}
+      />
+      <input
+        type="number"
+        placeholder="Height"
+        value={height}
+        onChange={(e) => setHeight(parseFloat(e.target.value))}
+      />
+      <button onClick={handleConcentricExtrude}>Apply Concentric Extrude</button>
+    </div>
+  );
+};
+
+export default ParametricConcentricExtrudeControls;
+/* ================================================================================ */
+import React, { useEffect, useRef } from 'react';
+import * as BABYLON from 'babylonjs';
+
+const PlaneSelection = ({ onPlaneSelected }) => {
+  const sceneRef = useRef(null);
+
+  useEffect(() => {
+    if (sceneRef.current) {
+      const engine = new BABYLON.Engine(sceneRef.current);
+      const scene = new BABYLON.Scene(engine);
+
+      const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
+      camera.attachControl(sceneRef.current, true);
+
+      const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(1, 1, 0), scene);
+
+      // Create planes
+      const planeXY = BABYLON.MeshBuilder.CreatePlane("planeXY", { size: 2 }, scene);
+      const planeYZ = BABYLON.MeshBuilder.CreatePlane("planeYZ", { size: 2 }, scene);
+      const planeXZ = BABYLON.MeshBuilder.CreatePlane("planeXZ", { size: 2 }, scene);
+
+      planeYZ.rotation.y = Math.PI / 2;
+      planeXZ.rotation.x = Math.PI / 2;
+
+      // Add click event to planes
+      [planeXY, planeYZ, planeXZ].forEach(plane => {
+        plane.actionManager = new BABYLON.ActionManager(scene);
+        plane.actionManager.registerAction(
+          new BABYLON.ExecuteCodeAction(
+            BABYLON.ActionManager.OnPickTrigger,
+            () => onPlaneSelected(plane.name)
+          )
+        );
+      });
+
+      engine.runRenderLoop(() => scene.render());
+
+      return () => {
+        engine.dispose();
+      };
+    }
+  }, [onPlaneSelected]);
+
+  return <canvas ref={sceneRef} style={{ width: '100%', height: '300px' }} />;
+};
+
+export default PlaneSelection;
+/* ================================================================================ */
+import React, { useState, useContext } from 'react';
+import axios from 'axios';
+import { UserFeedbackContext } from '../../../contexts/UserFeedbackContext';
+
+const StructuralAnalysisControls = ({ modelId, onAnalysisComplete }) => {
+  const [materialProperties, setMaterialProperties] = useState({
+    young_modulus: 200000,  // Default value for steel (MPa)
+    poisson_ratio: 0.3,
+    yield_strength: 250  // Default value for mild steel (MPa)
+  });
+  const [loads, setLoads] = useState([]);
+  const [constraints, setConstraints] = useState([]);
+  const { showMessage, showError } = useContext(UserFeedbackContext);
+
+  const handleMaterialChange = (e) => {
+    setMaterialProperties({
+      ...materialProperties,
+      [e.target.name]: parseFloat(e.target.value)
+    });
+  };
+
+  const handleAddLoad = () => {
+    setLoads([...loads, { node: '', direction: '', magnitude: '' }]);
+  };
+
+  const handleLoadChange = (index, field, value) => {
+    const newLoads = [...loads];
+    newLoads[index][field] = value;
+    setLoads(newLoads);
+  };
+
+  const handleRemoveLoad = (index) => {
+    const newLoads = loads.filter((_, i) => i !== index);
+    setLoads(newLoads);
+  };
+
+  const handleAddConstraint = () => {
+    setConstraints([...constraints, { node: '', dof: '', value: '' }]);
+  };
+
+  const handleConstraintChange = (index, field, value) => {
+    const newConstraints = [...constraints];
+    newConstraints[index][field] = value;
+    setConstraints(newConstraints);
+  };
+
+  const handleRemoveConstraint = (index) => {
+    const newConstraints = constraints.filter((_, i) => i !== index);
+    setConstraints(newConstraints);
+  };
+
+  const handleAnalysis = async () => {
+    try {
+      const response = await axios.post('/api/structural_analysis/analyze', {
+        modelId,
+        materialProperties,
+        loads,
+        constraints
+      });
+
+      if (response.data.success) {
+        onAnalysisComplete(response.data.results, response.data.failurePoints);
+        showMessage('Structural analysis completed successfully');
+      } else {
+        showError('Failed to perform structural analysis: ' + response.data.error);
+      }
+    } catch (error) {
+      showError('Error performing structural analysis: ' + error.message);
+    }
+  };
+
+  return (
+    <div className="bg-base-200 p-4 rounded-lg shadow-lg">
+      <h2 className="text-xl font-bold mb-4">Structural Analysis</h2>
+      
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold mb-2">Material Properties</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="label">
+              <span className="label-text">Young's Modulus (MPa)</span>
+            </label>
+            <input
+              type="number"
+              name="young_modulus"
+              value={materialProperties.young_modulus}
+              onChange={handleMaterialChange}
+              className="input input-bordered w-full"
+            />
+          </div>
+          <div>
+            <label className="label">
+              <span className="label-text">Poisson's Ratio</span>
+            </label>
+            <input
+              type="number"
+              name="poisson_ratio"
+              value={materialProperties.poisson_ratio}
+              onChange={handleMaterialChange}
+              className="input input-bordered w-full"
+            />
+          </div>
+          <div>
+            <label className="label">
+              <span className="label-text">Yield Strength (MPa)</span>
+            </label>
+            <input
+              type="number"
+              name="yield_strength"
+              value={materialProperties.yield_strength}
+              onChange={handleMaterialChange}
+              className="input input-bordered w-full"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold mb-2">Loads</h3>
+        {loads.map((load, index) => (
+          <div key={index} className="flex flex-wrap items-end mb-2">
+            <div className="mr-2 mb-2">
+              <label className="label">
+                <span className="label-text">Node</span>
+              </label>
+              <input
+                type="text"
+                value={load.node}
+                onChange={(e) => handleLoadChange(index, 'node', e.target.value)}
+                className="input input-bordered w-full"
+              />
+            </div>
+            <div className="mr-2 mb-2">
+              <label className="label">
+                <span className="label-text">Direction</span>
+              </label>
+              <input
+                type="text"
+                value={load.direction}
+                onChange={(e) => handleLoadChange(index, 'direction', e.target.value)}
+                className="input input-bordered w-full"
+              />
+            </div>
+            <div className="mr-2 mb-2">
+              <label className="label">
+                <span className="label-text">Magnitude</span>
+              </label>
+              <input
+                type="number"
+                value={load.magnitude}
+                onChange={(e) => handleLoadChange(index, 'magnitude', e.target.value)}
+                className="input input-bordered w-full"
+              />
+            </div>
+            <button onClick={() => handleRemoveLoad(index)} className="btn btn-error btn-sm">
+              Remove
+            </button>
+          </div>
+        ))}
+        <button onClick={handleAddLoad} className="btn btn-primary btn-sm">
+          Add Load
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold mb-2">Constraints</h3>
+        {constraints.map((constraint, index) => (
+          <div key={index} className="flex flex-wrap items-end mb-2">
+            <div className="mr-2 mb-2">
+              <label className="label">
+                <span className="label-text">Node</span>
+              </label>
+              <input
+                type="text"
+                value={constraint.node}
+                onChange={(e) => handleConstraintChange(index, 'node', e.target.value)}
+                className="input input-bordered w-full"
+              />
+            </div>
+            <div className="mr-2 mb-2">
+              <label className="label">
+                <span className="label-text">DOF</span>
+              </label>
+              <input
+                type="text"
+                value={constraint.dof}
+                onChange={(e) => handleConstraintChange(index, 'dof', e.target.value)}
+                className="input input-bordered w-full"
+              />
+            </div>
+            <div className="mr-2 mb-2">
+              <label className="label">
+                <span className="label-text">Value</span>
+              </label>
+              <input
+                type="number"
+                value={constraint.value}
+                onChange={(e) => handleConstraintChange(index, 'value', e.target.value)}
+                className="input input-bordered w-full"
+              />
+            </div>
+            <button onClick={() => handleRemoveConstraint(index)} className="btn btn-error btn-sm">
+              Remove
+            </button>
+          </div>
+        ))}
+        <button onClick={handleAddConstraint} className="btn btn-primary btn-sm">
+          Add Constraint
+        </button>
+      </div>
+
+      <div className="mt-4">
+        <button onClick={handleAnalysis} className="btn btn-primary w-full">
+          Run Structural Analysis
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default StructuralAnalysisControls;
+/* ================================================================================ */
+import React, { useRef, useEffect, useState } from 'react';
+import BabylonSceneService from '../../../services/babylonScene';
+
+const ThreeDView = ({ modelData, analysisResults, failurePoints }) => {
+  const canvasRef = useRef(null);
+  const [sceneService, setSceneService] = useState(null);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      const service = new BabylonSceneService(canvasRef.current);
+      setSceneService(service);
+
+      return () => service.dispose();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (sceneService && modelData) {
+      sceneService.updateScene(modelData, analysisResults, failurePoints);
+    }
+  }, [sceneService, modelData, analysisResults, failurePoints]);
+
+  return <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />;
+};
+
+export default ThreeDView;
+/* ================================================================================ */
+import React from 'react';
+import { useUserFeedback } from './UserFeedbackContext';
+
+const UserFeedbackUtility = () => {
+  const { feedback, clearFeedback } = useUserFeedback();
+
+  if (!feedback.message) {
+    return null;
+  }
+
+  return (
+    <div className={`feedback ${feedback.type}`}>
+      <span>{feedback.message}</span>
+      <button onClick={clearFeedback}>X</button>
+    </div>
+  );
+};
+
+export default UserFeedbackUtility;
+/* ================================================================================ */
+import * as BABYLON from 'babylonjs';
+
+function enableAreaSelection(scene, onAreaSelected) {
+  const selectionPoints = [];
+  let selectionMesh = null;
+
+  scene.onPointerDown = function (evt, pickResult) {
+    if (pickResult.hit) {
+      selectionPoints.push(pickResult.pickedPoint);
+      
+      if (selectionMesh) {
+        selectionMesh.dispose();
+      }
+
+      if (selectionPoints.length > 2) {
+        selectionMesh = BABYLON.MeshBuilder.CreatePolygon("selection", {shape: selectionPoints, updatable: true}, scene);
+        const selectionMaterial = new BABYLON.StandardMaterial("selectionMaterial", scene);
+        selectionMaterial.diffuseColor = new BABYLON.Color3(0, 1, 0);
+        selectionMaterial.alpha = 0.3;
+        selectionMesh.material = selectionMaterial;
+      }
+    }
+  };
+
+  scene.onKeyboardObservable.add((kbInfo) => {
+    if (kbInfo.type === BABYLON.KeyboardEventTypes.KEYDOWN) {
+      switch (kbInfo.event.key) {
+        case "Enter":
+          if (selectionPoints.length > 2) {
+            onAreaSelected(selectionPoints);
+            selectionPoints.length = 0;
+            if (selectionMesh) {
+              selectionMesh.dispose();
+            }
+          }
+          break;
+        case "Escape":
+          selectionPoints.length = 0;
+          if (selectionMesh) {
+            selectionMesh.dispose();
+          }
+          break;
+      }
+    }
+  });
+}
+
+export default enableAreaSelection;
+/* ================================================================================ */
+import * as BABYLON from 'babylonjs';
+
+function enableFaceSelection(scene, onFaceSelected) {
+  let highlightMesh = null;
+
+  scene.onPointerMove = function (evt, pickResult) {
+    if (pickResult.hit && pickResult.pickedMesh) {
+      const faceId = pickResult.faceId;
+      if (faceId !== -1) {
+        if (highlightMesh) {
+          highlightMesh.dispose();
+        }
+
+        const positions = pickResult.pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+        const indices = pickResult.pickedMesh.getIndices();
+        const facePositions = [
+          positions[indices[faceId * 3] * 3], positions[indices[faceId * 3] * 3 + 1], positions[indices[faceId * 3] * 3 + 2],
+          positions[indices[faceId * 3 + 1] * 3], positions[indices[faceId * 3 + 1] * 3 + 1], positions[indices[faceId * 3 + 1] * 3 + 2],
+          positions[indices[faceId * 3 + 2] * 3], positions[indices[faceId * 3 + 2] * 3 + 1], positions[indices[faceId * 3 + 2] * 3 + 2]
+        ];
+
+        highlightMesh = BABYLON.MeshBuilder.CreatePolygon("highlight", {shape: facePositions, updatable: true}, scene);
+        highlightMesh.position = pickResult.pickedMesh.position;
+        highlightMesh.rotation = pickResult.pickedMesh.rotation;
+        highlightMesh.scaling = pickResult.pickedMesh.scaling;
+
+        const highlightMaterial = new BABYLON.StandardMaterial("highlightMaterial", scene);
+        highlightMaterial.diffuseColor = new BABYLON.Color3(1, 1, 0);
+        highlightMaterial.alpha = 0.3;
+        highlightMesh.material = highlightMaterial;
+      }
+    } else if (highlightMesh) {
+      highlightMesh.dispose();
+      highlightMesh = null;
+    }
+  };
+
+  scene.onPointerPick = function (evt, pickResult) {
+    if (pickResult.hit && pickResult.pickedMesh && pickResult.faceId !== -1) {
+      onFaceSelected(pickResult.pickedMesh, pickResult.faceId);
+    }
+  };
+}
+
+export default enableFaceSelection;
+/* ================================================================================ */
+import * as BABYLON from 'babylonjs';
+
+function enableMultipleObjectSelection(scene, onSelectionComplete) {
+  const selectedMeshes = new Set();
+  const highlightMaterial = new BABYLON.StandardMaterial("highlightMaterial", scene);
+  highlightMaterial.emissiveColor = new BABYLON.Color3(0.5, 0.5, 1);
+
+  const originalMaterials = new Map();
+
+  scene.onPointerObservable.add((pointerInfo) => {
+    if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERPICK) {
+      const pickedMesh = pointerInfo.pickInfo.pickedMesh;
+      if (pickedMesh && !pickedMesh.isGround) {
+        if (selectedMeshes.has(pickedMesh)) {
+          // Deselect
+          selectedMeshes.delete(pickedMesh);
+          pickedMesh.material = originalMaterials.get(pickedMesh);
+        } else {
+          // Select
+          selectedMeshes.add(pickedMesh);
+          originalMaterials.set(pickedMesh, pickedMesh.material);
+          pickedMesh.material = highlightMaterial;
+        }
+      }
+    }
+  });
+
+  // Add a button to complete selection
+  const advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+  const button = BABYLON.GUI.Button.CreateSimpleButton("completeSelection", "Complete Selection");
+  button.width = "150px";
+  button.height = "40px";
+  button.color = "white";
+  button.cornerRadius = 20;
+  button.background = "green";
+  button.onPointerUpObservable.add(() => {
+    const selectedObjects = Array.from(selectedMeshes);
+    onSelectionComplete(selectedObjects);
+    
+    // Reset selection
+    selectedMeshes.clear();
+    originalMaterials.forEach((material, mesh) => {
+      mesh.material = material;
+    });
+    originalMaterials.clear();
+  });
+  advancedTexture.addControl(button);
+
+  return () => {
+    // Cleanup function
+    scene.onPointerObservable.clear();
+    advancedTexture.dispose();
+  };
+}
+
+export default enableMultipleObjectSelection;
+/* ================================================================================ */
+import * as BABYLON from 'babylonjs';
+
+function extrudeArea(scene, area, height, direction) {
+  const extrudedShape = BABYLON.MeshBuilder.ExtrudePolygon("extruded", {
+    shape: area,
+    depth: Math.abs(height),
+    updatable: true
+  }, scene);
+
+  if (height < 0) {
+    extrudedShape.scaling.y = -1;
+  }
+
+  extrudedShape.position = direction.scale(height);
+
+  return extrudedShape;
+}
+
+export default extrudeArea;
+/* ================================================================================ */
+const handleMirrorApply = async () => {
+    if (mirrorType && mirrorPlane && selectedObjects.length > 0) {
+      try {
+        const response = await axios.post('/api/mirror', {
+          mirrorType,
+          objectIds: selectedObjects.map(obj => obj.id),
+          mirrorPlane: {
+            origin: mirrorPlane.origin,
+            normal: mirrorPlane.normal
+          },
+          keepOriginal,
+          alignToAxis,
+          partialFeatures: Object.fromEntries(
+            Object.entries(partialFeatures).filter(([key]) => 
+              selectedObjects.some(obj => obj.id.toString() === key)
+            )
+          )
+        });
+  
+        if (response.data.success) {
+          updateBabylonScene(scene, response.data.updatedModel);
+          showMessage('Mirroring applied successfully');
+        } else {
+          showError('Failed to apply mirroring: ' + response.data.error);
+        }
+      } catch (error) {
+        showError('Error applying mirroring: ' + error.message);
+      }
+      setShowMirrorPreview(false);
+    } else {
+      showError('Please select mirror type, plane, and objects first');
+    }
+  };
+/* ================================================================================ */
+import * as BABYLON from 'babylonjs';
+
+function projectSketchToFace(sketch, face, scene) {
+  // Calculate face normal and center
+  const positions = face.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+  const indices = face.getIndices();
+  const v1 = BABYLON.Vector3.FromArray(positions, indices[0] * 3);
+  const v2 = BABYLON.Vector3.FromArray(positions, indices[1] * 3);
+  const v3 = BABYLON.Vector3.FromArray(positions, indices[2] * 3);
+  const normal = BABYLON.Vector3.Cross(v2.subtract(v1), v3.subtract(v1)).normalize();
+  const center = v1.add(v2).add(v3).scale(1/3);
+
+  // Create a plane aligned with the face
+  const plane = new BABYLON.Plane.FromPoints(v1, v2, v3);
+
+  // Project sketch points onto the plane
+  const projectedPoints = sketch.points.map(point => {
+    const ray = new BABYLON.Ray(center, new BABYLON.Vector3(point.x, point.y, 0));
+    return ray.intersectsPlane(plane);
+  });
+
+  // Create lines for the projected sketch
+  const lines = [];
+  for (let i = 0; i < projectedPoints.length - 1; i++) {
+    lines.push([projectedPoints[i], projectedPoints[i+1]]);
+  }
+  lines.push([projectedPoints[projectedPoints.length - 1], projectedPoints[0]]);
+
+  // Create a mesh for the projected sketch
+  const sketchMesh = BABYLON.MeshBuilder.CreateLineSystem("sketch", {lines: lines}, scene);
+  
+  return sketchMesh;
+}
+
+export default projectSketchToFace;
+/* ================================================================================ */
+function resizeSketch(sketchMesh, scale) {
+    const center = sketchMesh.getBoundingInfo().boundingBox.centerWorld;
+    sketchMesh.scaling = new BABYLON.Vector3(scale, scale, scale);
+    const newCenter = sketchMesh.getBoundingInfo().boundingBox.centerWorld;
+    sketchMesh.position.addInPlace(center.subtract(newCenter));
+  }
+  
+  export default resizeSketch;
+/* ================================================================================ */
+import * as BABYLON from 'babylonjs';
+import * as GUI from 'babylonjs-gui';
+
+class SketchVisualGuides {
+  constructor(scene, sketchMesh, faceMesh) {
+    this.scene = scene;
+    this.sketchMesh = sketchMesh;
+    this.faceMesh = faceMesh;
+    this.guideLines = [];
+    this.dimensionLabels = [];
+    this.advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+  }
+
+  update() {
+    this.clear();
+    this.createCenterLines();
+    this.createBoundingBox();
+    this.createDimensionLabels();
+  }
+
+  clear() {
+    this.guideLines.forEach(line => line.dispose());
+    this.guideLines = [];
+    this.dimensionLabels.forEach(label => label.dispose());
+    this.dimensionLabels = [];
+  }
+
+  createCenterLines() {
+    const sketchBoundingBox = this.sketchMesh.getBoundingInfo().boundingBox;
+    const faceBoundingBox = this.faceMesh.getBoundingInfo().boundingBox;
+
+    const centerX = (faceBoundingBox.minimumWorld.x + faceBoundingBox.maximumWorld.x) / 2;
+    const centerY = (faceBoundingBox.minimumWorld.y + faceBoundingBox.maximumWorld.y) / 2;
+    const centerZ = (faceBoundingBox.minimumWorld.z + faceBoundingBox.maximumWorld.z) / 2;
+
+    const verticalLine = BABYLON.MeshBuilder.CreateLines("verticalLine", {
+      points: [
+        new BABYLON.Vector3(centerX, faceBoundingBox.minimumWorld.y, centerZ),
+        new BABYLON.Vector3(centerX, faceBoundingBox.maximumWorld.y, centerZ)
+      ]
+    }, this.scene);
+
+    const horizontalLine = BABYLON.MeshBuilder.CreateLines("horizontalLine", {
+      points: [
+        new BABYLON.Vector3(faceBoundingBox.minimumWorld.x, centerY, centerZ),
+        new BABYLON.Vector3(faceBoundingBox.maximumWorld.x, centerY, centerZ)
+      ]
+    }, this.scene);
+
+    verticalLine.color = horizontalLine.color = new BABYLON.Color3(0, 1, 0);
+    this.guideLines.push(verticalLine, horizontalLine);
+  }
+
+  createBoundingBox() {
+    const boundingBox = this.sketchMesh.getBoundingInfo().boundingBox;
+    const corners = [
+      boundingBox.minimumWorld,
+      new BABYLON.Vector3(boundingBox.minimumWorld.x, boundingBox.minimumWorld.y, boundingBox.maximumWorld.z),
+      new BABYLON.Vector3(boundingBox.minimumWorld.x, boundingBox.maximumWorld.y, boundingBox.minimumWorld.z),
+      new BABYLON.Vector3(boundingBox.minimumWorld.x, boundingBox.maximumWorld.y, boundingBox.maximumWorld.z),
+      new BABYLON.Vector3(boundingBox.maximumWorld.x, boundingBox.minimumWorld.y, boundingBox.minimumWorld.z),
+      new BABYLON.Vector3(boundingBox.maximumWorld.x, boundingBox.minimumWorld.y, boundingBox.maximumWorld.z),
+      new BABYLON.Vector3(boundingBox.maximumWorld.x, boundingBox.maximumWorld.y, boundingBox.minimumWorld.z),
+      boundingBox.maximumWorld
+    ];
+
+    const lines = [
+      [0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7],
+      [4, 5], [4, 6], [5, 7], [6, 7]
+    ];
+
+    lines.forEach(([start, end]) => {
+      const line = BABYLON.MeshBuilder.CreateLines("boundingBoxLine", {
+        points: [corners[start], corners[end]]
+      }, this.scene);
+      line.color = new BABYLON.Color3(1, 0, 0);
+      this.guideLines.push(line);
+    });
+  }
+
+  createDimensionLabels() {
+    const boundingBox = this.sketchMesh.getBoundingInfo().boundingBox;
+    const width = boundingBox.maximumWorld.x - boundingBox.minimumWorld.x;
+    const height = boundingBox.maximumWorld.y - boundingBox.minimumWorld.y;
+
+    const widthLabel = new GUI.TextBlock();
+    widthLabel.text = `Width: ${width.toFixed(2)}`;
+    widthLabel.color = "white";
+    widthLabel.fontSize = 14;
+    this.advancedTexture.addControl(widthLabel);
+    widthLabel.linkWithMesh(this.sketchMesh);
+    widthLabel.linkOffsetY = -50;
+
+    const heightLabel = new GUI.TextBlock();
+    heightLabel.text = `Height: ${height.toFixed(2)}`;
+    heightLabel.color = "white";
+    heightLabel.fontSize = 14;
+    this.advancedTexture.addControl(heightLabel);
+    heightLabel.linkWithMesh(this.sketchMesh);
+    heightLabel.linkOffsetY = 50;
+
+    this.dimensionLabels.push(widthLabel, heightLabel);
+  }
+}
+
+export default SketchVisualGuides;
+/* ================================================================================ */
+// API base URL
+export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+// API routes
+export const API_ROUTES = {
+  CREATE_MODEL: '/api/create_new_model',
+  GET_MODEL: '/api/get_model',
+  UPDATE_MODEL: '/api/update_model',
+  DELETE_MODEL: '/api/delete_model',
+  CIRCULAR_CUT: '/api/circular_cut',
+  CONCENTRIC_EXTRUDE: '/api/concentric_extrude',
+  MIRROR: '/api/mirror',
+  STRUCTURAL_ANALYSIS: '/api/structural_analysis/analyze',
+  EXPORT_MODEL: '/api/export_model',
+  IMPORT_MODEL: '/api/import_model',
+};
+
+// HTTP methods
+export const HTTP_METHODS = {
+  GET: 'GET',
+  POST: 'POST',
+  PUT: 'PUT',
+  DELETE: 'DELETE',
+};
+/* ================================================================================ */
+import React, { createContext, useContext, useState } from 'react';
+
+// Create the context
+const UserFeedbackContext = createContext();
+
+// Create a provider component
+export const UserFeedbackProvider = ({ children }) => {
+  const [feedback, setFeedback] = useState({ message: '', type: '' });
+
+  const showMessage = (message) => {
+    setFeedback({ message, type: 'message' });
+  };
+
+  const showError = (error) => {
+    setFeedback({ message: error, type: 'error' });
+  };
+
+  const clearFeedback = () => {
+    setFeedback({ message: '', type: '' });
+  };
+
+  return (
+    <UserFeedbackContext.Provider value={{ feedback, showMessage, showError, clearFeedback }}>
+      {children}
+    </UserFeedbackContext.Provider>
+  );
+};
+
+// Custom hook to use the UserFeedbackContext
+export const useUserFeedback = () => {
+  return useContext(UserFeedbackContext);
+};
+
+export { UserFeedbackContext };
+
+/* ================================================================================ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can add any additional global styles here */
+/* ================================================================================ */
+import React from 'react';
+import ReactDOM from 'react-dom';
+import './index.css'; 
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+
+const root = ReactDOM.createRoot(document.getElementById('root')); 
+root.render( // Use root.render()
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+/* ================================================================================ */
+const reportWebVitals = (onPerfEntry) => {
+    if (onPerfEntry && onPerfEntry instanceof Function) {
+      import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+        getCLS(onPerfEntry);
+        getFID(onPerfEntry);
+        getFCP(onPerfEntry);
+        getLCP(onPerfEntry);
+        getTTFB(onPerfEntry);
+      });
+    }
+  };
+  
+  export default reportWebVitals;
+  
+/* ================================================================================ */
+import { API_BASE_URL, API_ROUTES, HTTP_METHODS } from '../constants/apiConstants';
+
+class ApiService {
+  constructor(baseUrl = API_BASE_URL) {
+    this.baseUrl = baseUrl;
+  }
+
+  async fetchJson(endpoint, method = HTTP_METHODS.GET, body = null, headers = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      credentials: 'include'
+    };
+
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Fetch error:', error);
+      throw error;
+    }
+  }
+
+  // API methods
+
+  createModel(modelData) {
+    return this.fetchJson(API_ROUTES.CREATE_MODEL, HTTP_METHODS.POST, modelData);
+  }
+
+  getModel(modelId) {
+    return this.fetchJson(`${API_ROUTES.GET_MODEL}/${modelId}`);
+  }
+
+  updateModel(modelId, modelData) {
+    return this.fetchJson(`${API_ROUTES.UPDATE_MODEL}/${modelId}`, HTTP_METHODS.PUT, modelData);
+  }
+
+  deleteModel(modelId) {
+    return this.fetchJson(`${API_ROUTES.DELETE_MODEL}/${modelId}`, HTTP_METHODS.DELETE);
+  }
+
+  performCircularCut(modelId, cutData) {
+    return this.fetchJson(API_ROUTES.CIRCULAR_CUT, HTTP_METHODS.POST, { modelId, ...cutData });
+  }
+
+  performConcentricExtrude(modelId, extrudeData) {
+    return this.fetchJson(API_ROUTES.CONCENTRIC_EXTRUDE, HTTP_METHODS.POST, { modelId, ...extrudeData });
+  }
+
+  performMirror(modelId, mirrorData) {
+    return this.fetchJson(API_ROUTES.MIRROR, HTTP_METHODS.POST, { modelId, ...mirrorData });
+  }
+
+  performStructuralAnalysis(modelId, analysisData) {
+    return this.fetchJson(API_ROUTES.STRUCTURAL_ANALYSIS, HTTP_METHODS.POST, { modelId, ...analysisData });
+  }
+
+  exportModel(modelId) {
+    return this.fetchJson(`${API_ROUTES.EXPORT_MODEL}/${modelId}`);
+  }
+
+  importModel(modelData) {
+    return this.fetchJson(API_ROUTES.IMPORT_MODEL, HTTP_METHODS.POST, modelData);
+  }
+}
+
+export default new ApiService();
+/* ================================================================================ */
+import * as BABYLON from 'babylonjs';
+import * as GUI from 'babylonjs-gui';
+
+class BabylonSceneService {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.engine = new BABYLON.Engine(canvas, true);
+    this.scene = new BABYLON.Scene(this.engine);
+    this.camera = this.createCamera();
+    this.light = this.createLight();
+    this.meshes = [];
+    this.failureArrows = [];
+    this.tooltips = [];
+
+    // Run the render loop
+    this.engine.runRenderLoop(() => {
+      this.scene.render();
+    });
+
+    // Handle browser resize
+    window.addEventListener('resize', () => {
+      this.engine.resize();
+    });
+  }
+
+  createCamera() {
+    const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, new BABYLON.Vector3(0, 0, 0), this.scene);
+    camera.attachControl(this.canvas, true);
+    return camera;
+  }
+
+  createLight() {
+    return new BABYLON.HemisphericLight("light", new BABYLON.Vector3(1, 1, 0), this.scene);
+  }
+
+  updateScene(modelData, analysisResults, failurePoints) {
+    this.clearScene();
+    this.renderModel(modelData);
+    if (analysisResults && failurePoints) {
+      this.visualizeAnalysisResults(analysisResults, failurePoints);
+    }
+  }
+
+  clearScene() {
+    this.meshes.forEach(mesh => mesh.dispose());
+    this.meshes = [];
+    this.failureArrows.forEach(arrow => arrow.dispose());
+    this.failureArrows = [];
+    this.tooltips.forEach(tooltip => tooltip.dispose());
+    this.tooltips = [];
+  }
+
+  renderModel(modelData) {
+    modelData.objects.forEach(obj => {
+      let mesh;
+      switch (obj.type) {
+        case 'Box':
+          mesh = BABYLON.MeshBuilder.CreateBox(obj.id, obj.parameters, this.scene);
+          break;
+        case 'Cylinder':
+          mesh = BABYLON.MeshBuilder.CreateCylinder(obj.id, obj.parameters, this.scene);
+          break;
+        case 'Sphere':
+          mesh = BABYLON.MeshBuilder.CreateSphere(obj.id, obj.parameters, this.scene);
+          break;
+        case 'custom':
+          const vertexData = new BABYLON.VertexData();
+          vertexData.positions = obj.geometry.vertices.flat();
+          vertexData.indices = obj.geometry.indices.flat();
+          mesh = new BABYLON.Mesh(obj.id, this.scene);
+          vertexData.applyToMesh(mesh);
+          break;
+      }
+
+      if (mesh) {
+        mesh.position = new BABYLON.Vector3(obj.position.x, obj.position.y, obj.position.z);
+        mesh.rotation = new BABYLON.Vector3(obj.rotation.x, obj.rotation.y, obj.rotation.z);
+        mesh.scaling = new BABYLON.Vector3(obj.scaling.x, obj.scaling.y, obj.scaling.z);
+
+        const material = new BABYLON.StandardMaterial(obj.id + "_material", this.scene);
+        material.diffuseColor = new BABYLON.Color3(obj.color.r, obj.color.g, obj.color.b);
+        mesh.material = material;
+
+        this.meshes.push(mesh);
+      }
+    });
+  }
+
+  visualizeAnalysisResults(analysisResults, failurePoints) {
+    failurePoints.forEach((point, index) => {
+      const start = new BABYLON.Vector3(point.position.x, point.position.y, point.position.z);
+      const direction = new BABYLON.Vector3(0, 1, 0);  // Point upwards
+      const length = 0.5;  // Length of the arrow
+
+      const color = new BABYLON.Color3(point.severity, 1 - point.severity, 0);  // Red to Green based on severity
+      
+      const arrow = BABYLON.MeshBuilder.CreateArrow(`failureArrow_${index}`, {
+        width: 0.1,
+        height: 0.4,
+        depth: 0.1,
+        direction: direction,
+      }, this.scene);
+
+      arrow.position = start;
+      arrow.scaling = new BABYLON.Vector3(length, length, length);
+
+      const material = new BABYLON.StandardMaterial(`arrowMaterial_${index}`, this.scene);
+      material.diffuseColor = color;
+      material.emissiveColor = color;
+      arrow.material = material;
+
+      this.failureArrows.push(arrow);
+
+      // Add tooltip
+      const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+      const tooltip = new GUI.Rectangle("tooltip");
+      tooltip.width = "300px";
+      tooltip.height = "auto";
+      tooltip.cornerRadius = 20;
+      tooltip.color = "White";
+      tooltip.thickness = 2;
+      tooltip.background = "Black";
+      advancedTexture.addControl(tooltip);
+      tooltip.linkWithMesh(arrow);
+      tooltip.isVisible = false;
+
+      const tooltipText = new GUI.TextBlock();
+      tooltipText.text = `Stress: ${point.stress.toFixed(2)} MPa\nSafety Factor: ${point.safety_factor.toFixed(2)}\n\nRecommendation:\n${point.recommendations[0]}`;  // Show the first recommendation
+      tooltipText.color = "white";
+      tooltipText.fontSize = 14;
+      tooltipText.textWrapping = true;
+      tooltip.addControl(tooltipText);
+
+      this.tooltips.push(tooltip);
+
+      arrow.actionManager = new BABYLON.ActionManager(this.scene);
+      arrow.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPointerOverTrigger, () => {
+        tooltip.isVisible = true;
+      }));
+      arrow.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPointerOutTrigger, () => {
+        tooltip.isVisible = false;
+      }));
+    });
+  }
+
+  setFailureArrowsVisibility(visible) {
+    this.failureArrows.forEach(arrow => arrow.setEnabled(visible));
+    this.tooltips.forEach(tooltip => tooltip.isVisible = visible);
+  }
+
+  dispose() {
+    this.engine.dispose();
+  }
+}
+
+export default BabylonSceneService;
+/* ================================================================================ */
+module.exports = {
+    content: ['./src/**/*.{js,jsx,ts,tsx}', './public/index.html'],
+    darkMode: false, // or 'media' or 'class'
+    theme: {
+      extend: {},
+    },
+    variants: {
+      extend: {},
+    },
+    plugins: [require('daisyui')],
+    daisyui: {
+      themes: ["light", "dark"],
+    },
+  }

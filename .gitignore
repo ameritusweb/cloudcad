@@ -400,3 +400,5 @@ FodyWeavers.xsd
 venv/
 node_modules/
 combinedHypeStudio.txt
+*.bat.bak
+*.js.bak
