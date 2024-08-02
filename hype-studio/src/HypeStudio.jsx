@@ -38,7 +38,7 @@ const HypeStudio = React.memo(() => {
   }, [model]);
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full" style={{ minWidth: '1150px' }}>
       <Header />
       <Toolbar />
       <div className="flex flex-1">

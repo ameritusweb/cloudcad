@@ -55,7 +55,7 @@ const App = () => {
               </button>
             </div>
           )}
-          <div className="flex flex-grow overflow-auto items-center justify-center">
+          <div className="flex flex-grow overflow-auto items-top p-4 justify-center overflow-hidden" style={{ minWidth: '90%' }}>
             <CenterView zoom={zoom} />
           </div>
           <div className="bg-white h-8 border-t border-gray-300 flex items-center justify-end">
