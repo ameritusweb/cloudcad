@@ -22,6 +22,12 @@ import {
   updateCameraPosition
 } from '../utils/cameraUtils';
 import { usePointerEvents } from '../hooks/usePointerEvents';
+import { 
+  selectEdge, 
+  selectFace, 
+  highlightEdge, 
+  highlightFace 
+} from '../utils/meshUtils';
 
 export const BabylonViewport = memo(({ engine, canvas }) => {
   const modelRef = useRef(useHypeStudioModel());
@@ -39,6 +45,9 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
   const startPointRef = useRef(null);
   const previewMeshRef = useRef(null);
   const currentViewRef = useRef('Front');
+
+  const selectedEdgesRef = useRef([]);
+  const selectedFacesRef = useRef([]);
 
   useEffect(() => {
     if (!engine || !canvas || !engine.isEngineActive) return;

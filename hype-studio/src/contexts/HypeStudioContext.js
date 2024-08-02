@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import EnhancedZenObservable from '../observables/EnhancedZenObservable';
-import { MeshBuilder } from '@babylonjs/core';
+import { MeshBuilder, Vector3, VertexBuffer, Mesh } from '@babylonjs/core';
 import { calculateSurfaceArea, applyPreciseTessellation } from '../utils/tesselationUtils';
 
 const initialHypeStudioState = {
@@ -103,35 +103,98 @@ const createHypeStudioModel = () => {
   
     // Apply precise tessellation
     const tessellatedMesh = applyPreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles);
-  
+
+    // Extract geometry data
+    const positions = tessellatedMesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = tessellatedMesh.getIndices();
+    const normals = tessellatedMesh.getVerticesData(VertexBuffer.NormalKind);
+    const uvs = tessellatedMesh.getVerticesData(VertexBuffer.UVKind);
+
     // Calculate actual surface area and triangle count
     const surfaceArea = calculateSurfaceArea(tessellatedMesh);
-    const actualTriangles = tessellatedMesh.getTotalIndices() / 3;
+    const actualTriangles = indices.length / 3;
     const actualDensity = actualTriangles / surfaceArea;
   
     // Add to the scene and state
     const id = `shape_${Date.now()}`;
-    this.setState(state => ({
-      ...state,
-      elements: {
-        ...state.elements,
-        shapes: {
-          ...state.elements.shapes,
-          [id]: { 
-            type, 
-            params, 
-            triangleDensityTarget,
-            estimatedTriangles,
-            actualTriangles,
-            actualDensity,
-            surfaceArea,
-            meshId: tessellatedMesh.id 
-          }
-        }
+    
+    // Create the shape object to be stored in state
+  const shapeObject = {
+    id,
+    type,
+    params,
+    triangleDensityTarget,
+    estimatedTriangles,
+    actualTriangles,
+    actualDensity,
+    surfaceArea,
+    geometry: {
+      positions: Array.from(positions),
+      indices: Array.from(indices),
+      normals: Array.from(normals),
+      uvs: uvs ? Array.from(uvs) : null,
+    },
+    transform: {
+      position: tessellatedMesh.position.asArray(),
+      rotation: tessellatedMesh.rotation.asArray(),
+      scaling: tessellatedMesh.scaling.asArray(),
+    }
+  };
+
+  // Add to the application state
+  this.setState(state => ({
+    ...state,
+    elements: {
+      ...state.elements,
+      shapes: {
+        ...state.elements.shapes,
+        [id]: shapeObject
       }
-    }));
+    }
+  }));
+
+  // Add the mesh to the scene
+  tessellatedMesh.name = `tessellated_${type}_${id}`;
+  this.scene.addMesh(tessellatedMesh);
   
     return id;
+  };
+
+  model.reconstructMeshFromState = function(shapeId) {
+    const shapeData = this.state.elements.shapes[shapeId];
+    if (!shapeData) return null;
+  
+    const mesh = new Mesh(shapeData.id, this.scene);
+    
+    const positions = new Float32Array(shapeData.geometry.positions);
+    const indices = new Uint32Array(shapeData.geometry.indices);
+    const normals = new Float32Array(shapeData.geometry.normals);
+    
+    mesh.setVerticesData(VertexBuffer.PositionKind, positions);
+    mesh.setIndices(indices);
+    mesh.setVerticesData(VertexBuffer.NormalKind, normals);
+    
+    if (shapeData.geometry.uvs) {
+      const uvs = new Float32Array(shapeData.geometry.uvs);
+      mesh.setVerticesData(VertexBuffer.UVKind, uvs);
+    }
+  
+    mesh.position = Vector3.FromArray(shapeData.transform.position);
+    mesh.rotation = Vector3.FromArray(shapeData.transform.rotation);
+    mesh.scaling = Vector3.FromArray(shapeData.transform.scaling);
+  
+    return mesh;
+  };
+
+  model.loadStateAndReconstructMeshes = function(savedState) {
+    this.setState(savedState);
+    
+    Object.keys(savedState.elements.shapes).forEach(shapeId => {
+      const mesh = this.reconstructMeshFromState(shapeId);
+      if (mesh) {
+        this.scene.addMesh(mesh);
+      }
+    });
   };
 
   model.deleteElement = function(type, id) {
