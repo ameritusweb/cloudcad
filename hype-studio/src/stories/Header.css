@@ -78,7 +78,7 @@ header {
   .right-side {
     background-color: #4c97d2;
     height: 50px;
-    width: 823px;
+    width: 865px;
     position: absolute;
     right: 0px;
     top: 0px;
@@ -87,7 +87,7 @@ header {
   .right-higher {
     background-color: #4c97d2;
     height: 25px;
-    width: 843px;
+    width: 891px;
     position: absolute;
     right: 0px;
     top: 0px;
@@ -98,7 +98,7 @@ header {
     height: 40px;
     width: 653px;
     position: absolute;
-    right: 170px;
+    right: 210px;
     top: 5px;
   }
   

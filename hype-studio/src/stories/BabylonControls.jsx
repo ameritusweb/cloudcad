@@ -3,6 +3,7 @@ import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';
 import { FaSearchPlus, FaHandPaper, FaSyncAlt, FaSquare, FaEye, FaCamera, FaMousePointer, FaPencilAlt, FaRuler } from 'react-icons/fa';
+import { CameraIcon, CursorArrowRaysIcon } from '@heroicons/react/24/solid';
 
 const PlaneState = {
   HIDDEN: 'hidden',
@@ -91,7 +92,7 @@ export const BabylonControls = memo(() => {
       <div id={`babylon-controls-${version}`} className="absolute top-2 right-2 text-white bg-black hover:bg-opacity-100 bg-opacity-50 p-2 rounded">
         Current View: {currentModelView}
       </div>
-      <div className="absolute bottom-[0.5rem] right-2 flex space-x-2">
+      <div className="absolute bottom-[3.5rem] right-2 flex space-x-2">
       <button 
           title={'Pointer Mode'}
           onClick={() => handleControlModeChange('pointer')}
@@ -135,7 +136,7 @@ export const BabylonControls = memo(() => {
           <FaSyncAlt />
         </button>
       </div>
-      <div className="absolute bottom-[0.5rem] left-2 flex space-x-2">
+      <div className="absolute bottom-[3.5rem] left-2 flex space-x-2">
         {['X', 'Y', 'Z'].map(plane => {
           const { bgColor, icon } = getButtonStyle(plane);
           return (
@@ -150,16 +151,21 @@ export const BabylonControls = memo(() => {
           );
         })}
       </div>
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white p-2 rounded shadow">
-        {position !== null && target !== null && (
-          <>
-            <div>Camera Position:</div>
-            <div>X: {position.x.toFixed(2)}, Y: {position.y.toFixed(2)}, Z: {position.z.toFixed(2)}</div>
-            <div>Camera Target:</div>
-            <div>X: {target.x.toFixed(2)}, Y: {target.y.toFixed(2)}, Z: {target.z.toFixed(2)}</div>
-          </>
-        )}
-      </div>
+          <div className={`absolute bottom-2 w-full h-[2.5rem] left-1/2 transform -translate-x-1/2 bg-gray-800 bg-opacity-50 text-white p-2 rounded shadow flex items-center space-x-2`}
+          >     
+              <CameraIcon className="w-5 h-5" />
+              {position !== null && target !== null && (
+              <span>
+                {position.x.toFixed(1)}, {position.y.toFixed(1)}, {position.z.toFixed(1)}
+              </span>
+              )}
+              <CursorArrowRaysIcon className="w-5 h-5 ml-2" />
+              {position !== null && target !== null && (
+              <span>
+                {target.x.toFixed(1)}, {target.y.toFixed(1)}, {target.z.toFixed(1)}
+              </span>
+              )}
+          </div>
     </>
   );
 });

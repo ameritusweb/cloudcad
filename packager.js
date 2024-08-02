@@ -79,7 +79,7 @@ async function getAllFiles(dirPath, arrayOfFiles = []) {
       const stat = await fs.promises.stat(fullPath);
       if (stat.isDirectory()) {
         await getAllFiles(fullPath, arrayOfFiles);
-      } else if (/\.(js|jsx|ts|tsx|css|html|md)$/i.test(file)) { // Case-insensitive matching
+      } else if (/\.(js|jsx|ts|tsx|css|html)$/i.test(file)) { // Case-insensitive matching
         arrayOfFiles.push(fullPath);
       }
     }
