@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import EnhancedZenObservable from '../observables/EnhancedZenObservable';
+import { MeshBuilder } from '@babylonjs/core';
+import { calculateSurfaceArea, applyPreciseTessellation } from '../utils/tesselationUtils';
 
 const initialHypeStudioState = {
   projectName: 'My Project',
@@ -8,6 +10,7 @@ const initialHypeStudioState = {
   elements: {
     sketches: {},
     extrusions: {},
+    shapes: {}
     // Add other element types as needed
   },
   camera: {
@@ -16,6 +19,7 @@ const initialHypeStudioState = {
   },
   customProperties: {},
   selectedElementId: null,
+  selectedElement: null,
   activeView: 'List View',
   leftPanelContent: [],
   currentModelView: '',
@@ -55,7 +59,11 @@ const createHypeStudioModel = () => {
     this.setState(state => {
       const newElements = { ...state.elements };
       newElements[type][id] = { ...element, id };
-      return { ...state, elements: newElements };
+      return { 
+        ...state, 
+        elements: newElements,
+        selectedElementId: id // Automatically select the new element
+      };
     });
     return id;
   };
@@ -72,6 +80,60 @@ const createHypeStudioModel = () => {
     });
   };
 
+  model.updateShapeComplexity = function(id, complexity) {
+    this.updateElement('shapes', id, { complexity: Math.max(1, Math.min(10, complexity)) });
+  };
+
+  model.updateShapeDimensions = function(id, dimensions) {
+    this.updateElement('shapes', id, { params: dimensions });
+  };
+
+  model.createShape = function(shapeData) {
+    const id = this.addElement('shapes', shapeData);
+    return id;
+  };
+
+  model.createTessellatedShape = function(shapeData) {
+    const { type, params, triangleDensityTarget, estimatedTriangles } = shapeData;
+    
+    // Create a basic shape mesh
+    const mesh = type === 'box' 
+      ? MeshBuilder.CreateBox("box", params, this.scene)
+      : MeshBuilder.CreateCylinder("cylinder", params, this.scene);
+  
+    // Apply precise tessellation
+    const tessellatedMesh = applyPreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles);
+  
+    // Calculate actual surface area and triangle count
+    const surfaceArea = calculateSurfaceArea(tessellatedMesh);
+    const actualTriangles = tessellatedMesh.getTotalIndices() / 3;
+    const actualDensity = actualTriangles / surfaceArea;
+  
+    // Add to the scene and state
+    const id = `shape_${Date.now()}`;
+    this.setState(state => ({
+      ...state,
+      elements: {
+        ...state.elements,
+        shapes: {
+          ...state.elements.shapes,
+          [id]: { 
+            type, 
+            params, 
+            triangleDensityTarget,
+            estimatedTriangles,
+            actualTriangles,
+            actualDensity,
+            surfaceArea,
+            meshId: tessellatedMesh.id 
+          }
+        }
+      }
+    }));
+  
+    return id;
+  };
+
   model.deleteElement = function(type, id) {
     this.setState(state => {
       const newElements = { ...state.elements };
@@ -85,7 +147,11 @@ const createHypeStudioModel = () => {
   };
 
   model.selectElement = function(elementId) {
-    this.setState(state => ({ ...state, selectedElementId: elementId }));
+    this.setState(state => ({ 
+      ...state, 
+      selectedElementId: elementId,
+      selectedSketchType: null // Reset selected sketch type when selecting an element
+    }));
   };
 
   model.setCustomProperty = function(elementId, propertyName, value) {
