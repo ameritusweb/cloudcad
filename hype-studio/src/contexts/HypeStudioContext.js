@@ -1,7 +1,11 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import EnhancedZenObservable from '../observables/EnhancedZenObservable';
 import { MeshBuilder, Vector3, VertexBuffer, Mesh } from '@babylonjs/core';
 import { calculateSurfaceArea, applyPreciseTessellation } from '../utils/tesselationUtils';
+import { exportStateToJSON, importStateFromJSON } from '../utils/ioUtils';
+import { saveStateToLocalStorage, loadStateFromLocalStorage, clearStateFromLocalStorage } from '../utils/storageUtils';
+import { Notification } from '../stories/Notification';
+import { useNotification } from '../hooks/useNotification';
 
 const initialHypeStudioState = {
   projectName: 'My Project',
@@ -30,12 +34,18 @@ const initialHypeStudioState = {
     Z: 'hidden'
   },
   selectedSketchType: null,
+  autosaveInterval: 30000,
+  stateVersion: '1.0.0',
 };
 
 const HypeStudioContext = createContext(null);
 
 const createHypeStudioModel = () => {
   const model = new EnhancedZenObservable(initialHypeStudioState);
+
+  model.getStateVersion = function() {
+    return this.getState().stateVersion;
+  };
 
   model.createSketch = function(sketchData) {
     const id = this.addElement('sketches', sketchData);
@@ -119,44 +129,44 @@ const createHypeStudioModel = () => {
     const id = `shape_${Date.now()}`;
     
     // Create the shape object to be stored in state
-  const shapeObject = {
-    id,
-    type,
-    params,
-    triangleDensityTarget,
-    estimatedTriangles,
-    actualTriangles,
-    actualDensity,
-    surfaceArea,
-    geometry: {
-      positions: Array.from(positions),
-      indices: Array.from(indices),
-      normals: Array.from(normals),
-      uvs: uvs ? Array.from(uvs) : null,
-    },
-    transform: {
-      position: tessellatedMesh.position.asArray(),
-      rotation: tessellatedMesh.rotation.asArray(),
-      scaling: tessellatedMesh.scaling.asArray(),
-    }
-  };
-
-  // Add to the application state
-  this.setState(state => ({
-    ...state,
-    elements: {
-      ...state.elements,
-      shapes: {
-        ...state.elements.shapes,
-        [id]: shapeObject
+    const shapeObject = {
+      id,
+      type,
+      params,
+      triangleDensityTarget,
+      estimatedTriangles,
+      actualTriangles,
+      actualDensity,
+      surfaceArea,
+      geometry: {
+        positions: Array.from(positions),
+        indices: Array.from(indices),
+        normals: Array.from(normals),
+        uvs: uvs ? Array.from(uvs) : null,
+      },
+      transform: {
+        position: tessellatedMesh.position.asArray(),
+        rotation: tessellatedMesh.rotation.asArray(),
+        scaling: tessellatedMesh.scaling.asArray(),
       }
-    }
-  }));
+    };
 
-  // Add the mesh to the scene
-  tessellatedMesh.name = `tessellated_${type}_${id}`;
-  this.scene.addMesh(tessellatedMesh);
-  
+    // Add to the application state
+    this.setState(state => ({
+      ...state,
+      elements: {
+        ...state.elements,
+        shapes: {
+          ...state.elements.shapes,
+          [id]: shapeObject
+        }
+      }
+    }));
+
+    // Add the mesh to the scene
+    tessellatedMesh.name = `tessellated_${type}_${id}`;
+    this.scene.addMesh(tessellatedMesh);
+    
     return id;
   };
 
@@ -258,25 +268,54 @@ const createHypeStudioModel = () => {
     this.undoneActions = []; // Clear redo stack when a new action is performed
   };
 
-  model.undo = function() {
-    if (this.history.length === 0) return;
-    const undoAction = this.history.pop();
-    const redoAction = undoAction();
-    this.undoneActions.push(redoAction);
-    this.notifyUpdate();
-  };
-
-  model.redo = function() {
-    if (this.undoneActions.length === 0) return;
-    const redoAction = this.undoneActions.pop();
-    const undoAction = redoAction();
-    this.history.push(undoAction);
-    this.notifyUpdate();
-  };
-
   // Placeholder for update notification
   model.notifyUpdate = function() {
     // This will be implemented in the provider
+  };
+
+  model.exportState = () => {
+    exportStateToJSON(model);
+  };
+
+  model.importState = (file) => {
+    importStateFromJSON(file, model);
+  };
+
+  model.saveState = () => {
+    saveStateToLocalStorage(model.getState());
+  };
+
+  model.loadState = () => {
+    const savedState = loadStateFromLocalStorage();
+    if (savedState) {
+      model.setState(() => savedState, false);
+    }
+  };
+
+  model.clearState = () => {
+    clearStateFromLocalStorage();
+  };
+
+  model.setAutosaveInterval = (interval) => {
+    model.setState(state => ({ ...state, autosaveInterval: interval }));
+  };
+
+  let autosaveRef = null;
+
+  model.startAutosave = () => {
+    if (autosaveRef) {
+      clearInterval(autosaveRef);
+    }
+    autosaveRef = setInterval(() => {
+      model.saveState();
+    }, model.getState('autosaveInterval'));
+  };
+
+  model.stopAutosave = () => {
+    if (autosaveRef) {
+      clearInterval(autosaveRef);
+      autosaveRef = null;
+    }
   };
 
   // Serialization methods
@@ -303,22 +342,46 @@ const createHypeStudioModel = () => {
 };
 
 export const HypeStudioProvider = ({ children }) => {
-  const [model, setModel] = useState(() => createHypeStudioModel());
 
-  const notifyUpdate = useCallback(() => {
-    // Force a re-render without changing the model reference
-    model.version = (model.version || 0) + 1;
-    setModel(model);
+  const [model, setModel] = useState(() => {
+    const model = createHypeStudioModel();
+    model.loadState(); // Load state from localStorage on initialization
+    return model;
+  });
+
+  const { notifications, addNotification } = useNotification();
+
+  useEffect(() => {
+    model.setStateProperty = (propertyName, value, recordHistory = true) => {
+      model.setState((prevModel) => ({ ...prevModel, [propertyName]: value }), recordHistory);
+    }
+
+    model.addNotification = (type, message) => {
+      addNotification(type, message);
+    }
+
+    model.notifyUpdate = () => {
+      model.version = (model.version || 0) + 1;
+      setModel(model);
+    };
   }, [model]);
 
-  // Set notifyUpdate only once when the component mounts
-  React.useEffect(() => {
-    model.notifyUpdate = notifyUpdate;
-  }, [model, notifyUpdate]);
+  useEffect(() => {
+    model.startAutosave(); // Start autosave when component mounts
+
+    return () => {
+      model.stopAutosave(); // Clean up autosave when component unmounts
+    };
+  }, [model]);
+
+  useEffect(() => {
+    model.startAutosave(); // Restart autosave when autosave interval changes
+  }, [model]);
 
   return (
     <HypeStudioContext.Provider value={model}>
       {children}
+      <Notification notifications={notifications} />
     </HypeStudioContext.Provider>
   );
 };
@@ -329,4 +392,20 @@ export const useHypeStudioModel = () => {
     throw new Error('useHypeStudioModel must be used within a HypeStudioProvider');
   }
   return context;
+};
+
+export const useAutosaveControl = () => {
+  const context = useContext(HypeStudioContext);
+  if (context === null) {
+    throw new Error('useAutosaveControl must be used within a HypeStudioProvider');
+  }
+  return { startAutosave: context.startAutosave, stopAutosave: context.stopAutosave };
+};
+
+export const useNotificationControl = () => {
+  const context = useContext(HypeStudioContext);
+  if (context === null) {
+    throw new Error('useNotificationControl must be used within a HypeStudioProvider');
+  }
+  return { addNotification: context.addNotification, removeNotification: context.removeNotification };
 };

@@ -67,7 +67,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       modelRef.current.setState(state => ({ ...state, currentModelView: newView }));
     });
 
-    modelRef.current.setState(state => ({ ...state, currentModelView: currentViewRef.current }));
+    modelRef.current.setState(state => ({ ...state, currentModelView: currentViewRef.current }), false);
 
     highlightLayerRef.current = new HighlightLayer("highlightLayer", scene);
 

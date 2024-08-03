@@ -3,6 +3,7 @@ import { FaSquare, FaCircle, FaCube, FaGripLines, FaVectorSquare, FaPlus } from 
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';
+import { SettingsView } from './SettingsView';
 
 const ShapeCreator = ({ onCreateShape }) => {
   const [shapeType, setShapeType] = useState(null);
@@ -205,6 +206,7 @@ export const LeftPanel = memo(() => {
 
   return (<div id={`left-panel-${version}`} className="w-48 bg-white p-2 overflow-y-auto">
     <h2 className="font-bold mb-2">{activeView}</h2>
+    {activeView === 'Settings View' && <SettingsView />}
     {activeView === 'Shape Tool View' && (
         <>
         <ShapeCreator onCreateShape={handleCreateShape} />

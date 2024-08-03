@@ -1,12 +1,14 @@
 import * as BABYLON from '@babylonjs/core';
 
 class PreciseTessellation {
-  constructor(mesh, triangleDensityTarget, estimatedTriangles) {
+  constructor(mesh, triangleDensityTarget, estimatedTriangles, options = {}) {
     this.mesh = mesh;
     this.triangleDensityTarget = triangleDensityTarget;
     this.estimatedTriangles = estimatedTriangles;
-    this.tolerance = 0.05; // 5% tolerance
-    this.maxIterations = 10; // Prevent infinite loops
+    this.tolerance = options.tolerance || 0.05; // 5% tolerance
+    this.maxIterations = options.maxIterations || 10; // Prevent infinite loops
+    this.maxEdgeLength = options.maxEdgeLength || 1.0; // Max length of an edge
+    this.angleTolerance = options.angleTolerance || Math.PI / 6; // Angle tolerance for curvature
   }
 
   tessellate() {
@@ -16,7 +18,7 @@ class PreciseTessellation {
 
     while (iterations < this.maxIterations) {
       let currentDensity = currentTriangles / surfaceArea;
-      
+
       if (Math.abs(currentDensity - this.triangleDensityTarget) / this.triangleDensityTarget <= this.tolerance) {
         // We've reached our target density within tolerance
         break;
@@ -27,7 +29,7 @@ class PreciseTessellation {
         break;
       }
 
-      this.subdivide();
+      this.adaptiveSubdivide();
       currentTriangles = this.mesh.getTotalIndices() / 3;
       iterations++;
     }
@@ -35,26 +37,28 @@ class PreciseTessellation {
     return this.mesh;
   }
 
-  subdivide() {
+  adaptiveSubdivide() {
     const positions = this.mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
     const indices = this.mesh.getIndices();
     const normals = this.mesh.getVerticesData(BABYLON.VertexBuffer.NormalKind);
+    const uvs = this.mesh.getVerticesData(BABYLON.VertexBuffer.UVKind);
 
     const newPositions = [];
     const newIndices = [];
     const newNormals = [];
+    const newUVs = [];
 
     // Step 1: Calculate face points
-    const facePoints = this.calculateFacePoints(positions, indices);
+    const facePoints = this.calculateFacePoints(positions, indices, uvs);
 
     // Step 2: Calculate edge points
-    const edgePoints = this.calculateEdgePoints(positions, indices, facePoints);
+    const edgePoints = this.calculateEdgePoints(positions, indices, facePoints, uvs);
 
     // Step 3: Update original vertices
     const updatedVertices = this.updateOriginalVertices(positions, indices, facePoints, edgePoints);
 
     // Step 4: Create new mesh structure
-    this.createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices);
+    this.createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices, newUVs);
 
     // Step 5: Calculate new normals
     this.calculateNewNormals(newPositions, newIndices, newNormals);
@@ -63,34 +67,47 @@ class PreciseTessellation {
     this.mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, newPositions);
     this.mesh.setIndices(newIndices);
     this.mesh.setVerticesData(BABYLON.VertexBuffer.NormalKind, newNormals);
+    this.mesh.setVerticesData(BABYLON.VertexBuffer.UVKind, newUVs);
   }
 
-  calculateFacePoints(positions, indices) {
+  calculateFacePoints(positions, indices, uvs) {
     const facePoints = [];
     for (let i = 0; i < indices.length; i += 3) {
       const v1 = new BABYLON.Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
       const v2 = new BABYLON.Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
       const v3 = new BABYLON.Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
-      const facePoint = v1.add(v2).add(v3).scale(1/3);
-      facePoints.push(facePoint);
+      const facePoint = v1.add(v2).add(v3).scale(1 / 3);
+
+      const uv1 = new BABYLON.Vector2(uvs[indices[i] * 2], uvs[indices[i] * 2 + 1]);
+      const uv2 = new BABYLON.Vector2(uvs[indices[i + 1] * 2], uvs[indices[i + 1] * 2 + 1]);
+      const uv3 = new BABYLON.Vector2(uvs[indices[i + 2] * 2], uvs[indices[i + 2] * 2 + 1]);
+      const faceUV = uv1.add(uv2).add(uv3).scale(1 / 3);
+
+      facePoints.push({ position: facePoint, uv: faceUV });
     }
     return facePoints;
   }
 
-  calculateEdgePoints(positions, indices, facePoints) {
+  calculateEdgePoints(positions, indices, facePoints, uvs) {
     const edgePoints = new Map();
     for (let i = 0; i < indices.length; i += 3) {
       for (let j = 0; j < 3; j++) {
         const v1Index = indices[i + j];
         const v2Index = indices[i + (j + 1) % 3];
         const edgeKey = this.getEdgeKey(v1Index, v2Index);
-        
+
         if (!edgePoints.has(edgeKey)) {
           const v1 = new BABYLON.Vector3(positions[v1Index * 3], positions[v1Index * 3 + 1], positions[v1Index * 3 + 2]);
           const v2 = new BABYLON.Vector3(positions[v2Index * 3], positions[v2Index * 3 + 1], positions[v2Index * 3 + 2]);
-          const facePoint = facePoints[i / 3];
-          const edgePoint = v1.add(v2).add(facePoint).scale(1/3);
-          edgePoints.set(edgeKey, edgePoint);
+          const facePoint = facePoints[Math.floor(i / 3)].position;
+          const edgePoint = v1.add(v2).add(facePoint).scale(1 / 3);
+
+          const uv1 = new BABYLON.Vector2(uvs[v1Index * 2], uvs[v1Index * 2 + 1]);
+          const uv2 = new BABYLON.Vector2(uvs[v2Index * 2], uvs[v2Index * 2 + 1]);
+          const faceUV = facePoints[Math.floor(i / 3)].uv;
+          const edgeUV = uv1.add(uv2).add(faceUV).scale(1 / 3);
+
+          edgePoints.set(edgeKey, { position: edgePoint, uv: edgeUV });
         }
       }
     }
@@ -108,7 +125,7 @@ class PreciseTessellation {
         const vIndex = indices[i + j];
         if (!vertexFaces.has(vIndex)) vertexFaces.set(vIndex, []);
         if (!vertexEdges.has(vIndex)) vertexEdges.set(vIndex, []);
-        vertexFaces.get(vIndex).push(i / 3);
+        vertexFaces.get(vIndex).push(Math.floor(i / 3));
         vertexEdges.get(vIndex).push(this.getEdgeKey(vIndex, indices[i + (j + 1) % 3]));
         vertexEdges.get(vIndex).push(this.getEdgeKey(vIndex, indices[i + (j + 2) % 3]));
       }
@@ -118,16 +135,16 @@ class PreciseTessellation {
     for (let i = 0; i < positions.length / 3; i++) {
       const v = new BABYLON.Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
       const n = vertexFaces.get(i).length;
-      
+
       let F = new BABYLON.Vector3(0, 0, 0);
       vertexFaces.get(i).forEach(fIndex => {
-        F = F.add(facePoints[fIndex]);
+        F = F.add(facePoints[fIndex].position);
       });
       F = F.scale(1 / n);
 
       let R = new BABYLON.Vector3(0, 0, 0);
       vertexEdges.get(i).forEach(eKey => {
-        R = R.add(edgePoints.get(eKey));
+        R = R.add(edgePoints.get(eKey).position);
       });
       R = R.scale(1 / n);
 
@@ -138,7 +155,7 @@ class PreciseTessellation {
     return updatedVertices;
   }
 
-  createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices) {
+  createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices, newUVs) {
     const vertexMap = new Map();
 
     // Add updated original vertices
@@ -150,13 +167,15 @@ class PreciseTessellation {
     // Add face points
     facePoints.forEach((f, i) => {
       vertexMap.set(`f${i}`, newPositions.length / 3);
-      newPositions.push(f.x, f.y, f.z);
+      newPositions.push(f.position.x, f.position.y, f.position.z);
+      newUVs.push(f.uv.x, f.uv.y);
     });
 
     // Add edge points
     edgePoints.forEach((e, key) => {
       vertexMap.set(key, newPositions.length / 3);
-      newPositions.push(e.x, e.y, e.z);
+      newPositions.push(e.position.x, e.position.y, e.position.z);
+      newUVs.push(e.uv.x, e.uv.y);
     });
 
     // Create new faces
@@ -164,7 +183,7 @@ class PreciseTessellation {
       const v1 = indices[i];
       const v2 = indices[i + 1];
       const v3 = indices[i + 2];
-      const f = `f${i / 3}`;
+      const f = `f${Math.floor(i / 3)}`;
 
       const e1 = this.getEdgeKey(v1, v2);
       const e2 = this.getEdgeKey(v2, v3);
@@ -226,11 +245,11 @@ class PreciseTessellation {
   }
 }
 
-export function applyPreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles) {
-  const tessellation = new PreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles);
+export function applyPreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles, options = {}) {
+  const tessellation = new PreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles, options);
   return tessellation.tessellate();
 }
 
 export function calculateSurfaceArea(tessellatedMesh) {
-    return new PreciseTessellation(tessellatedMesh, 0, 0).calculateSurfaceArea();
+  return new PreciseTessellation(tessellatedMesh, 0, 0).calculateSurfaceArea();
 }

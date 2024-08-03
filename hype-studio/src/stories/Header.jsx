@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
-import { useHypeStudioState } from '../hooks/useHypeStudioState';
+import { useHypeStudioState, useHistoryState } from '../hooks/useHypeStudioState';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import './Header.css'; // We'll create this file for the styles
 import sideImage from '../assets/side.png';
 import UndoIcon from '../assets/left-arrow.svg';
@@ -7,10 +8,26 @@ import RedoIcon from '../assets/right-arrow.svg';
 import { useVersioning } from '../hooks/useVersioning';
 
 export const Header = memo(() => {
+  const model = useHypeStudioModel();
   const projectName = useHypeStudioState('projectName', 'My Project');
   const dimensions = useHypeStudioState('dimensions', '20mm x 40mm x 20mm');
+  const version = useVersioning(['projectName', 'dimensions', 'stateVersion']);
 
-  const version = useVersioning(['projectName', 'dimensions']);
+  const canUndo = model.canUndo();
+  const canRedo = model.canRedo();
+
+  const handleUndo = () => {
+    if (model.canUndo()) {
+      model.undo();
+      model.addNotification('info', 'Undo complete');
+    }
+  };
+
+  const handleRedo = () => {
+    if (model.canRedo()) {
+      model.redo();
+    }
+  };
 
   return (
     <header id={`header-${version}`}>
@@ -29,11 +46,11 @@ export const Header = memo(() => {
       <div className="white-stripes-right-5"></div>
       <div className="white-banner">
         <div>{`${projectName} - ${dimensions}`}</div>
-        <div className="undo">
-          <UndoIcon className="undo-icon"/>
+        <div className={`undo cursor-pointer ${canUndo ? 'text-black' : 'opacity-50'}`}>
+          <UndoIcon className="undo-icon w-6 h-6" onClick={handleUndo} />
         </div>
-        <div className="redo">
-          <RedoIcon className="redo-icon"/>
+        <div className={`redo cursor-pointer ${canRedo ? 'text-black' : 'opacity-50'}`}>
+          <RedoIcon className="redo-icon w-6 h-6" onClick={handleRedo} />
         </div>
       </div>
       <div className="side">

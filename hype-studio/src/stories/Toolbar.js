@@ -3,8 +3,7 @@ import MyListIcon from '../assets/list.svg';
 import MySketchIcon from '../assets/sketch.svg';
 import MyImportExportIcon from '../assets/import-export.svg';
 import MyExtrudeIcon from '../assets/extrude.svg';
-import MyDimensionIcon from '../assets/dimension.svg';
-import MyFilletChamferIcon from '../assets/chamfer.svg';
+import MySettingsIcon from '../assets/settings.svg';
 import MyMirroringIcon from '../assets/mirror.svg';
 import MyPatternIcon from '../assets/pattern.svg';
 import MyFormulaIcon from '../assets/formula.svg';
@@ -24,7 +23,8 @@ const toolbarItems = [
   { icon: MyMirroringIcon, name: 'Mirroring View' },
   { icon: MyPatternIcon, name: 'Pattern View' },
   { icon: MyFormulaIcon, name: 'Formula View' },
-  { icon: MyStructuralAnalysisIcon, name: 'Structural Analysis View' }
+  { icon: MyStructuralAnalysisIcon, name: 'Structural Analysis View' },
+  { icon: MySettingsIcon, name: 'Settings View' },
 ];
 
 export const Toolbar = memo(() => {
@@ -35,7 +35,7 @@ export const Toolbar = memo(() => {
   const version = useVersioning(['activeView']);
 
   const handleItemClick = (viewName) => {
-    model.setState(state => ({ ...state, activeView: viewName }));
+    model.setState(state => ({ ...state, activeView: viewName }), false);
   };
 
   return (

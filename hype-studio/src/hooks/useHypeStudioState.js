@@ -1,5 +1,5 @@
 // useHypeStudioState.js
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 
 export function useHypeStudioState(key, defaultValue) {

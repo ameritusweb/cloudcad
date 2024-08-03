@@ -75,29 +75,56 @@ class EnhancedSubscription {
   }
 }
 
+class HistoryModel {
+  constructor() {
+    this.past = [];
+    this.future = [];
+  }
+
+  push(state) {
+    this.past.push(state);
+    this.future = [];
+  }
+
+  undo(currentState) {
+    if (this.canUndo()) {
+      const pastState = this.past.pop();
+      this.future.unshift(currentState);
+      return pastState;
+    }
+    return null;
+  }
+
+  redo(currentState) {
+    if (this.canRedo()) {
+      const nextState = this.future.shift();
+      this.past.push(currentState);
+      return nextState;
+    }
+    return null;
+  }
+
+  canUndo() {
+    return this.past.length > 0;
+  }
+
+  canRedo() {
+    return this.future.length > 0;
+  }
+
+  clear() {
+    this.past = [];
+    this.future = [];
+  }
+}
+
 class EnhancedZenObservable {
   constructor(initialState = {}) {
     this.state = initialState;
-    this.history = [JSON.parse(JSON.stringify(initialState))];
+    this.historyModel = new HistoryModel();
     this.currentIndex = 0;
     this.observables = new Map();
     this.diffObservables = new Map();
-  }
-
-  setState(updater, recordHistory = true) {
-    try {
-      const newState = typeof updater === 'function' ? updater(this.state) : updater;
-      const diff = this.computeDiff(this.state, newState);
-      this.applyDiff(diff);
-
-      if (recordHistory) {
-        this.currentIndex++;
-        this.history = this.history.slice(0, this.currentIndex);
-        this.history.push(JSON.parse(JSON.stringify(this.state)));
-      }
-    } catch (error) {
-      console.error('Error setting state:', error);
-    }
   }
 
   applyDiff(diff, currentState = this.state, prefix = '') {
@@ -191,18 +218,50 @@ class EnhancedZenObservable {
     return subscription.subscribe(callback);
   }
 
+  setState(updater, recordHistory = true) {
+    try {
+      const prevState = JSON.parse(JSON.stringify(this.state));
+      const newState = typeof updater === 'function' ? updater(this.state) : updater;
+      const prevVersion = prevState.stateVersion;
+      newState.stateVersion = this.generateNewVersion();
+      const diff = this.computeDiff(this.state, newState);
+      if (Object.keys(diff).length === 1) {
+        newState.stateVersion = prevVersion;
+        return; // no changes except for state version
+      }
+      this.applyDiff(diff);
+
+      if (recordHistory) {
+        this.historyModel.push(prevState);
+      }
+
+    } catch (error) {
+      console.error('Error setting state:', error);
+    }
+  }
+
   undo() {
-    if (this.currentIndex > 0) {
-      this.currentIndex--;
-      this.setState(() => this.history[this.currentIndex], false);
+    const currentState = JSON.parse(JSON.stringify(this.state));
+    const previousState = this.historyModel.undo(currentState);
+    if (previousState) {
+      this.setState(() => previousState, false);
     }
   }
 
   redo() {
-    if (this.currentIndex < this.history.length - 1) {
-      this.currentIndex++;
-      this.setState(() => this.history[this.currentIndex], false);
+    const currentState = JSON.parse(JSON.stringify(this.state));
+    const nextState = this.historyModel.redo(currentState);
+    if (nextState) {
+      this.setState(() => nextState, false);
     }
+  }
+
+  canUndo() {
+    return this.historyModel.canUndo();
+  }
+
+  canRedo() {
+    return this.historyModel.canRedo();
   }
 
   getState(key) {
@@ -221,6 +280,12 @@ class EnhancedZenObservable {
       console.warn(`Warning: Property '${key}' is undefined in the state object. Consider adding it to the initial state.`);
     }
     return value !== undefined ? JSON.parse(JSON.stringify(value)) : undefined;
+  }
+
+   generateNewVersion() {
+     const timestamp = Date.now().toString(36);
+     const randomStr = Math.random().toString(36).substr(2, 5);
+     return `${timestamp}-${randomStr}`;
   }
 }
 
