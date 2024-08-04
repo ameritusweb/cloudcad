@@ -1,10 +1,13 @@
 import { 
-    Vector3, MeshBuilder, StandardMaterial, Quaternion, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
+    Vector3, MeshBuilder, Color4, StandardMaterial, Quaternion, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
   } from '@babylonjs/core';
 import earcut from 'earcut';
 
 const EDGE_THRESHOLD = 0.01;
 const FACE_NORMAL_THRESHOLD = 0.9;
+
+// Constants
+const FLAT_ANGLE_THRESHOLD = 0.1; // (Radians) Controls flatness sensitivity
 
 // Utility function to create a unique key for an edge
 const getEdgeKey = (v1Index, v2Index) => {
@@ -213,88 +216,189 @@ export function highlightCylinderPart(mesh, selection) {
   return highlightMesh;
 }
 
-// Function to select a mesh part (edge, face, or mesh) based on a pick result
-export function selectMeshPart(mesh, pickResult) {
-  const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
-  const indices = mesh.getIndices();
-  const normals = mesh.getVerticesData(VertexBuffer.NormalKind);
-  const pickedPoint = pickResult.pickedPoint;
-  const pickedNormal = pickResult.getNormal(true);
+/**
+ * Precompute adjacency list for efficient neighbor lookup.
+ * @param {Mesh} mesh - The mesh to compute adjacency list for.
+ * @returns {Object} An adjacency list mapping vertex indices to triangle indices.
+ */
+export function precomputeAdjacencyList(mesh) {
+    const indices = mesh.getIndices();
+    const adjacencyList = {};
 
-  let closestEdge = null;
-  let closestEdgeDistance = Infinity;
-  let closestFace = null;
-  let maxFaceAlignment = -1;
-
-  for (let i = 0; i < indices.length; i += 3) {
-    const v1 = Vector3.FromArray(positions, indices[i] * 3);
-    const v2 = Vector3.FromArray(positions, indices[i + 1] * 3);
-    const v3 = Vector3.FromArray(positions, indices[i + 2] * 3);
-
-    // Check edges
-    const edges = [[v1, v2], [v2, v3], [v3, v1]];
-    edges.forEach(([start, end]) => {
-      const edgeVector = end.subtract(start);
-      const t = Vector3.Dot(pickedPoint.subtract(start), edgeVector) / edgeVector.lengthSquared();
-      if (t >= 0 && t <= 1) {
-        const projection = start.add(edgeVector.scale(t));
-        const distance = Vector3.Distance(pickedPoint, projection);
-        if (distance < closestEdgeDistance) {
-          closestEdgeDistance = distance;
-          closestEdge = { start, end };
-        }
-      }
-    });
-
-    // Check face
-    const faceNormal = Vector3.Cross(v2.subtract(v1), v3.subtract(v1)).normalize();
-    const alignment = Vector3.Dot(faceNormal, pickedNormal);
-    if (alignment > maxFaceAlignment) {
-      maxFaceAlignment = alignment;
-      const v1s = { x: v1.x, y: v1.y, z: v1.z };
-      const v2s = { x: v2.x, y: v2.y, z: v2.z };
-      const v3s = { x: v3.x, y: v3.y, z: v3.z };
-      const faceNormals = { x: faceNormal.x, y: faceNormal.y, z: faceNormal.z };
-      closestFace = { v1s, v2s, v3s, normal: faceNormals };
+    for (let i = 0; i < indices.length; i += 3) {
+        const triangleVertices = indices.slice(i, i + 3);
+        triangleVertices.forEach(vertexIndex => {
+            adjacencyList[vertexIndex] = adjacencyList[vertexIndex] || [];
+            triangleVertices.forEach(otherVertexIndex => {
+                if (otherVertexIndex !== vertexIndex) {
+                    adjacencyList[vertexIndex].push(i / 3); // Add triangle index
+                }
+            });
+        });
     }
-  }
 
-  if (closestEdgeDistance < EDGE_THRESHOLD) {
-    return { type: 'edge', data: closestEdge };
-  } else if (maxFaceAlignment > FACE_NORMAL_THRESHOLD) {
-    return { type: 'face', data: closestFace };
-  } else {
-    return { type: 'mesh', data: mesh };
-  }
+    return adjacencyList;
 }
 
-// Function to highlight a selected mesh part (edge, face, or mesh)
+/**
+ * Selects contiguous non-flat regions of a mesh.
+ * @param {Mesh} mesh - The mesh to select from.
+ * @param {PickingInfo} pickResult - The picking result.
+ * @param {Array} adjacencyList - The pre-computed adjacency list.
+ * @returns {Object|null} Selection data or null if no valid selection.
+ */
+export function selectMeshPart(mesh, pickResult, adjacencyList) {
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = mesh.getIndices();
+
+    // Ensure valid faceId
+    if (pickResult.faceId === undefined || pickResult.faceId < 0) {
+        return null;
+    }
+
+    const pickedTriangleIndex = Math.floor(pickResult.faceId / 3); // faceId is the index in the index array
+    const selectedTriangles = [];
+    const processedTriangles = new Set();
+
+    floodFill(mesh, pickedTriangleIndex, selectedTriangles, processedTriangles, adjacencyList, true); // 'true' indicates the starting point
+
+    return selectedTriangles.length > 0 ? { type: 'face', data: selectedTriangles } : null;
+}
+
+/**
+ * Recursively selects connected, non-flat triangles.
+ * @param {Mesh} mesh - The mesh to perform the flood fill on.
+ * @param {number} triangleIndex - The index of the starting triangle.
+ * @param {Array} selectedTriangles - The array to store selected triangles.
+ * @param {Set} processedTriangles - The set of processed triangles.
+ * @param {Array} adjacencyList - The pre-computed adjacency list.
+ * @param {boolean} initial - Whether this is the initial triangle.
+ */
+function floodFill(mesh, triangleIndex, selectedTriangles, processedTriangles, adjacencyList, initial = false) {
+    if (processedTriangles.has(triangleIndex)) {
+        return; // Already processed this triangle
+    }
+    processedTriangles.add(triangleIndex);
+    selectedTriangles.push(triangleIndex);
+
+    const neighbors = getNeighboringTriangles(mesh, triangleIndex, adjacencyList);
+
+    for (const neighbor of neighbors) {
+        if (!processedTriangles.has(neighbor)) {
+            if (initial || isConnected(mesh, triangleIndex, neighbor)) { 
+                // Always include the initial triangle or directly connected neighbors
+                floodFill(mesh, neighbor, selectedTriangles, processedTriangles, adjacencyList, false); 
+            } else if (!isFlat(mesh, triangleIndex, neighbor)) { 
+                // Start a new contiguous region if the neighbor isn't flat
+                floodFill(mesh, neighbor, selectedTriangles, processedTriangles, adjacencyList, true); 
+            }
+        }
+    }
+}
+
+/**
+ * Get neighboring triangle indices using the adjacency list.
+ * @param {Mesh} mesh - The mesh to find neighbors in.
+ * @param {number} triangleIndex - The index of the triangle.
+ * @param {Array} adjacencyList = The pre-computed adjacency list.
+ * @returns {Array} An array of neighboring triangle indices.
+ */
+function getNeighboringTriangles(mesh, triangleIndex, adjacencyList) {
+    const indices = mesh.getIndices();
+    const triangleVertices = indices.slice(triangleIndex * 3, triangleIndex * 3 + 3);
+
+    const neighbors = new Set();
+    triangleVertices.forEach(vertexIndex => {
+        if (adjacencyList[vertexIndex]) {
+            adjacencyList[vertexIndex].forEach(neighborIndex => neighbors.add(neighborIndex));
+        }
+    });
+
+    neighbors.delete(triangleIndex); // Remove the current triangle itself
+    return Array.from(neighbors);
+}
+
+/**
+ * Check if two triangles share a vertex (are connected).
+ * @param {Mesh} mesh - The mesh containing the triangles.
+ * @param {number} triangleIndex1 - The index of the first triangle.
+ * @param {number} triangleIndex2 - The index of the second triangle.
+ * @returns {boolean} True if the triangles are connected, otherwise false.
+ */
+function isConnected(mesh, triangleIndex1, triangleIndex2) {
+    const indices = mesh.getIndices();
+    const vertices1 = indices.slice(triangleIndex1 * 3, triangleIndex1 * 3 + 3);
+    const vertices2 = indices.slice(triangleIndex2 * 3, triangleIndex2 * 3 + 3);
+    return vertices1.some(vertex => vertices2.includes(vertex));
+}
+
+/**
+ * Check if the angle between two triangle normals is below the flatness threshold.
+ * @param {Mesh} mesh - The mesh containing the triangles.
+ * @param {number} triangleIndex1 - The index of the first triangle.
+ * @param {number} triangleIndex2 - The index of the second triangle.
+ * @returns {boolean} True if the triangles are flat relative to each other.
+ */
+function isFlat(mesh, triangleIndex1, triangleIndex2) {
+    const normals = mesh.getVerticesData(VertexBuffer.NormalKind);
+    const indices = mesh.getIndices();
+
+    const normal1 = Vector3.FromArray(normals, indices[triangleIndex1 * 3] * 3);
+    const normal2 = Vector3.FromArray(normals, indices[triangleIndex2 * 3] * 3);
+
+    // Calculate the angle between the normals directly
+    const angle = Vector3.GetAngleBetweenVectors(normal1, normal2);
+
+    return angle < FLAT_ANGLE_THRESHOLD; // Triangles are considered flat if the angle is below the threshold
+}
+
+/**
+ * Highlights selected triangles by creating a polygon mesh.
+ * @param {Mesh} mesh - The mesh to highlight a part in.
+ * @param {Object} selection - The selection data.
+ * @returns {Mesh|null} The highlight mesh or null if none.
+ */
 export function highlightMeshPart(mesh, selection) {
-  const scene = mesh.getScene();
-  let highlightMesh;
+    mesh.material.alpha = 0.5;
+    const scene = mesh.getScene();
+    let highlightMesh;
 
-  switch (selection.type) {
-    case 'edge':
-      const { start, end } = selection.data;
-      highlightMesh = MeshBuilder.CreateLines("highlightEdge", { points: [start, end] }, scene);
-      highlightMesh.color = new Color3(1, 1, 0); // Yellow for edges
-      break;
-    case 'face':
-      const { v1, v2, v3 } = selection.data;
-      highlightMesh = MeshBuilder.CreatePolygon("highlightFace", { shape: [v1, v2, v3], sideOrientation: Mesh.DOUBLESIDE }, scene);
-      const material = new StandardMaterial("highlightMaterial", scene);
-      material.emissiveColor = new Color3(0, 1, 0); // Green for faces
-      material.alpha = 0.5;
-      highlightMesh.material = material;
-      break;
-    case 'mesh':
-      // For full mesh selection, we could create a bounding box or just return null
-      return null;
-  }
+    if (selection.type === 'face') {
+        const { data: triangleIndices } = selection;
+        const vertices = [];
 
-  if (highlightMesh) {
-    highlightMesh.parent = mesh;
-  }
+        triangleIndices.forEach(triangleIndex => {
+            const indices = mesh.getIndices().slice(triangleIndex * 3, triangleIndex * 3 + 3);
+            indices.forEach(index => {
+                const position = Vector3.FromArray(mesh.getVerticesData(VertexBuffer.PositionKind), index * 3);
+                vertices.push(position);
+            });
+        });
 
-  return highlightMesh;
+        // Triangulate the vertices using earcut
+        const flattenedVertices = vertices.flatMap(vertex => [vertex.x, vertex.y, vertex.z]);
+        const triangles = earcut(flattenedVertices); // Flatten vertices into a single array
+
+        // Create a polygon mesh using the triangulated indices
+        highlightMesh = MeshBuilder.CreatePolygon("highlightFace", { 
+            shape: vertices, 
+            faceUV: [], // You may need to provide UV coordinates if your mesh has textures
+            faceColors: [new Color4(0, 1, 0, 0.5)], // Green color with alpha for transparency
+            indices: triangles, // Use the triangulated indices
+            sideOrientation: Mesh.DOUBLESIDE 
+        }, scene, earcut);
+
+        const material = new StandardMaterial("highlightMaterial", scene);
+        material.emissiveColor = new Color3(0, 1, 0); // Green for faces
+        material.alpha = 0.5;
+        highlightMesh.material = material;
+    } else {
+        return null;
+    }
+
+    if (highlightMesh) {
+        highlightMesh.parent = mesh;
+    }
+
+    return highlightMesh;
 }

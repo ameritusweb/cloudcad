@@ -217,31 +217,36 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
         highlightedMeshRef.current = null;
       }
   
-      if (mesh.shape === 'cylinder') {
-        selection = selectCylinderPart(mesh, pickResult);
-        if (selection) {
-          highlightedMeshRef.current = highlightCylinderPart(mesh, selection);
-        }
-      } else {
+      // if (mesh.shape === 'cylinder') {
+      //   selection = selectCylinderPart(mesh, pickResult);
+      //   if (selection) {
+      //     highlightedMeshRef.current = highlightCylinderPart(mesh, selection);
+      //   }
+      // } else {
         // First, try to select a specific edge
-        const edgeIndex = selectEdge(mesh, pickResult);
-        if (edgeIndex !== -1) {
-          selection = { type: 'edge', data: edgeIndex };
-          highlightedMeshRef.current = highlightEdge(mesh, edgeIndex);
-        } else {
-          // If no edge is selected, try to select a face
-          const faceIndex = selectFace(mesh, pickResult);
-          if (faceIndex !== -1) {
-            selection = { type: 'face', data: faceIndex };
-            highlightedMeshRef.current = highlightFace(mesh, faceIndex);
-          } else {
-            // If no specific part is selected, fall back to general mesh part selection
-            selection = selectMeshPart(mesh, pickResult);
-            if (selection) {
-              highlightedMeshRef.current = highlightMeshPart(mesh, selection);
-            }
-          }
-        }
+      //   const edgeIndex = selectEdge(mesh, pickResult);
+      //   if (edgeIndex !== -1) {
+      //     selection = { type: 'edge', data: edgeIndex };
+      //     highlightedMeshRef.current = highlightEdge(mesh, edgeIndex);
+      //   } else {
+      //     // If no edge is selected, try to select a face
+      //     const faceIndex = selectFace(mesh, pickResult);
+      //     if (faceIndex !== -1) {
+      //       selection = { type: 'face', data: faceIndex };
+      //       highlightedMeshRef.current = highlightFace(mesh, faceIndex);
+      //     } else {
+      //       // If no specific part is selected, fall back to general mesh part selection
+      //       selection = selectMeshPart(mesh, pickResult, modelRef.current.getAdjacencyList(mesh));
+      //       if (selection) {
+      //         highlightedMeshRef.current = highlightMeshPart(mesh, selection);
+      //       }
+      //     }
+      //   }
+      // }
+
+      selection = selectMeshPart(mesh, pickResult, modelRef.current.getAdjacencyList(mesh));
+      if (selection) {
+        highlightedMeshRef.current = highlightMeshPart(mesh, selection);
       }
   
       if (highlightedMeshRef.current) {

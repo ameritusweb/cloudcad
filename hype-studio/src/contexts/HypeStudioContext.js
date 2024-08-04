@@ -4,6 +4,7 @@ import { MeshBuilder, Vector3, VertexBuffer, Mesh, NullEngine, Scene, Engine } f
 import { calculateSurfaceArea, applyPreciseTessellation } from '../utils/tesselationUtils';
 import { exportStateToJSON, importStateFromJSON } from '../utils/ioUtils';
 import { saveStateToLocalStorage, loadStateFromLocalStorage, clearStateFromLocalStorage } from '../utils/storageUtils';
+import { precomputeAdjacencyList } from '../utils/selectionUtils';
 import { Notification } from '../stories/Notification';
 import { useNotification } from '../hooks/useNotification';
 
@@ -61,6 +62,11 @@ const createHypeStudioModel = () => {
   model.updateSketch = function(id, updates) {
     this.updateElement('sketches', id, updates);
   };
+
+  model.getAdjacencyList = function(mesh) {
+    const shape = this.getState(`elements.shapes.${mesh.id}`);
+    return shape.adjacencyList;
+  }
 
   model.setProjectName = function(name) {
     this.setState(state => ({ ...state, projectName: name }));
@@ -150,7 +156,8 @@ const createHypeStudioModel = () => {
         position: tessellatedMesh.position.asArray(),
         rotation: tessellatedMesh.rotation.asArray(),
         scaling: tessellatedMesh.scaling.asArray(),
-      }
+      },
+      adjacencyList: precomputeAdjacencyList(tessellatedMesh)
     };
 
     // Add to the application state
