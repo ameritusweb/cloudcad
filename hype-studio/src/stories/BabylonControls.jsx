@@ -14,6 +14,7 @@ const PlaneState = {
 export const BabylonControls = memo(() => {
 
   const model = useHypeStudioModel();
+  const customPlanes = useHypeStudioState('customPlanes', []);
   const currentModelView = useHypeStudioState('currentModelView', '');
   const controlMode = useHypeStudioState('controlMode', 'rotate');
   const planeStates = useHypeStudioState('planeStates', {
@@ -136,21 +137,21 @@ export const BabylonControls = memo(() => {
           <FaSyncAlt />
         </button>
       </div>
-      <div className="absolute bottom-[3.5rem] left-2 flex space-x-2">
-        {['X', 'Y', 'Z'].map(plane => {
-          const { bgColor, icon } = getButtonStyle(plane);
-          return (
-            <button 
-              key={plane}
-              onClick={() => onCyclePlaneState(plane)}
-              className={`p-2 rounded ${bgColor} text-white flex items-center hover:bg-opacity-100 bg-opacity-50 justify-center w-12 h-12`}
-            >
-              {icon}
-              <span className="ml-1">{plane}</span>
-            </button>
-          );
-        })}
-      </div>
+      <div className="absolute bottom-[3.5rem] left-2 flex space-x-2 flex-wrap">
+      {['X', 'Y', 'Z', ...customPlanes.map(plane => plane.id)].map(plane => {
+        const { bgColor, icon } = getButtonStyle(plane);
+        return (
+          <button 
+            key={plane}
+            onClick={() => onCyclePlaneState(plane)}
+            className={`p-2 rounded ${bgColor} text-white flex items-center hover:bg-opacity-100 bg-opacity-50 justify-center w-12 h-12 mb-2`}
+          >
+            {icon}
+            <span className="ml-1">{plane.slice(-1)}</span>
+          </button>
+        );
+      })}
+    </div>
           <div className={`absolute bottom-2 w-full h-[2.5rem] left-1/2 transform -translate-x-1/2 bg-gray-800 bg-opacity-50 text-white p-2 rounded shadow flex items-center space-x-2`}
           >     
               <CameraIcon className="w-5 h-5" />

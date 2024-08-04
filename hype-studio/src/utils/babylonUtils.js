@@ -15,13 +15,6 @@ import * as meshUtils from './meshUtils';
   
     const light = new HemisphericLight("light", new Vector3(0, 1, -1), scene);
     light.intensity = 0.4;
-  
-    const box = MeshBuilder.CreateBox("extrusions_1", { size: 2 }, scene);
-    const boxMaterial = new StandardMaterial("boxMaterial", scene);
-    boxMaterial.emissiveColor = new Color3(0.4, 0.4, 0.4);
-    box.material = boxMaterial;
-
-    // meshesRef.current['extrusions_1'] = box;
 
     return { scene, camera };
   };
@@ -49,29 +42,32 @@ import * as meshUtils from './meshUtils';
     return { scene, camera };
   };
   
-  export const createPlane = (scene, axis) => {
-    const plane = MeshBuilder.CreatePlane(`${axis}Plane`, { size: 10 }, scene);
-    const material = new StandardMaterial(`${axis}PlaneMaterial`, scene);
+  export const createPlane = (scene, planeId, normal) => {
+    const plane = MeshBuilder.CreatePlane(planeId, { size: 10 }, scene);
+    const material = new StandardMaterial(`${planeId}Material`, scene);
     material.diffuseColor = new Color3(0.5, 0.5, 0.5);
     material.alpha = 0.5;
     material.backFaceCulling = false;
     plane.material = material;
   
-    switch(axis) {
-      case 'X':
-        plane.rotation.y = Math.PI / 2;
-        break;
-      case 'Y':
-        plane.rotation.x = Math.PI / 2;
-        break;
-      default:
-      case 'Z':
-        // No rotation needed
-        break;
+    if (normal) {
+      plane.lookAt(normal);
+    } else {
+      switch(planeId) {
+        case 'X':
+          plane.rotation.y = Math.PI / 2;
+          break;
+        case 'Y':
+          plane.rotation.x = Math.PI / 2;
+          break;
+        default:
+        case 'Z':
+          // No rotation needed
+          break;
+      }
     }
-
-    plane.isVisible = false;
   
+    plane.isVisible = false;
     return plane;
   };
   

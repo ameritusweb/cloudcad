@@ -28,6 +28,7 @@ const initialHypeStudioState = {
   leftPanelContent: [],
   currentModelView: '',
   controlMode: 'rotate',
+  customPlanes: [],
   planeStates: {
     X: 'hidden',
     Y: 'hidden',
@@ -207,6 +208,16 @@ const createHypeStudioModel = () => {
     });
   };
 
+  model.deleteCustomPlane = function(planeId) {
+    this.setState(state => ({
+      ...state,
+      customPlanes: state.customPlanes.filter(plane => plane.id !== planeId),
+      planeStates: Object.fromEntries(
+        Object.entries(state.planeStates).filter(([key]) => key !== planeId)
+      ),
+    }));
+  };
+
   model.deleteElement = function(type, id) {
     this.setState(state => {
       const newElements = { ...state.elements };
@@ -345,7 +356,7 @@ export const HypeStudioProvider = ({ children }) => {
 
   const [model, setModel] = useState(() => {
     const model = createHypeStudioModel();
-    model.loadState(); // Load state from localStorage on initialization
+    // model.loadState(); // Load state from localStorage on initialization
     return model;
   });
 

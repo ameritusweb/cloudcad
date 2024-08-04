@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, memo } from 'react';
-import { HighlightLayer } from '@babylonjs/core';
+import { HighlightLayer, Vector3 } from '@babylonjs/core';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { createControlCube, getViewFromNormal } from '../utils/sceneUtils';
@@ -92,6 +92,22 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       updateCameraPosition(cameraRef.current, newCurrentModelView);
     });
 
+    const customPlanesSubscription = modelRef.current.subscribe('customPlanes', (newCustomPlanes) => {
+      newCustomPlanes.forEach(plane => {
+        if (!planesRef.current[plane.id]) {
+          planesRef.current[plane.id] = createPlane(sceneRef.current, plane.id, new Vector3(plane.normal.x, plane.normal.y, plane.normal.z));
+        }
+      });
+      
+      // Remove any planes that no longer exist
+      Object.keys(planesRef.current).forEach(planeId => {
+        if (!['X', 'Y', 'Z'].includes(planeId) && !newCustomPlanes.find(p => p.id === planeId)) {
+          planesRef.current[planeId].dispose();
+          delete planesRef.current[planeId];
+        }
+      });
+    });
+
     const renderSubscription = modelRef.current.subscribe('elements', () => {
       meshesRef.current = renderScene(scene, modelRef.current, meshesRef.current);
     });
@@ -107,6 +123,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       if (engine.isEngineActive) {
         controlModeSubscription.unsubscribe();
         planeStatesSubscription.unsubscribe();
+        customPlanesSubscription.unsubscribe();
         renderSubscription.unsubscribe();
         currentModelViewSubscription.unsubscribe();
         window.removeEventListener("resize", engine.resize);
@@ -199,7 +216,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
             z: cameraRef.current.target.z
           }}
         }
-      ));
+      ), false);
     }
   }, [selectedSketchType]);
 

@@ -8,6 +8,7 @@ import MyMirroringIcon from '../assets/mirror.svg';
 import MyPatternIcon from '../assets/pattern.svg';
 import MyFormulaIcon from '../assets/formula.svg';
 import MyShapeIcon from '../assets/shape.svg';
+import MyPlanesIcon from '../assets/planes.svg';
 import MyStructuralAnalysisIcon from '../assets/analysis.svg';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
@@ -20,6 +21,7 @@ const toolbarItems = [
   { icon: MyExtrudeIcon, name: 'Extrude View' },
   { icon: MyImportExportIcon, name: 'Import/Export View' },
   { icon: MyShapeIcon, name: 'Shape Tool View' },
+  { icon: MyPlanesIcon, name: 'Custom Planes View'},
   { icon: MyMirroringIcon, name: 'Mirroring View' },
   { icon: MyPatternIcon, name: 'Pattern View' },
   { icon: MyFormulaIcon, name: 'Formula View' },
