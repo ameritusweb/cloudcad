@@ -14,7 +14,10 @@ import {
   handleMeshSelection,
   handleSketchInteraction,
   handleExtrusionInteraction,
-  renderScene
+  renderScene,
+  createShape,
+  updateShape,
+  removeShape
 } from '../utils/babylonUtils';
 import {
   updateCameraControls,
@@ -40,6 +43,9 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
   const meshesRef = useRef({});
   const planesRef = useRef({});
   const highlightLayerRef = useRef(null);
+  const shapesRef = useRef({});
+
+  const shapes = useHypeStudioState('elements.shapes', {});
 
   const isDrawingRef = useRef(false);
   const startPointRef = useRef(null);
@@ -108,6 +114,30 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
       });
     });
 
+    const shapesSubscription = modelRef.current.subscribe('elements.shapes', (newShapes) => {
+      // Handle added or updated shapes
+      Object.entries(newShapes).forEach(([id, shapeData]) => {
+        if (!shapesRef.current[id]) {
+          // New shape
+          const newMesh = createShape(sceneRef.current, id, shapeData);
+          if (newMesh) {
+            shapesRef.current[id] = newMesh;
+          }
+        } else {
+          // Updated shape
+          updateShape(shapesRef.current[id], shapeData);
+        }
+      });
+
+      // Handle removed shapes
+      Object.keys(shapesRef.current).forEach((id) => {
+        if (!newShapes[id]) {
+          removeShape(sceneRef.current, shapesRef.current[id]);
+          delete shapesRef.current[id];
+        }
+      });
+    });
+
     const renderSubscription = modelRef.current.subscribe('elements', () => {
       meshesRef.current = renderScene(scene, modelRef.current, meshesRef.current);
     });
@@ -124,6 +154,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
         controlModeSubscription.unsubscribe();
         planeStatesSubscription.unsubscribe();
         customPlanesSubscription.unsubscribe();
+        shapesSubscription.unsubscribe();
         renderSubscription.unsubscribe();
         currentModelViewSubscription.unsubscribe();
         window.removeEventListener("resize", engine.resize);

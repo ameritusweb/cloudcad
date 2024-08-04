@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import EnhancedZenObservable from '../observables/EnhancedZenObservable';
-import { MeshBuilder, Vector3, VertexBuffer, Mesh } from '@babylonjs/core';
+import { MeshBuilder, Vector3, VertexBuffer, Mesh, NullEngine, Scene, Engine } from '@babylonjs/core';
 import { calculateSurfaceArea, applyPreciseTessellation } from '../utils/tesselationUtils';
 import { exportStateToJSON, importStateFromJSON } from '../utils/ioUtils';
 import { saveStateToLocalStorage, loadStateFromLocalStorage, clearStateFromLocalStorage } from '../utils/storageUtils';
@@ -104,13 +104,13 @@ const createHypeStudioModel = () => {
     return id;
   };
 
-  model.createTessellatedShape = function(shapeData) {
+  model.createTessellatedShape = function(tempScene, shapeData) {
     const { type, params, triangleDensityTarget, estimatedTriangles } = shapeData;
     
     // Create a basic shape mesh
     const mesh = type === 'box' 
-      ? MeshBuilder.CreateBox("box", params, this.scene)
-      : MeshBuilder.CreateCylinder("cylinder", params, this.scene);
+      ? MeshBuilder.CreateBox("box", params, tempScene)
+      : MeshBuilder.CreateCylinder("cylinder", params, tempScene);
   
     // Apply precise tessellation
     const tessellatedMesh = applyPreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles);
@@ -163,10 +163,6 @@ const createHypeStudioModel = () => {
         }
       }
     }));
-
-    // Add the mesh to the scene
-    tessellatedMesh.name = `tessellated_${type}_${id}`;
-    this.scene.addMesh(tessellatedMesh);
     
     return id;
   };
@@ -363,6 +359,20 @@ export const HypeStudioProvider = ({ children }) => {
   const { notifications, addNotification } = useNotification();
 
   useEffect(() => {
+    // Create temp engine and scene for offscreen operations
+    const canvas = document.createElement('canvas'); 
+    const newTempEngine = new Engine(canvas, true);
+    const newTempScene = new Scene(newTempEngine);
+    model.tempEngine = newTempEngine;
+    model.tempScene = newTempScene;
+
+    return () => {
+      newTempEngine.dispose();
+      newTempScene.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
     model.setStateProperty = (propertyName, value, recordHistory = true) => {
       model.setState((prevModel) => ({ ...prevModel, [propertyName]: value }), recordHistory);
     }
@@ -419,4 +429,15 @@ export const useNotificationControl = () => {
     throw new Error('useNotificationControl must be used within a HypeStudioProvider');
   }
   return { addNotification: context.addNotification, removeNotification: context.removeNotification };
+};
+
+export const useHypeStudioEngines = () => {
+  const context = useContext(HypeStudioContext);
+  if (!context) {
+    throw new Error('useHypeStudioEngines must be used within a HypeStudioProvider');
+  }
+  return {
+    getTempEngine: () => context.tempEngine,
+    getTempScene: () => context.tempScene
+  };
 };

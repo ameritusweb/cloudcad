@@ -2,10 +2,84 @@
 
 import { 
     Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, 
-    StandardMaterial, Color3, Camera, Viewport, TransformNode
+    StandardMaterial, Color3, Camera, Viewport, TransformNode, Mesh, VertexData
   } from '@babylonjs/core';
 import * as meshUtils from './meshUtils';
   
+export const createShape = (scene, id, shapeData) => {
+  let mesh;
+
+  if (shapeData.type && ['box', 'cylinder'].includes(shapeData.type)) {
+    // Handle predefined shapes
+    switch (shapeData.type) {
+      case 'box':
+        mesh = MeshBuilder.CreateBox(id, shapeData.params, scene);
+        break;
+      case 'cylinder':
+        mesh = MeshBuilder.CreateCylinder(id, shapeData.params, scene);
+        break;
+    }
+  } else if (shapeData.geometry) {
+    // Handle custom shapes with provided geometry
+    mesh = new Mesh(id, scene);
+    const vertexData = new VertexData();
+    
+    vertexData.positions = shapeData.geometry.positions;
+    vertexData.indices = shapeData.geometry.indices;
+    vertexData.normals = shapeData.geometry.normals;
+    if (shapeData.geometry.uvs) {
+      vertexData.uvs = shapeData.geometry.uvs;
+    }
+
+    vertexData.applyToMesh(mesh);
+  } else {
+    console.warn(`Unable to create shape for ${id}: No recognized type or geometry provided`);
+    return null;
+  }
+
+  const material = new StandardMaterial(`${id}_material`, scene);
+  material.diffuseColor = new Color3(0.5, 0.5, 0.5);
+  mesh.material = material;
+
+  if (shapeData.position) mesh.position = new Vector3(shapeData.position.x, shapeData.position.y, shapeData.position.z);
+  if (shapeData.rotation) mesh.rotation = new Vector3(shapeData.rotation.x, shapeData.rotation.y, shapeData.rotation.z);
+  if (shapeData.scaling) mesh.scaling = new Vector3(shapeData.scaling.x, shapeData.scaling.y, shapeData.scaling.z);
+
+  return mesh;
+};
+
+export const updateShape = (mesh, shapeData) => {
+  if (shapeData.params && ['box', 'cylinder'].includes(shapeData.type)) {
+    // Update parameters for predefined shapes
+    Object.entries(shapeData.params).forEach(([key, value]) => {
+      mesh[key] = value;
+    });
+  }
+
+  if (shapeData.geometry) {
+    // Update geometry for custom shapes
+    const vertexData = new VertexData();
+    vertexData.positions = shapeData.geometry.positions;
+    vertexData.indices = shapeData.geometry.indices;
+    vertexData.normals = shapeData.geometry.normals;
+    if (shapeData.geometry.uvs) {
+      vertexData.uvs = shapeData.geometry.uvs;
+    }
+    vertexData.applyToMesh(mesh, true);  // The 'true' parameter updates the mesh in place
+  }
+
+  // Update other properties
+  if (shapeData.position) mesh.position.copyFrom(new Vector3(shapeData.position.x, shapeData.position.y, shapeData.position.z));
+  if (shapeData.rotation) mesh.rotation.copyFrom(new Vector3(shapeData.rotation.x, shapeData.rotation.y, shapeData.rotation.z));
+  if (shapeData.scaling) mesh.scaling.copyFrom(new Vector3(shapeData.scaling.x, shapeData.scaling.y, shapeData.scaling.z));
+};
+
+export const removeShape = (scene, mesh) => {
+  if (mesh) {
+    mesh.dispose();
+  }
+};
+
   export const setupMainScene = (engine, canvas, meshesRef) => {
     const scene = new Scene(engine);
     scene.clearColor = new Color3(0.95, 0.95, 0.95);

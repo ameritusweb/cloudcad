@@ -1,6 +1,6 @@
 import React, { useCallback, memo, useState, useMemo } from 'react';
 import { FaSquare, FaCircle, FaCube, FaGripLines, FaVectorSquare, FaPlus } from 'react-icons/fa';
-import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import { useHypeStudioModel, useHypeStudioEngines } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';
 import { SettingsView } from './SettingsView';
@@ -10,6 +10,7 @@ import { CustomPlanesView } from './CustomPlanesView';
 export const LeftPanel = memo(() => {
 
   const model = useHypeStudioModel();
+  const { getTempEngine, getTempScene } = useHypeStudioEngines();
   const activeView = useHypeStudioState('activeView', 'List View');
   const selectedSketchType = useHypeStudioState('selectedSketchType', null);
   const selectedElementId = useHypeStudioState('selectedElementId', null);
@@ -28,7 +29,7 @@ export const LeftPanel = memo(() => {
   }, [model]);
 
   const handleCreateShape = useCallback((shapeData) => {
-    model.createTessellatedShape(shapeData);
+    model.createTessellatedShape(getTempScene(), shapeData);
   }, [model]);
 
   const renderSelectionInfo = () => {
