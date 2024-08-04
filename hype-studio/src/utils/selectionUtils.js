@@ -1,5 +1,5 @@
 import { 
-    Vector3, MeshBuilder, StandardMaterial, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
+    Vector3, MeshBuilder, StandardMaterial, Quaternion, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
   } from '@babylonjs/core';
 import earcut from 'earcut';
 
@@ -126,10 +126,14 @@ center.scaleInPlace(1 / vertices.length);
   
   // Position and orient the highlight mesh
   highlightMesh.position = center;
-  const up = new Vector3(0, 1, 0);
-  const axis = Vector3.Cross(up, new Vector3(normal.x, normal.y, normal.z));
-  const angle = Math.acos(Vector3.Dot(up, new Vector3(normal.x, normal.y, normal.z)));
-  highlightMesh.rotation = Vector3.RotationFromAxis(axis, up, new Vector3(normal.x, normal.y, normal.z));
+  // Orient the highlight mesh
+  const normalVector = new Vector3(normal.x, normal.y, normal.z);
+  
+ // Calculate rotation from initial (0, 0, 1) to face normal
+ const rotationAxis = Vector3.Cross(Vector3.Forward(), normalVector); 
+ const rotationAngle = Math.acos(Vector3.Dot(Vector3.Forward(), normalVector));
+ const rotationQuaternion = Quaternion.RotationAxis(rotationAxis, rotationAngle);
+ highlightMesh.rotationQuaternion = rotationQuaternion;
 
   // Move the highlight slightly above the face to prevent z-fighting
   highlightMesh.position.addInPlace(new Vector3(normal.x, normal.y, normal.z).scale(0.01));
@@ -137,6 +141,7 @@ center.scaleInPlace(1 / vertices.length);
   const highlightMaterial = new StandardMaterial("highlightMaterial", mesh.getScene());
   highlightMaterial.emissiveColor = new Color3(0, 1, 0);  // Green highlight
   highlightMaterial.alpha = 0.5;
+  highlightMaterial.backFaceCulling = false;
   highlightMesh.material = highlightMaterial;
 
   highlightMesh.renderingGroupId = 1;
