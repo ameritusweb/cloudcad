@@ -88,7 +88,7 @@ export const removeShape = (scene, mesh) => {
     camera.attachControl(canvas, true);
   
     const light = new HemisphericLight("light", new Vector3(0, 1, -1), scene);
-    light.intensity = 0.4;
+    light.intensity = 0.9;
 
     return { scene, camera };
   };

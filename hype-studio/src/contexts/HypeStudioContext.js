@@ -24,6 +24,7 @@ const initialHypeStudioState = {
   customProperties: {},
   selectedElementId: null,
   selectedElement: null,
+  selectedPart: null,
   activeView: 'List View',
   leftPanelContent: [],
   currentModelView: '',

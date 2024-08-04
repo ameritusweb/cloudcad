@@ -25,12 +25,16 @@ import {
   updateCameraPosition
 } from '../utils/cameraUtils';
 import { usePointerEvents } from '../hooks/usePointerEvents';
-import { 
-  selectEdge, 
-  selectFace, 
-  highlightEdge, 
-  highlightFace 
-} from '../utils/meshUtils';
+import {
+  selectEdge,
+  selectFace,
+  highlightEdge,
+  highlightFace,
+  selectCylinderPart,
+  highlightCylinderPart,
+  selectMeshPart,
+  highlightMeshPart
+} from '../utils/selectionUtils';
 
 export const BabylonViewport = memo(({ engine, canvas }) => {
   const modelRef = useRef(useHypeStudioModel());
@@ -42,7 +46,6 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
   const cameraRef = useRef(null);
   const meshesRef = useRef({});
   const planesRef = useRef({});
-  const highlightLayerRef = useRef(null);
   const shapesRef = useRef({});
 
   const shapes = useHypeStudioState('elements.shapes', {});
@@ -52,8 +55,8 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
   const previewMeshRef = useRef(null);
   const currentViewRef = useRef('Front');
 
-  const selectedEdgesRef = useRef([]);
-  const selectedFacesRef = useRef([]);
+  const highlightLayerRef = useRef(null);
+  const highlightedMeshRef = useRef(null);
 
   useEffect(() => {
     if (!engine || !canvas || !engine.isEngineActive) return;
@@ -157,6 +160,13 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
         shapesSubscription.unsubscribe();
         renderSubscription.unsubscribe();
         currentModelViewSubscription.unsubscribe();
+
+        if (highlightedMeshRef.current) {
+          highlightLayerRef.current.removeMesh(highlightedMeshRef.current);
+          highlightedMeshRef.current.dispose();
+        }
+        highlightLayerRef.current.dispose();
+        
         window.removeEventListener("resize", engine.resize);
         scene.dispose();
         controlScene.dispose();
@@ -177,40 +187,106 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
 
     const scene = sceneRef.current;
 
+    // Clear selection when clicking on empty space
+  if (!pickResult.hit) {
+    if (highlightedMeshRef.current) {
+      highlightLayerRef.current.removeMesh(highlightedMeshRef.current);
+      highlightedMeshRef.current.dispose();
+      highlightedMeshRef.current = null;
+    }
+    modelRef.current.setState(state => ({
+      ...state,
+      selectedPart: null,
+      selectedElementId: null
+    }));
+    return;
+  }
+
     if (activeView === 'Sketch View' && selectedSketchType && pickResult.hit && pickResult.pickedMesh.name.includes('Plane')) {
       isDrawingRef.current = true;
       startPointRef.current = pickResult.pickedPoint;
       previewMeshRef.current = createPreviewMesh(scene, selectedSketchType, pickResult.pickedPoint);
-    } else {
-      const selectedNodeId = handleMeshSelection(pickResult, meshesRef.current, scene, modelRef.current, (nodeId) => {
-        // This is where you would call your onSelectionChange function if needed
-      });
-
-      if (selectedNodeId) {
-        const elementType = selectedNodeId.split('_')[0];
-        let dragCallback;
-        switch (elementType) {
-          default:
-          case 'sketch':
-            dragCallback = handleSketchInteraction(modelRef.current, selectedNodeId, pickResult);
-            break;
-          case 'extrusion':
-            dragCallback = handleExtrusionInteraction(modelRef.current, selectedNodeId, pickResult);
-            break;
-          // Add cases for other element types
+    } else if (pickResult.hit) {
+      const mesh = pickResult.pickedMesh;
+      let selection;
+  
+      // Clear previous highlight
+      if (highlightedMeshRef.current) {
+        highlightLayerRef.current.removeMesh(highlightedMeshRef.current);
+        highlightedMeshRef.current.dispose();
+        highlightedMeshRef.current = null;
+      }
+  
+      if (mesh.shape === 'cylinder') {
+        selection = selectCylinderPart(mesh, pickResult);
+        if (selection) {
+          highlightedMeshRef.current = highlightCylinderPart(mesh, selection);
         }
-        if (dragCallback) {
-          scene.onPointerMove = (moveEvt) => {
-            const dragResult = scene.pick(moveEvt.offsetX, moveEvt.offsetY);
-            if (dragResult.hit) {
-              dragCallback(dragResult.pickedPoint);
+      } else {
+        // First, try to select a specific edge
+        const edgeIndex = selectEdge(mesh, pickResult);
+        if (edgeIndex !== -1) {
+          selection = { type: 'edge', data: edgeIndex };
+          highlightedMeshRef.current = highlightEdge(mesh, edgeIndex);
+        } else {
+          // If no edge is selected, try to select a face
+          const faceIndex = selectFace(mesh, pickResult);
+          if (faceIndex !== -1) {
+            selection = { type: 'face', data: faceIndex };
+            highlightedMeshRef.current = highlightFace(mesh, faceIndex);
+          } else {
+            // If no specific part is selected, fall back to general mesh part selection
+            selection = selectMeshPart(mesh, pickResult);
+            if (selection) {
+              highlightedMeshRef.current = highlightMeshPart(mesh, selection);
             }
-          };
-          scene.onPointerUp = () => {
-            scene.onPointerMove = null;
-            scene.onPointerUp = null;
-          };
+          }
         }
+      }
+  
+      if (highlightedMeshRef.current) {
+        highlightLayerRef.current.addMesh(highlightedMeshRef.current, new Vector3(1, 1, 0));
+      }
+  
+      if (selection) {
+        modelRef.current.setState(state => ({
+          ...state,
+          selectedPart: {
+            meshId: mesh.id,
+            ...selection
+          }
+        }));
+  
+        // // Handle mesh selection and interaction as before
+        // const selectedNodeId = handleMeshSelection(pickResult, meshesRef.current, scene, modelRef.current, (nodeId) => {
+        //   // This is where you would call your onSelectionChange function if needed
+        // });
+  
+        // if (selectedNodeId) {
+        //   const elementType = selectedNodeId.split('_')[0];
+        //   let dragCallback;
+        //   switch (elementType) {
+        //     case 'sketch':
+        //       dragCallback = handleSketchInteraction(modelRef.current, selectedNodeId, pickResult);
+        //       break;
+        //     case 'extrusion':
+        //       dragCallback = handleExtrusionInteraction(modelRef.current, selectedNodeId, pickResult);
+        //       break;
+        //     // Add cases for other element types
+        //   }
+        //   if (dragCallback) {
+        //     scene.onPointerMove = (moveEvt) => {
+        //       const dragResult = scene.pick(moveEvt.offsetX, moveEvt.offsetY);
+        //       if (dragResult.hit) {
+        //         dragCallback(dragResult.pickedPoint);
+        //       }
+        //     };
+        //     scene.onPointerUp = () => {
+        //       scene.onPointerMove = null;
+        //       scene.onPointerUp = null;
+        //     };
+        //   }
+        // }
       }
     }
   }, [activeView, selectedSketchType]);
