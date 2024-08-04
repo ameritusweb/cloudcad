@@ -272,11 +272,10 @@ export function selectMeshPart(mesh, pickResult, adjacencyList) {
  * @param {Array} selectedTriangles - The array to store selected triangles.
  * @param {Set} processedTriangles - The set of processed triangles.
  * @param {Array} adjacencyList - The pre-computed adjacency list.
- * @param {boolean} initial - Whether this is the initial triangle.
  */
 function floodFill(mesh, triangleIndex, selectedTriangles, processedTriangles, adjacencyList, initial = false) {
     if (processedTriangles.has(triangleIndex)) {
-        return; // Already processed this triangle
+        return;
     }
     processedTriangles.add(triangleIndex);
     selectedTriangles.push(triangleIndex);
@@ -285,17 +284,19 @@ function floodFill(mesh, triangleIndex, selectedTriangles, processedTriangles, a
 
     for (const neighbor of neighbors) {
         if (!processedTriangles.has(neighbor)) {
-            if (initial || isConnected(mesh, triangleIndex, neighbor)) { 
-                // Always include the initial triangle or directly connected neighbors
-                floodFill(mesh, neighbor, selectedTriangles, processedTriangles, adjacencyList, false); 
-            } else if (!isFlat(mesh, triangleIndex, neighbor)) { 
-                // Start a new contiguous region if the neighbor isn't flat
-                floodFill(mesh, neighbor, selectedTriangles, processedTriangles, adjacencyList, true); 
+            const connected = isConnected(mesh, triangleIndex, neighbor);
+            const flat = isFlat(mesh, triangleIndex, neighbor);
+
+            if (initial || connected) {
+                // For initial or connected triangles, include them regardless of flatness
+                floodFill(mesh, neighbor, selectedTriangles, processedTriangles, adjacencyList, false);
+            } else if (!flat) {
+                // For unconnected, non-flat triangles, start a new flood fill
+                floodFill(mesh, neighbor, selectedTriangles, processedTriangles, adjacencyList, true);
             }
         }
     }
 }
-
 /**
  * Get neighboring triangle indices using the adjacency list.
  * @param {Mesh} mesh - The mesh to find neighbors in.
@@ -346,10 +347,10 @@ function isFlat(mesh, triangleIndex1, triangleIndex2) {
     const normal1 = Vector3.FromArray(normals, indices[triangleIndex1 * 3] * 3);
     const normal2 = Vector3.FromArray(normals, indices[triangleIndex2 * 3] * 3);
 
-    // Calculate the angle between the normals directly
-    const angle = Vector3.GetAngleBetweenVectors(normal1, normal2);
+    // Calculate the angle between the two normals
+    const angle = Vector3.GetAngleBetweenVectors(normal1, normal2, normal1);
 
-    return angle < FLAT_ANGLE_THRESHOLD; // Triangles are considered flat if the angle is below the threshold
+    return Math.abs(angle) < FLAT_ANGLE_THRESHOLD;
 }
 
 /**
