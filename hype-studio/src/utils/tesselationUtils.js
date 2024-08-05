@@ -253,9 +253,9 @@ class PreciseTessellation {
 
       // Fractal subdivision pattern (example)
       newIndices.push(
-          vertexMap.get(v1), vertexMap.get(f), vertexMap.get(v2),
-          vertexMap.get(v2), vertexMap.get(f), vertexMap.get(v3),
-          vertexMap.get(v3), vertexMap.get(f), vertexMap.get(v1)
+          vertexMap.get(v2), vertexMap.get(f), vertexMap.get(v1),
+          vertexMap.get(v3), vertexMap.get(f), vertexMap.get(v2),
+          vertexMap.get(v1), vertexMap.get(f), vertexMap.get(v3)
       );
   }
 

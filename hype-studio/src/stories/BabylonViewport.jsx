@@ -128,18 +128,93 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
             const positions = newMesh.getVerticesData(VertexBuffer.PositionKind);
             const indices = newMesh.getIndices();
 
-            const linesData = [];
-            for (let i = 0; i < indices.length; i += 3) {
-                const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
-                const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
-                const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+            const normals = newMesh.getVerticesData(VertexBuffer.NormalKind);
 
-                linesData.push([v1, v2], [v2, v3], [v3, v1]); // Connect all three vertices of the triangle
+            const linesDataMap = new Map();
+            const normalGroups = {};
+            const threshold = 0.1; // Adjust the threshold as needed
+
+            // Function to group normals by axis components within a threshold
+            function groupNormals(normal) {
+                const key = `${Math.round(normal.x / threshold) * threshold},${Math.round(normal.y / threshold) * threshold},${Math.round(normal.z / threshold) * threshold}`;
+                if (!normalGroups[key]) {
+                    normalGroups[key] = [];
+                }
+                normalGroups[key].push(normal);
+                return key;
             }
 
-            const outline = MeshBuilder.CreateLineSystem("lines", { lines: linesData }, sceneRef.current);
-            outline.color = new Color3(1, 0, 0);
-            outline.renderingGroupId = 1;
+            // Loop through indices and group lines by their normals
+            for (let i = 0; i < indices.length; i += 3) {
+                const v1 = new Vector3(
+                    positions[indices[i] * 3], 
+                    positions[indices[i] * 3 + 1], 
+                    positions[indices[i] * 3 + 2]
+                );
+                const v2 = new Vector3(
+                    positions[indices[i + 1] * 3], 
+                    positions[indices[i + 1] * 3 + 1], 
+                    positions[indices[i + 1] * 3 + 2]
+                );
+                const v3 = new Vector3(
+                    positions[indices[i + 2] * 3], 
+                    positions[indices[i + 2] * 3 + 1], 
+                    positions[indices[i + 2] * 3 + 2]
+                );
+
+                const n1 = new Vector3(
+                    normals[indices[i] * 3], 
+                    normals[indices[i] * 3 + 1], 
+                    normals[indices[i] * 3 + 2]
+                );
+                const n2 = new Vector3(
+                    normals[indices[i + 1] * 3], 
+                    normals[indices[i + 1] * 3 + 1], 
+                    normals[indices[i + 1] * 3 + 2]
+                );
+                const n3 = new Vector3(
+                    normals[indices[i + 2] * 3], 
+                    normals[indices[i + 2] * 3 + 1], 
+                    normals[indices[i + 2] * 3 + 2]
+                );
+
+                const key1 = groupNormals(n1);
+                const key2 = groupNormals(n2);
+                const key3 = groupNormals(n3);
+
+                if (!linesDataMap.has(key1)) linesDataMap.set(key1, []);
+                if (!linesDataMap.has(key2)) linesDataMap.set(key2, []);
+                if (!linesDataMap.has(key3)) linesDataMap.set(key3, []);
+
+                linesDataMap.get(key1).push([v1, v2], [v2, v3], [v3, v1]);
+                linesDataMap.get(key2).push([v1, v2], [v2, v3], [v3, v1]);
+                linesDataMap.get(key3).push([v1, v2], [v2, v3], [v3, v1]);
+            }
+
+            // Function to generate random colors
+            function getRandomColor() {
+                return new Color3(Math.random(), Math.random(), Math.random());
+            }
+
+            // Create separate line systems for each normal group
+            linesDataMap.forEach((linesData, key, index) => {
+                const lineSystem = MeshBuilder.CreateLineSystem(`lines_${index}`, { lines: linesData }, sceneRef.current);
+                lineSystem.color = getRandomColor();
+                lineSystem.renderingGroupId = 1;
+            });
+
+            // const linesData = [];
+            // for (let i = 0; i < indices.length; i += 3) {
+            //     const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+            //     const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+            //     const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+
+            //     linesData.push([v1, v2], [v2, v3], [v3, v1]); // Connect all three vertices of the triangle
+            // }
+
+            // const outline = MeshBuilder.CreateLineSystem("lines", { lines: linesData }, sceneRef.current);
+            // outline.color = new Color3(0, 1, 0);
+            // outline.renderingGroupId = 1;
 
             shapesRef.current[id] = newMesh;
           }
