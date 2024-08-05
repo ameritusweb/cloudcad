@@ -129,7 +129,6 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
             const positions = newMesh.getVerticesData(VertexBuffer.PositionKind);
             const indices = newMesh.getIndices();
             const normals = newMesh.getVerticesData(VertexBuffer.NormalKind);
-            const adjacencyList = shapeData.adjacencyList;
 
             const linesDataMap = new Map();
             const normalGroups = {};
@@ -143,27 +142,39 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
               }
               normalGroups[key].push(normal);
               return key;
-          }
+            }
 
-          // Loop through indices and group lines by their normals
-          for (let i = 0; i < indices.length; i += 3) {
-              const v1 = new Vector3(
-                  positions[indices[i] * 3], 
-                  positions[indices[i] * 3 + 1], 
-                  positions[indices[i] * 3 + 2]
-              );
-              const v2 = new Vector3(
-                  positions[indices[i + 1] * 3], 
-                  positions[indices[i + 1] * 3 + 1], 
-                  positions[indices[i + 1] * 3 + 2]
-              );
-              const v3 = new Vector3(
-                  positions[indices[i + 2] * 3], 
-                  positions[indices[i + 2] * 3 + 1], 
-                  positions[indices[i + 2] * 3 + 2]
-              );
+            const vertexToTrianglesMap = new Map(); // Map to track which triangles each vertex is part of
+            const normalToTrianglesMap = new Map();
 
-              const n1 = new Vector3(
+            // Function to generate a unique key for a vertex
+            function getVertexKey(vertex) {
+                return `${vertex.x},${vertex.y},${vertex.z}`;
+            }
+
+            // Loop through indices and track which vertices are part of which triangles
+            for (let i = 0; i < indices.length; i += 3) {
+                const v1Index = indices[i];
+                const v2Index = indices[i + 1];
+                const v3Index = indices[i + 2];
+
+                const v1 = new Vector3(
+                    positions[v1Index * 3], 
+                    positions[v1Index * 3 + 1], 
+                    positions[v1Index * 3 + 2]
+                );
+                const v2 = new Vector3(
+                    positions[v2Index * 3], 
+                    positions[v2Index * 3 + 1], 
+                    positions[v2Index * 3 + 2]
+                );
+                const v3 = new Vector3(
+                    positions[v3Index * 3], 
+                    positions[v3Index * 3 + 1], 
+                    positions[v3Index * 3 + 2]
+                );
+
+                const n1 = new Vector3(
                   normals[indices[i] * 3], 
                   normals[indices[i] * 3 + 1], 
                   normals[indices[i] * 3 + 2]
@@ -188,7 +199,34 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
               if (!linesDataMap.has(key3)) linesDataMap.set(key3, []);
 
               linesDataMap.get(key1).push([v1, v2], [v2, v3], [v3, v1]);
-          }
+
+                const triangle = [v1, v2, v3];
+
+                const v1Key = getVertexKey(v1);
+                const v2Key = getVertexKey(v2);
+                const v3Key = getVertexKey(v3);
+
+                const n1Key = getVertexKey(n1);
+                const n2Key = getVertexKey(n2);
+                const n3Key = getVertexKey(n3);
+
+                // Update the map with the triangle information
+                if (!vertexToTrianglesMap.has(v1Key)) vertexToTrianglesMap.set(v1Key, []);
+                if (!vertexToTrianglesMap.has(v2Key)) vertexToTrianglesMap.set(v2Key, []);
+                if (!vertexToTrianglesMap.has(v3Key)) vertexToTrianglesMap.set(v3Key, []);
+
+                vertexToTrianglesMap.get(v1Key).push(triangle);
+                vertexToTrianglesMap.get(v2Key).push(triangle);
+                vertexToTrianglesMap.get(v3Key).push(triangle);
+
+                if (!normalToTrianglesMap.has(n1Key)) normalToTrianglesMap.set(n1Key, []);
+                if (!normalToTrianglesMap.has(n2Key)) normalToTrianglesMap.set(n2Key, []);
+                if (!normalToTrianglesMap.has(n3Key)) normalToTrianglesMap.set(n3Key, []);
+
+                normalToTrianglesMap.get(n1Key).push(triangle);
+                normalToTrianglesMap.get(n2Key).push(triangle);
+                normalToTrianglesMap.get(n3Key).push(triangle);
+            }
 
             // Calculate average normals for each group
             const averageNormals = {};
@@ -198,48 +236,60 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
                 averageNormals[key] = averageNormal;
             }
 
+            const areNormalsSimilar = (normal1, normal2) => Vector3.DistanceSquared(normal1, normal2) < threshold * threshold;
+
+
             // Find ordered pairs of group keys
             const groupPairs = [];
             const groupKeys = Object.keys(normalGroups);
             for (let i = 0; i < groupKeys.length; i++) {
                 for (let j = i + 1; j < groupKeys.length; j++) {
-                    groupPairs.push([groupKeys[i], groupKeys[j]]);
+                    if (areNormalsSimilar(averageNormals[groupKeys[i]], averageNormals[groupKeys[j]])) {
+                      groupPairs.push([groupKeys[i], groupKeys[j]]);
+                    }
                 }
-            }
-
-            // Create a map from normal vector to its index in the 'normals' array
-            const normalToIndexMap = new Map();
-            for (let i = 0; i < normals.length; i += 3) {
-                const normal = new Vector3(normals[i], normals[i + 1], normals[i + 2]);
-                normalToIndexMap.set(normal.toString(), i / 3); // Use string representation of Vector3 as key
             }
 
             // Check for shared vertices and compare average normals
             const groupsToMerge = new Map();
-            const positionThresholdSquared = threshold * 20; // Square the threshold for distance comparison
-            const areNormalsSimilar = (normal1, normal2) => Vector3.DistanceSquared(normal1, normal2) < threshold * threshold;
+
+            function areTrianglesSimilar(t1, t2) {
+              for (let tr1 of t1) {
+                for (let tr2 of t2) {
+                  const isSimilar = areNormalsSimilar(tr1[0], tr2[0])
+                    ||
+                    areNormalsSimilar(tr1[0], tr2[1])
+                    ||
+                    areNormalsSimilar(tr1[0], tr2[2])
+                    ||
+                    areNormalsSimilar(tr1[1], tr2[1])
+                    ||
+                    areNormalsSimilar(tr1[1], tr2[2])
+                    ||
+                    areNormalsSimilar(tr1[2], tr2[2]);
+                  if (isSimilar)
+                    return true;
+                }
+              }
+              return false;
+            }
 
             for (const [groupKey1, groupKey2] of groupPairs) {
                 const verticesGroup1 = normalGroups[groupKey1].map(normal => {
-                    const vertexIndex = normalToIndexMap.get(normal.toString());
-                    return new Vector3(positions[vertexIndex * 3], positions[vertexIndex * 3 + 1], positions[vertexIndex * 3 + 2]);
+                    const normalKey1 = getVertexKey(normal);
+                    return normalToTrianglesMap.get(normalKey1);
                 });
 
                 for (const normal of normalGroups[groupKey2]) {
-                    const vertexIndex = normalToIndexMap.get(normal.toString());
-                    const v2 = new Vector3(
-                        positions[vertexIndex * 3],
-                        positions[vertexIndex * 3 + 1],
-                        positions[vertexIndex * 3 + 2]
-                    );
+                  const normalKey2 = getVertexKey(normal);
+                  const triangle = normalToTrianglesMap.get(normalKey2);
 
                     for (const v1 of verticesGroup1) {
-                        if (Vector3.DistanceSquared(v1, v2) < positionThresholdSquared) {
-                            // Vertices are close enough, groups share a vertex
-                            if (areNormalsSimilar(averageNormals[groupKey1], averageNormals[groupKey2])) {
-                                if (!groupsToMerge.has(groupKey1)) groupsToMerge.set(groupKey1, new Set());
-                                groupsToMerge.get(groupKey1).add(groupKey2);
-                            }
+                        if (areTrianglesSimilar(triangle, v1)) {
+
+                            if (!groupsToMerge.has(groupKey1)) groupsToMerge.set(groupKey1, new Set());
+                            groupsToMerge.get(groupKey1).add(groupKey2);
+
                             break; // No need to check other vertices in group1 if one is already shared
                         }
                     }
@@ -307,28 +357,6 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
                     index++;
                 }
             }
-
-            // // Create separate line systems for each normal group
-            // let index = 0;
-            // linesDataMap.forEach((linesData, key) => {
-            //     const lineSystem = MeshBuilder.CreateLineSystem(`lines_${index}`, { lines: linesData }, sceneRef.current);
-            //     lineSystem.color = getRandomColor();
-            //     lineSystem.renderingGroupId = 1;
-            //     index++;
-            // });
-
-            // const linesData = [];
-            // for (let i = 0; i < indices.length; i += 3) {
-            //     const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
-            //     const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
-            //     const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
-
-            //     linesData.push([v1, v2], [v2, v3], [v3, v1]); // Connect all three vertices of the triangle
-            // }
-
-            // const outline = MeshBuilder.CreateLineSystem("lines", { lines: linesData }, sceneRef.current);
-            // outline.color = new Color3(0, 1, 0);
-            // outline.renderingGroupId = 1;
 
             shapesRef.current[id] = newMesh;
           }
