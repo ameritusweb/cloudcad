@@ -132,7 +132,7 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
 
             const linesDataMap = new Map();
             const normalGroups = {};
-            const threshold = 0.1; // Adjust the threshold as needed
+            const threshold = 0.5; // Adjust the threshold as needed
 
             // Function to group normals by axis components within a threshold
             function groupNormals(normal) {
