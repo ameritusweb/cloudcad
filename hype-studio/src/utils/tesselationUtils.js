@@ -9,6 +9,7 @@ class PreciseTessellation {
     this.maxIterations = options.maxIterations || 10; // Prevent infinite loops
     this.maxEdgeLength = options.maxEdgeLength || 1.0; // Max length of an edge
     this.angleTolerance = options.angleTolerance || Math.PI / 6; // Angle tolerance for curvature
+    this.distanceThreshold = options.distanceThreshold || 0.1; // Threshold for acceptable distance change
   }
 
   tessellate() {
@@ -57,17 +58,26 @@ class PreciseTessellation {
     // Step 3: Update original vertices
     const updatedVertices = this.updateOriginalVertices(positions, indices, facePoints, edgePoints);
 
-    // Step 4: Create new mesh structure
+    // Step 4: Validate new positions
+    this.validateNewPositions(positions, updatedVertices);
+
+    // Step 5: Create new mesh structure
     this.createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices, newUVs);
 
-    // Step 5: Calculate new normals
+    // Step 6: Calculate new normals
     this.calculateNewNormals(newPositions, newIndices, newNormals);
+
+    // Step 7: Calculate distances between old and new triangles
+    this.calculateTriangleDistances(indices, positions, newIndices, newPositions);
 
     // Update the mesh with new data
     this.mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, newPositions);
     this.mesh.setIndices(newIndices);
     this.mesh.setVerticesData(BABYLON.VertexBuffer.NormalKind, newNormals);
     this.mesh.setVerticesData(BABYLON.VertexBuffer.UVKind, newUVs);
+
+    // Step 8: Check for orphaned triangles
+    this.checkForOrphanedTriangles(newIndices);
   }
 
   calculateFacePoints(positions, indices, uvs) {
@@ -85,6 +95,7 @@ class PreciseTessellation {
 
       facePoints.push({ position: facePoint, uv: faceUV });
     }
+    console.log("Face Points:", facePoints);
     return facePoints;
   }
 
@@ -111,6 +122,7 @@ class PreciseTessellation {
         }
       }
     }
+    console.log("Edge Points:", edgePoints);
     return edgePoints;
   }
 
@@ -146,13 +158,24 @@ class PreciseTessellation {
       vertexEdges.get(i).forEach(eKey => {
         R = R.add(edgePoints.get(eKey).position);
       });
-      R = R.scale(1 / n);
+      R = R.scale(1 / (vertexEdges.get(i).length / 2)); // Each edge is counted twice
 
       const updatedV = F.scale(1 / n).add(R.scale(2 / n)).add(v.scale((n - 3) / n));
       updatedVertices.push(updatedV);
     }
-
+    console.log("Updated Vertices:", updatedVertices);
     return updatedVertices;
+  }
+
+  validateNewPositions(oldPositions, newPositions) {
+    oldPositions.forEach((oldPos, index) => {
+      const oldVector = new BABYLON.Vector3(oldPositions[index * 3], oldPositions[index * 3 + 1], oldPositions[index * 3 + 2]);
+      const newVector = newPositions[index];
+      const distance = BABYLON.Vector3.Distance(oldVector, newVector);
+      if (distance > this.distanceThreshold) {
+        console.warn(`Vertex ${index} moved ${distance} units, which exceeds the threshold.`);
+      }
+    });
   }
 
   createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices, newUVs) {
@@ -198,29 +221,50 @@ class PreciseTessellation {
         vertexMap.get(e3), vertexMap.get(v1), vertexMap.get(f)
       );
     }
+    console.log("New Positions:", newPositions);
+    console.log("New Indices:", newIndices);
   }
 
   calculateNewNormals(newPositions, newIndices, newNormals) {
-    // Calculate flat normals
+    // Initialize normals array
+    for (let i = 0; i < newPositions.length; i += 3) {
+      newNormals.push(0, 0, 0);
+    }
+
+    // Calculate flat normals and accumulate
     for (let i = 0; i < newIndices.length; i += 3) {
-      const v1 = new BABYLON.Vector3(newPositions[newIndices[i] * 3], newPositions[newIndices[i] * 3 + 1], newPositions[newIndices[i] * 3 + 2]);
-      const v2 = new BABYLON.Vector3(newPositions[newIndices[i + 1] * 3], newPositions[newIndices[i + 1] * 3 + 1], newPositions[newIndices[i + 1] * 3 + 2]);
-      const v3 = new BABYLON.Vector3(newPositions[newIndices[i + 2] * 3], newPositions[newIndices[i + 2] * 3 + 1], newPositions[newIndices[i + 2] * 3 + 2]);
+      const v1Index = newIndices[i];
+      const v2Index = newIndices[i + 1];
+      const v3Index = newIndices[i + 2];
+
+      const v1 = new BABYLON.Vector3(newPositions[v1Index * 3], newPositions[v1Index * 3 + 1], newPositions[v1Index * 3 + 2]);
+      const v2 = new BABYLON.Vector3(newPositions[v2Index * 3], newPositions[v2Index * 3 + 1], newPositions[v2Index * 3 + 2]);
+      const v3 = new BABYLON.Vector3(newPositions[v3Index * 3], newPositions[v3Index * 3 + 1], newPositions[v3Index * 3 + 2]);
 
       const normal = BABYLON.Vector3.Cross(v2.subtract(v1), v3.subtract(v1)).normalize();
 
-      newNormals[newIndices[i] * 3] = normal.x;
-      newNormals[newIndices[i] * 3 + 1] = normal.y;
-      newNormals[newIndices[i] * 3 + 2] = normal.z;
+      // Accumulate normals for shared vertices
+      newNormals[v1Index * 3] += normal.x;
+      newNormals[v1Index * 3 + 1] += normal.y;
+      newNormals[v1Index * 3 + 2] += normal.z;
 
-      newNormals[newIndices[i + 1] * 3] = normal.x;
-      newNormals[newIndices[i + 1] * 3 + 1] = normal.y;
-      newNormals[newIndices[i + 1] * 3 + 2] = normal.z;
+      newNormals[v2Index * 3] += normal.x;
+      newNormals[v2Index * 3 + 1] += normal.y;
+      newNormals[v2Index * 3 + 2] += normal.z;
 
-      newNormals[newIndices[i + 2] * 3] = normal.x;
-      newNormals[newIndices[i + 2] * 3 + 1] = normal.y;
-      newNormals[newIndices[i + 2] * 3 + 2] = normal.z;
+      newNormals[v3Index * 3] += normal.x;
+      newNormals[v3Index * 3 + 1] += normal.y;
+      newNormals[v3Index * 3 + 2] += normal.z;
     }
+
+    // Normalize the normals
+    for (let i = 0; i < newNormals.length; i += 3) {
+      const normal = new BABYLON.Vector3(newNormals[i], newNormals[i + 1], newNormals[i + 2]).normalize();
+      newNormals[i] = normal.x;
+      newNormals[i + 1] = normal.y;
+      newNormals[i + 2] = normal.z;
+    }
+    console.log("New Normals:", newNormals);
   }
 
   getEdgeKey(v1, v2) {
@@ -242,6 +286,69 @@ class PreciseTessellation {
     }
 
     return totalArea;
+  }
+
+  checkForOrphanedTriangles(indices) {
+    const edgeUsageCount = new Map();
+
+    // Count the usage of each edge
+    for (let i = 0; i < indices.length; i += 3) {
+      for (let j = 0; j < 3; j++) {
+        const v1 = indices[i + j];
+        const v2 = indices[i + (j + 1) % 3];
+        const edgeKey = this.getEdgeKey(v1, v2);
+        edgeUsageCount.set(edgeKey, (edgeUsageCount.get(edgeKey) || 0) + 1);
+      }
+    }
+
+    // Check for orphaned triangles
+    const orphanedTriangles = [];
+    for (let i = 0; i < indices.length; i += 3) {
+      let orphaned = false;
+      for (let j = 0; j < 3; j++) {
+        const v1 = indices[i + j];
+        const v2 = indices[i + (j + 1) % 3];
+        const edgeKey = this.getEdgeKey(v1, v2);
+        if (edgeUsageCount.get(edgeKey) === 1) {
+          orphaned = true;
+          break;
+        }
+      }
+      if (orphaned) {
+        orphanedTriangles.push([indices[i], indices[i + 1], indices[i + 2]]);
+      }
+    }
+
+    if (orphanedTriangles.length > 0) {
+      console.error('Orphaned triangles found:', orphanedTriangles);
+    } else {
+      console.log('No orphaned triangles found.');
+    }
+  }
+
+  calculateTriangleDistances(oldIndices, oldPositions, newIndices, newPositions) {
+    const oldTriangles = this.calculateTriangleCentroids(oldIndices, oldPositions);
+    const newTriangles = this.calculateTriangleCentroids(newIndices, newPositions);
+
+    oldTriangles.forEach((oldTriangle, index) => {
+      const newTriangle = newTriangles[index];
+      const distance = BABYLON.Vector3.Distance(oldTriangle, newTriangle);
+      if (distance > this.distanceThreshold) {
+        console.warn(`Triangle ${index} moved ${distance} units`);
+      }
+    });
+  }
+
+  calculateTriangleCentroids(indices, positions) {
+    const centroids = [];
+    for (let i = 0; i < indices.length; i += 3) {
+      const v1 = new BABYLON.Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+      const v2 = new BABYLON.Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+      const v3 = new BABYLON.Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+      const centroid = v1.add(v2).add(v3).scale(1 / 3);
+      centroids.push(centroid);
+    }
+    return centroids;
   }
 }
 
