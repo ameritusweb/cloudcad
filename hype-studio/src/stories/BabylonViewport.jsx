@@ -125,10 +125,11 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
           const newMesh = createShape(sceneRef.current, id, shapeData);
           if (newMesh) {
 
+            // Extract positions, indices, and normals from the mesh
             const positions = newMesh.getVerticesData(VertexBuffer.PositionKind);
             const indices = newMesh.getIndices();
-
             const normals = newMesh.getVerticesData(VertexBuffer.NormalKind);
+            const adjacencyList = shapeData.adjacencyList;
 
             const linesDataMap = new Map();
             const normalGroups = {};
@@ -136,59 +137,145 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
 
             // Function to group normals by axis components within a threshold
             function groupNormals(normal) {
-                const key = `${Math.round(normal.x / threshold) * threshold},${Math.round(normal.y / threshold) * threshold},${Math.round(normal.z / threshold) * threshold}`;
-                if (!normalGroups[key]) {
-                    normalGroups[key] = [];
-                }
-                normalGroups[key].push(normal);
-                return key;
+              const key = `${Math.round(normal.x / threshold) * threshold},${Math.round(normal.y / threshold) * threshold},${Math.round(normal.z / threshold) * threshold}`;
+              if (!normalGroups[key]) {
+                  normalGroups[key] = [];
+              }
+              normalGroups[key].push(normal);
+              return key;
+          }
+
+          // Loop through indices and group lines by their normals
+          for (let i = 0; i < indices.length; i += 3) {
+              const v1 = new Vector3(
+                  positions[indices[i] * 3], 
+                  positions[indices[i] * 3 + 1], 
+                  positions[indices[i] * 3 + 2]
+              );
+              const v2 = new Vector3(
+                  positions[indices[i + 1] * 3], 
+                  positions[indices[i + 1] * 3 + 1], 
+                  positions[indices[i + 1] * 3 + 2]
+              );
+              const v3 = new Vector3(
+                  positions[indices[i + 2] * 3], 
+                  positions[indices[i + 2] * 3 + 1], 
+                  positions[indices[i + 2] * 3 + 2]
+              );
+
+              const n1 = new Vector3(
+                  normals[indices[i] * 3], 
+                  normals[indices[i] * 3 + 1], 
+                  normals[indices[i] * 3 + 2]
+              );
+              const n2 = new Vector3(
+                  normals[indices[i + 1] * 3], 
+                  normals[indices[i + 1] * 3 + 1], 
+                  normals[indices[i + 1] * 3 + 2]
+              );
+              const n3 = new Vector3(
+                  normals[indices[i + 2] * 3], 
+                  normals[indices[i + 2] * 3 + 1], 
+                  normals[indices[i + 2] * 3 + 2]
+              );
+
+              const key1 = groupNormals(n1);
+              const key2 = groupNormals(n2);
+              const key3 = groupNormals(n3);
+
+              if (!linesDataMap.has(key1)) linesDataMap.set(key1, []);
+              if (!linesDataMap.has(key2)) linesDataMap.set(key2, []);
+              if (!linesDataMap.has(key3)) linesDataMap.set(key3, []);
+
+              linesDataMap.get(key1).push([v1, v2], [v2, v3], [v3, v1]);
+          }
+
+            // Calculate average normals for each group
+            const averageNormals = {};
+            for (const [key, normals] of Object.entries(normalGroups)) {
+                const sum = normals.reduce((acc, normal) => acc.addInPlace(normal), new Vector3(0, 0, 0));
+                const averageNormal = sum.scale(1 / normals.length);
+                averageNormals[key] = averageNormal;
             }
 
-            // Loop through indices and group lines by their normals
-            for (let i = 0; i < indices.length; i += 3) {
-                const v1 = new Vector3(
-                    positions[indices[i] * 3], 
-                    positions[indices[i] * 3 + 1], 
-                    positions[indices[i] * 3 + 2]
-                );
-                const v2 = new Vector3(
-                    positions[indices[i + 1] * 3], 
-                    positions[indices[i + 1] * 3 + 1], 
-                    positions[indices[i + 1] * 3 + 2]
-                );
-                const v3 = new Vector3(
-                    positions[indices[i + 2] * 3], 
-                    positions[indices[i + 2] * 3 + 1], 
-                    positions[indices[i + 2] * 3 + 2]
-                );
+            // Find ordered pairs of group keys
+            const groupPairs = [];
+            const groupKeys = Object.keys(normalGroups);
+            for (let i = 0; i < groupKeys.length; i++) {
+                for (let j = i + 1; j < groupKeys.length; j++) {
+                    groupPairs.push([groupKeys[i], groupKeys[j]]);
+                }
+            }
 
-                const n1 = new Vector3(
-                    normals[indices[i] * 3], 
-                    normals[indices[i] * 3 + 1], 
-                    normals[indices[i] * 3 + 2]
-                );
-                const n2 = new Vector3(
-                    normals[indices[i + 1] * 3], 
-                    normals[indices[i + 1] * 3 + 1], 
-                    normals[indices[i + 1] * 3 + 2]
-                );
-                const n3 = new Vector3(
-                    normals[indices[i + 2] * 3], 
-                    normals[indices[i + 2] * 3 + 1], 
-                    normals[indices[i + 2] * 3 + 2]
-                );
+            // Create a map from normal vector to its index in the 'normals' array
+            const normalToIndexMap = new Map();
+            for (let i = 0; i < normals.length; i += 3) {
+                const normal = new Vector3(normals[i], normals[i + 1], normals[i + 2]);
+                normalToIndexMap.set(normal.toString(), i / 3); // Use string representation of Vector3 as key
+            }
 
-                const key1 = groupNormals(n1);
-                const key2 = groupNormals(n2);
-                const key3 = groupNormals(n3);
+            // Check for shared vertices and compare average normals
+            const groupsToMerge = new Map();
+            const positionThresholdSquared = threshold * 20; // Square the threshold for distance comparison
+            const areNormalsSimilar = (normal1, normal2) => Vector3.DistanceSquared(normal1, normal2) < threshold * threshold;
 
-                if (!linesDataMap.has(key1)) linesDataMap.set(key1, []);
-                if (!linesDataMap.has(key2)) linesDataMap.set(key2, []);
-                if (!linesDataMap.has(key3)) linesDataMap.set(key3, []);
+            for (const [groupKey1, groupKey2] of groupPairs) {
+                const verticesGroup1 = normalGroups[groupKey1].map(normal => {
+                    const vertexIndex = normalToIndexMap.get(normal.toString());
+                    return new Vector3(positions[vertexIndex * 3], positions[vertexIndex * 3 + 1], positions[vertexIndex * 3 + 2]);
+                });
 
-                linesDataMap.get(key1).push([v1, v2], [v2, v3], [v3, v1]);
-                linesDataMap.get(key2).push([v1, v2], [v2, v3], [v3, v1]);
-                linesDataMap.get(key3).push([v1, v2], [v2, v3], [v3, v1]);
+                for (const normal of normalGroups[groupKey2]) {
+                    const vertexIndex = normalToIndexMap.get(normal.toString());
+                    const v2 = new Vector3(
+                        positions[vertexIndex * 3],
+                        positions[vertexIndex * 3 + 1],
+                        positions[vertexIndex * 3 + 2]
+                    );
+
+                    for (const v1 of verticesGroup1) {
+                        if (Vector3.DistanceSquared(v1, v2) < positionThresholdSquared) {
+                            // Vertices are close enough, groups share a vertex
+                            if (areNormalsSimilar(averageNormals[groupKey1], averageNormals[groupKey2])) {
+                                if (!groupsToMerge.has(groupKey1)) groupsToMerge.set(groupKey1, new Set());
+                                groupsToMerge.get(groupKey1).add(groupKey2);
+                            }
+                            break; // No need to check other vertices in group1 if one is already shared
+                        }
+                    }
+                }
+            }
+
+            // Merge groups
+            const mergedGroups = new Map();
+            const visitedGroups = new Set();
+
+            for (const [groupKey, mergeSet] of groupsToMerge.entries()) {
+                if (!visitedGroups.has(groupKey)) {
+                    const mergedSet = new Set();
+                    const queue = [groupKey];
+
+                    while (queue.length > 0) {
+                        const currentKey = queue.shift();
+                        if (visitedGroups.has(currentKey)) continue;
+
+                        visitedGroups.add(currentKey);
+                        mergedSet.add(currentKey);
+
+                        if (groupsToMerge.has(currentKey)) {
+                            for (const adjacentKey of groupsToMerge.get(currentKey)) {
+                                if (!visitedGroups.has(adjacentKey)) {
+                                    queue.push(adjacentKey);
+                                }
+                            }
+                        }
+                    }
+
+                    // Add merged set to mergedGroups and remove all keys in mergedSet from mergedGroups
+                    mergedSet.delete(groupKey);
+                    mergedGroups.set(groupKey, mergedSet);
+                    // mergedSet.forEach(key => mergedGroups.delete(key));
+                }
             }
 
             // Function to generate random colors
@@ -196,12 +283,39 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
                 return new Color3(Math.random(), Math.random(), Math.random());
             }
 
-            // Create separate line systems for each normal group
-            linesDataMap.forEach((linesData, key, index) => {
-                const lineSystem = MeshBuilder.CreateLineSystem(`lines_${index}`, { lines: linesData }, sceneRef.current);
-                lineSystem.color = getRandomColor();
-                lineSystem.renderingGroupId = 1;
-            });
+            // Create separate line systems for each merged group
+            let index = 0;
+            for (const [groupKey, groupSet] of mergedGroups.entries()) {
+                const linesData = [];
+
+                if (linesDataMap.has(groupKey)) {
+                  linesData.push(...linesDataMap.get(groupKey));
+                }
+
+                // Gather lines for the current group and merged groups
+                for (const key of groupSet) {
+                    if (linesDataMap.has(key)) {
+                        linesData.push(...linesDataMap.get(key));
+                    }
+                }
+
+                // Create line system for the merged group
+                if (linesData.length > 0) {
+                    const lineSystem = MeshBuilder.CreateLineSystem(`lines_${index}`, { lines: linesData }, sceneRef.current);
+                    lineSystem.color = getRandomColor();
+                    lineSystem.renderingGroupId = 1;
+                    index++;
+                }
+            }
+
+            // // Create separate line systems for each normal group
+            // let index = 0;
+            // linesDataMap.forEach((linesData, key) => {
+            //     const lineSystem = MeshBuilder.CreateLineSystem(`lines_${index}`, { lines: linesData }, sceneRef.current);
+            //     lineSystem.color = getRandomColor();
+            //     lineSystem.renderingGroupId = 1;
+            //     index++;
+            // });
 
             // const linesData = [];
             // for (let i = 0; i < indices.length; i += 3) {
