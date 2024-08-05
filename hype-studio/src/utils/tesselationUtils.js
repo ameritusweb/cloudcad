@@ -9,7 +9,7 @@ class PreciseTessellation {
     this.maxIterations = options.maxIterations || 10; // Prevent infinite loops
     this.maxEdgeLength = options.maxEdgeLength || 1.0; // Max length of an edge
     this.angleTolerance = options.angleTolerance || Math.PI / 6; // Angle tolerance for curvature
-    this.distanceThreshold = options.distanceThreshold || 0.1; // Threshold for acceptable distance change
+    this.distanceThreshold = options.distanceThreshold || 0.25; // Threshold for acceptable distance change
   }
 
   tessellate() {
@@ -148,29 +148,34 @@ class PreciseTessellation {
       const v = new BABYLON.Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
       const n = vertexFaces.get(i).length;
 
-      let F = new BABYLON.Vector3(0, 0, 0);
+      let avgVector = new BABYLON.Vector3(0, 0, 0);
+
       vertexFaces.get(i).forEach(fIndex => {
-        F = F.add(facePoints[fIndex].position);
+        avgVector = avgVector.add(BABYLON.Vector3.Normalize(facePoints[fIndex].position.subtract(v)));
       });
-      F = F.scale(1 / n);
 
-      let R = new BABYLON.Vector3(0, 0, 0);
       vertexEdges.get(i).forEach(eKey => {
-        R = R.add(edgePoints.get(eKey).position);
+        avgVector = avgVector.add(BABYLON.Vector3.Normalize(edgePoints.get(eKey).position.subtract(v)));
       });
-      R = R.scale(1 / (vertexEdges.get(i).length / 2)); // Each edge is counted twice
 
-      const updatedV = F.scale(1 / n).add(R.scale(2 / n)).add(v.scale((n - 3) / n));
+      avgVector = avgVector.scale(1 / (vertexFaces.get(i).length + vertexEdges.get(i).length / 2)).normalize();
+
+      // Scaling factor (adjust as needed)
+      const moveDistance = 0.2; 
+
+      const updatedV = v.add(avgVector.scale(moveDistance));
       updatedVertices.push(updatedV);
     }
+
     console.log("Updated Vertices:", updatedVertices);
     return updatedVertices;
-  }
+}
+
 
   validateNewPositions(oldPositions, newPositions) {
-    oldPositions.forEach((oldPos, index) => {
+    newPositions.forEach((newPos, index) => {
       const oldVector = new BABYLON.Vector3(oldPositions[index * 3], oldPositions[index * 3 + 1], oldPositions[index * 3 + 2]);
-      const newVector = newPositions[index];
+      const newVector = newPos;
       const distance = BABYLON.Vector3.Distance(oldVector, newVector);
       if (distance > this.distanceThreshold) {
         console.warn(`Vertex ${index} moved ${distance} units, which exceeds the threshold.`);
