@@ -6,7 +6,7 @@ class PreciseTessellation {
     this.triangleDensityTarget = triangleDensityTarget;
     this.estimatedTriangles = estimatedTriangles;
     this.tolerance = options.tolerance || 0.05; // 5% tolerance
-    this.maxIterations = options.maxIterations || 10; // Prevent infinite loops
+    this.maxIterations = options.maxIterations || 1; // Prevent infinite loops
     this.maxEdgeLength = options.maxEdgeLength || 1.0; // Max length of an edge
     this.angleTolerance = options.angleTolerance || Math.PI / 6; // Angle tolerance for curvature
     this.distanceThreshold = options.distanceThreshold || 0.25; // Threshold for acceptable distance change
@@ -196,49 +196,97 @@ class PreciseTessellation {
     });
   }
 
+  getFaceKey(v1, v2, v3) {
+    // Sort vertex indices to create a unique key for the face
+    const sortedIndices = [v1, v2, v3].sort((a, b) => a - b);
+    return `f${sortedIndices.join('-')}`; // Example: f1-3-5
+}
+
   createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices, newUVs) {
     const vertexMap = new Map();
 
-    // Add updated original vertices
+    // Add updated original vertices (no duplication)
     updatedVertices.forEach((v, i) => {
-      vertexMap.set(i, newPositions.length / 3);
-      newPositions.push(v.x, v.y, v.z);
+        vertexMap.set(i, i); 
+        newPositions.push(v.x, v.y, v.z);
     });
 
-    // Add face points
-    facePoints.forEach((f, i) => {
-      vertexMap.set(`f${i}`, newPositions.length / 3);
-      newPositions.push(f.position.x, f.position.y, f.position.z);
-      newUVs.push(f.uv.x, f.uv.y);
-    });
+    // // Add face points
+    // facePoints.forEach((f, i) => {
+    //     vertexMap.set(`f${i}`, newPositions.length / 3);
+    //     newPositions.push(f.position.x, f.position.y, f.position.z);
+    //     newUVs.push(f.uv.x, f.uv.y);
+    // });
+
+    // Add face points (using face keys)
+    indices.forEach((_, i) => { 
+      const v1 = indices[i * 3];
+      const v2 = indices[i * 3 + 1];
+      const v3 = indices[i * 3 + 2];
+      const faceKey = this.getFaceKey(v1, v2, v3); 
+      vertexMap.set(faceKey, newPositions.length / 3); 
+      if (facePoints[i]) {
+        newPositions.push(facePoints[i].position.x, facePoints[i].position.y, facePoints[i].position.z);
+        newUVs.push(facePoints[i].uv.x, facePoints[i].uv.y);
+      } else {
+        console.warn('aa');
+      }
+  });
 
     // Add edge points
     edgePoints.forEach((e, key) => {
-      vertexMap.set(key, newPositions.length / 3);
-      newPositions.push(e.position.x, e.position.y, e.position.z);
-      newUVs.push(e.uv.x, e.uv.y);
+        vertexMap.set(key, newPositions.length / 3);
+        newPositions.push(e.position.x, e.position.y, e.position.z);
+        newUVs.push(e.uv.x, e.uv.y);
     });
 
-    // Create new faces
-    for (let i = 0; i < indices.length; i += 3) {
+     // Create new faces (using getFaceKey)
+     for (let i = 0; i < indices.length; i += 3) {
       const v1 = indices[i];
       const v2 = indices[i + 1];
       const v3 = indices[i + 2];
-      const f = `f${Math.floor(i / 3)}`;
+      const f = this.getFaceKey(v1, v2, v3); // Get face key using the new function
 
       const e1 = this.getEdgeKey(v1, v2);
       const e2 = this.getEdgeKey(v2, v3);
       const e3 = this.getEdgeKey(v3, v1);
 
+      // Fractal subdivision pattern (example)
       newIndices.push(
-        vertexMap.get(v1), vertexMap.get(e1), vertexMap.get(f),
-        vertexMap.get(e1), vertexMap.get(v2), vertexMap.get(f),
-        vertexMap.get(v2), vertexMap.get(e2), vertexMap.get(f),
-        vertexMap.get(e2), vertexMap.get(v3), vertexMap.get(f),
-        vertexMap.get(v3), vertexMap.get(e3), vertexMap.get(f),
-        vertexMap.get(e3), vertexMap.get(v1), vertexMap.get(f)
+          vertexMap.get(v1), vertexMap.get(f), vertexMap.get(v2),
+          vertexMap.get(v2), vertexMap.get(f), vertexMap.get(v3),
+          vertexMap.get(v3), vertexMap.get(f), vertexMap.get(v1)
       );
-    }
+  }
+
+    // // Create new faces (fractal subdivision)
+    // for (let i = 0; i < indices.length; i += 3) {
+    //     const v1 = indices[i];
+    //     const v2 = indices[i + 1];
+    //     const v3 = indices[i + 2];
+    //     const f = `f${Math.floor(i / 3)}`;
+
+    //     const e1 = this.getEdgeKey(v1, v2);
+    //     const e2 = this.getEdgeKey(v2, v3);
+    //     const e3 = this.getEdgeKey(v3, v1);
+
+    //     // Fractal subdivision pattern
+    //     newIndices.push(
+    //         // vertexMap.get(v1), vertexMap.get(e1), vertexMap.get(e3), // Top triangle
+    //         // vertexMap.get(v2), vertexMap.get(e2), vertexMap.get(e1), // Right triangle
+    //         // vertexMap.get(v3), vertexMap.get(e3), vertexMap.get(e2), // Bottom triangle
+    //         // vertexMap.get(e1), vertexMap.get(e2), vertexMap.get(e3),  // Inner triangle
+    //         vertexMap.get(v1), vertexMap.get(e1), vertexMap.get(v3),
+    //         vertexMap.get(v1), vertexMap.get(e2), vertexMap.get(v3),
+    //         vertexMap.get(v1), vertexMap.get(e3), vertexMap.get(v3),
+    //         vertexMap.get(v2), vertexMap.get(e1), vertexMap.get(v3),
+    //         vertexMap.get(v2), vertexMap.get(e2), vertexMap.get(v3),
+    //         vertexMap.get(v2), vertexMap.get(e3), vertexMap.get(v3),
+    //         vertexMap.get(v2), vertexMap.get(e1), vertexMap.get(v1),
+    //         vertexMap.get(v2), vertexMap.get(e2), vertexMap.get(v1),
+    //         vertexMap.get(v2), vertexMap.get(e3), vertexMap.get(v1),
+    //     );
+    // }
     console.log("New Positions:", newPositions);
     console.log("New Indices:", newIndices);
   }
