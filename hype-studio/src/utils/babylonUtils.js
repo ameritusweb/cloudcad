@@ -22,20 +22,21 @@ export const createShape = (scene, id, shapeData) => {
   } else if (shapeData.geometry) {
     // Handle custom shapes with provided geometry
     mesh = new Mesh(id, scene);
-    const vertexData = new VertexData();
-    
-    vertexData.positions = shapeData.geometry.positions;
-    vertexData.indices = shapeData.geometry.indices;
-    vertexData.normals = shapeData.geometry.normals;
-    if (shapeData.geometry.uvs) {
-      vertexData.uvs = shapeData.geometry.uvs;
-    }
-
-    vertexData.applyToMesh(mesh);
   } else {
     console.warn(`Unable to create shape for ${id}: No recognized type or geometry provided`);
     return null;
   }
+
+  const vertexData = new VertexData();
+    
+  vertexData.positions = shapeData.geometry.positions;
+  vertexData.indices = shapeData.geometry.indices;
+  vertexData.normals = shapeData.geometry.normals;
+  if (shapeData.geometry.uvs) {
+    vertexData.uvs = shapeData.geometry.uvs;
+  }
+
+  vertexData.applyToMesh(mesh);
 
   const material = new StandardMaterial(`${id}_material`, scene);
   material.diffuseColor = new Color3(0.5, 0.5, 0.5);

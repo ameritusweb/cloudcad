@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, memo } from 'react';
-import { HighlightLayer, Vector3 } from '@babylonjs/core';
+import { HighlightLayer, Vector3, VertexBuffer, MeshBuilder, Color3, ShaderMaterial } from '@babylonjs/core';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { createControlCube, getViewFromNormal } from '../utils/sceneUtils';
@@ -124,6 +124,23 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
           // New shape
           const newMesh = createShape(sceneRef.current, id, shapeData);
           if (newMesh) {
+
+            const positions = newMesh.getVerticesData(VertexBuffer.PositionKind);
+            const indices = newMesh.getIndices();
+
+            const linesData = [];
+            for (let i = 0; i < indices.length; i += 3) {
+                const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+                const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+                const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+
+                linesData.push([v1, v2], [v2, v3], [v3, v1]); // Connect all three vertices of the triangle
+            }
+
+            const outline = MeshBuilder.CreateLineSystem("lines", { lines: linesData }, sceneRef.current);
+            outline.color = new Color3(1, 0, 0);
+            outline.renderingGroupId = 1;
+
             shapesRef.current[id] = newMesh;
           }
         } else {

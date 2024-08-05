@@ -1,10 +1,10 @@
 import { 
-    Vector3, MeshBuilder, Color4, StandardMaterial, Quaternion, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
+    Vector3, MeshBuilder, Color4, StandardMaterial, ShaderMaterial, Quaternion, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
   } from '@babylonjs/core';
 import earcut from 'earcut';
 
 const EDGE_THRESHOLD = 0.01;
-const FACE_NORMAL_THRESHOLD = 0.9;
+const FACE_NORMAL_THRESHOLD = 0.2;
 
 // Constants
 const FLAT_ANGLE_THRESHOLD = 0.1; // (Radians) Controls flatness sensitivity
@@ -225,16 +225,19 @@ export function precomputeAdjacencyList(mesh) {
     const indices = mesh.getIndices();
     const adjacencyList = {};
 
+    // Pre-initialize empty arrays for all vertices
+    for (let i = 0; i < mesh.getTotalVertices(); i++) {
+        adjacencyList[i] = [];
+    }
+
     for (let i = 0; i < indices.length; i += 3) {
-        const triangleVertices = indices.slice(i, i + 3);
-        triangleVertices.forEach(vertexIndex => {
-            adjacencyList[vertexIndex] = adjacencyList[vertexIndex] || [];
-            triangleVertices.forEach(otherVertexIndex => {
-                if (otherVertexIndex !== vertexIndex) {
-                    adjacencyList[vertexIndex].push(i / 3); // Add triangle index
-                }
-            });
-        });
+        const triangleIndex = i / 3;
+        const [v1Index, v2Index, v3Index] = indices.slice(i, i + 3); // Get vertex indices directly
+
+        // Add triangle index to each vertex's adjacency list ONLY ONCE
+        adjacencyList[v1Index].push(triangleIndex); 
+        adjacencyList[v2Index].push(triangleIndex);
+        adjacencyList[v3Index].push(triangleIndex);
     }
 
     return adjacencyList;
@@ -351,6 +354,85 @@ function isFlat(mesh, triangleIndex1, triangleIndex2) {
     const angle = Vector3.GetAngleBetweenVectors(normal1, normal2, normal1);
 
     return Math.abs(angle) < FLAT_ANGLE_THRESHOLD;
+}
+
+// Precompute vertex classifications based on their normal vectors
+export function precomputeVertexClassifications(mesh, adjacencyList) {
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = mesh.getIndices();
+    const normals = mesh.getVerticesData(VertexBuffer.NormalKind);   
+
+    const vertexClassifications = {};
+
+    for (let i = 0; i < indices.length; i += 3) {
+        const triangleIndex = i / 3;
+        const v1Index = indices[i];
+        const v2Index = indices[i + 1];
+        const v3Index = indices[i + 2];
+
+        const normal1 = Vector3.FromArray(normals, v1Index * 3);
+        const normal2 = Vector3.FromArray(normals, v2Index * 3);
+        const normal3 = Vector3.FromArray(normals, v3Index * 3);
+
+        // Classify each vertex based on adjacent triangles
+        for (const vertexIndex of [v1Index, v2Index, v3Index]) {
+            vertexClassifications[vertexIndex] = vertexClassifications[vertexIndex] || { flat: 0, curved: 0 };
+
+            for (const adjTriangleIndex of adjacencyList[vertexIndex]) {
+                if (adjTriangleIndex !== triangleIndex) {
+                    const adjNormal = Vector3.FromArray(normals, indices[adjTriangleIndex * 3] * 3); // Get normal of the first vertex of the adjacent triangle
+                    const isAdjCurved = !normal1.equalsWithEpsilon(adjNormal, FACE_NORMAL_THRESHOLD);
+
+                    if (isAdjCurved) {
+                        vertexClassifications[vertexIndex].curved++;
+                    } else {
+                        vertexClassifications[vertexIndex].flat++;
+                    }
+                }
+            }
+        }
+    }
+
+    // Final classification based on the counts
+    for (const vertexIndex in vertexClassifications) {
+        const { flat, curved } = vertexClassifications[vertexIndex];
+        vertexClassifications[vertexIndex] = {
+            flat: flat > 0,
+            curved: curved > 0,
+            both: flat > 0 && curved > 0
+        };
+    }
+
+    return vertexClassifications;
+}
+
+// Function to find edges based on vertex classifications
+export function findEdges(mesh, vertexClassifications) {
+    const adjacencyList = precomputeAdjacencyList(mesh);
+    const edges = new Set();
+
+    for (const vertexIndex in vertexClassifications) {
+        const classification = vertexClassifications[vertexIndex];
+
+        // Check if vertex is part of an edge (either only on curved surface or on the boundary of flat and curved surfaces)
+        if (classification.curved && !classification.both) { 
+            // Check neighboring triangles for edges
+            for (const neighborTriangleIndex of adjacencyList[vertexIndex]) {
+                const neighborVertices = mesh.getIndices().slice(neighborTriangleIndex * 3, neighborTriangleIndex * 3 + 3);
+                for (const neighborVertexIndex of neighborVertices) {
+                    if (neighborVertexIndex !== vertexIndex) {
+                        const neighborClassification = vertexClassifications[neighborVertexIndex];
+                        // If neighbor is part of a flat face, this is an edge
+                        if (neighborClassification.flat) { 
+                            edges.add(getEdgeKey(vertexIndex, neighborVertexIndex));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return Array.from(edges); // Convert the Set to an array for convenience
 }
 
 /**
