@@ -160,8 +160,20 @@ class PreciseTessellation {
 
       avgVector = avgVector.scale(1 / (vertexFaces.get(i).length + vertexEdges.get(i).length / 2)).normalize();
 
-      // Scaling factor (adjust as needed)
-      const moveDistance = 0.2; 
+      // Dynamic scaling based on the average distance of face and edge points from the original vertex
+      let avgDistance = 0;
+
+      vertexFaces.get(i).forEach(fIndex => {
+        avgDistance += facePoints[fIndex].position.subtract(v).length();
+      });
+
+      vertexEdges.get(i).forEach(eKey => {
+        avgDistance += edgePoints.get(eKey).position.subtract(v).length();
+      });
+
+      avgDistance /= (vertexFaces.get(i).length + vertexEdges.get(i).length / 2);
+
+      const moveDistance = 0 * avgDistance;  // Adjust scaling factor
 
       const updatedV = v.add(avgVector.scale(moveDistance));
       updatedVertices.push(updatedV);
@@ -170,6 +182,7 @@ class PreciseTessellation {
     console.log("Updated Vertices:", updatedVertices);
     return updatedVertices;
 }
+
 
 
   validateNewPositions(oldPositions, newPositions) {
