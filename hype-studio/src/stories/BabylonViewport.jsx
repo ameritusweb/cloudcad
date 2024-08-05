@@ -358,6 +358,19 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
                 }
             }
 
+            // Handle standalone normal groups (not part of merged groups)
+            for (const groupKey of linesDataMap.keys()) {
+              if (!mergedGroups.has(groupKey) && ![...mergedGroups.values()].some(set => set.has(groupKey))) {
+                const linesData = linesDataMap.get(groupKey);
+                if (linesData.length > 0) {
+                  const lineSystem = MeshBuilder.CreateLineSystem(`lines_${index}`, { lines: linesData }, sceneRef.current);
+                  lineSystem.color = getRandomColor();
+                  lineSystem.renderingGroupId = 1;
+                  index++;
+                }
+              }
+            }
+
             shapesRef.current[id] = newMesh;
           }
         } else {
