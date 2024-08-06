@@ -47,7 +47,97 @@ EOF`
   }
 ];
 
+function mockStaticAnalysis(material, geometry, loads, constraints) {
+  // Simplified mock calculations
+  const totalForce = loads.reduce((sum, load) => sum + load.magnitude, 0);
+  const area = geometry.width * geometry.height;
+  const stress = totalForce / area;
+  const strain = stress / material.youngsModulus;
+  const displacement = strain * geometry.length;
+
+  return {
+    maxStress: stress,
+    maxDisplacement: displacement,
+    stressDistribution: generateMockDistribution(stress, geometry.nodes),
+    displacementDistribution: generateMockDistribution(displacement, geometry.nodes),
+    factorOfSafety: material.yieldStrength / stress,
+  };
+}
+
+function mockFatigueAnalysis(material, geometry, loads, constraints) {
+  const staticResults = mockStaticAnalysis(material, geometry, loads, constraints);
+  const cyclestoFailure = 1e6 * Math.pow((material.fatigueStrength / staticResults.maxStress), material.fatigueExponent);
+
+  return {
+    ...staticResults,
+    cyclestoFailure,
+    damagePerCycle: 1 / cyclestoFailure,
+    fatigueLifeDistribution: generateMockDistribution(cyclestoFailure, geometry.nodes),
+  };
+}
+
+function mockThermalAnalysis(material, geometry, loads, constraints) {
+  const maxTemp = loads.reduce((max, load) => Math.max(max, load.temperature), 0);
+  const minTemp = constraints.reduce((min, constraint) => Math.min(min, constraint.temperature), maxTemp);
+  const tempDiff = maxTemp - minTemp;
+  const thermalStress = material.thermalExpansionCoeff * material.youngsModulus * tempDiff;
+
+  return {
+    maxTemperature: maxTemp,
+    minTemperature: minTemp,
+    temperatureDistribution: generateMockDistribution(maxTemp, geometry.nodes),
+    thermalStress,
+    thermalStressDistribution: generateMockDistribution(thermalStress, geometry.nodes),
+    thermalDisplacement: material.thermalExpansionCoeff * tempDiff * geometry.length,
+  };
+}
+
+function mockDynamicAnalysis(material, geometry, loads, constraints) {
+  const staticResults = mockStaticAnalysis(material, geometry, loads, constraints);
+  const naturalFrequency = Math.sqrt(material.youngsModulus / material.density) / (2 * geometry.length);
+  
+  const timeSteps = Array.from({length: 50}, (_, i) => i * 0.1);
+  const dynamicResults = timeSteps.map(t => ({
+    time: t,
+    displacement: staticResults.maxDisplacement * Math.sin(2 * Math.PI * naturalFrequency * t),
+    velocity: staticResults.maxDisplacement * 2 * Math.PI * naturalFrequency * Math.cos(2 * Math.PI * naturalFrequency * t),
+    acceleration: -staticResults.maxDisplacement * Math.pow(2 * Math.PI * naturalFrequency, 2) * Math.sin(2 * Math.PI * naturalFrequency * t),
+  }));
+
+  return {
+    staticResults,
+    naturalFrequency,
+    dynamicResults,
+  };
+}
+
+function generateMockDistribution(maxValue, nodes) {
+  return nodes.map((node, index) => ({
+    nodeId: node.id,
+    value: maxValue * (1 - index / nodes.length) * (0.8 + 0.4 * Math.random())
+  }));
+}
+
 export const handlers = [
+  http.post('/api/structural-analysis', async ({ request }) => {
+    // Read the intercepted request body as JSON.
+    const analysisRequest = await request.json()
+ 
+    const { analysisType, material, geometry, loads, constraints } = analysisRequest;
+
+    switch (analysisType) {
+      default:
+        return HttpResponse.json({ error: 'Invalid analysis type' }, { status: 400 });
+      case 'static':
+        return HttpResponse.json(mockStaticAnalysis(material, geometry, loads, constraints), { status: 201 });
+      case 'fatigue':
+        return HttpResponse.json(mockFatigueAnalysis(material, geometry, loads, constraints), { status: 201 });
+      case 'thermal':
+        return HttpResponse.json(mockThermalAnalysis(material, geometry, loads, constraints), { status: 201 });
+      case 'dynamic':
+        return HttpResponse.json(mockDynamicAnalysis(material, geometry, loads, constraints), { status: 201 });
+    }
+  }),
   // Handler for uploading a file
   http.post('/api/upload-file', async ({ request }) => {
     const file = await request.json();
