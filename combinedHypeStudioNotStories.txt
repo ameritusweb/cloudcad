@@ -1,0 +1,1326 @@
+/** @type { import('@storybook/react-webpack5').StorybookConfig } */
+const config = {
+  stories: ["../src/**/*.mdx", "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
+  addons: [
+    "@storybook/preset-create-react-app",
+    "@storybook/addon-onboarding",
+    "@storybook/addon-links",
+    "@storybook/addon-essentials",
+    "@chromatic-com/storybook",
+    "@storybook/addon-interactions",
+    'msw-storybook-addon',
+  ],
+  framework: {
+    name: "@storybook/react-webpack5",
+    options: {},
+  },
+  staticDirs: ["..\\public"],
+};
+export default config;
+
+/* ================================================================================ */
+/** @type { import('@storybook/react').Preview } */
+import { initialize, mswLoader } from 'msw-storybook-addon';
+import { handlers } from '../src/mocks/handlers';
+
+// Initialize MSW
+initialize();
+
+export const loaders = [
+  mswLoader,
+];
+
+export const parameters = {
+  actions: { argTypesRegex: "^on[A-Z].*" },
+  controls: {
+    matchers: {
+      color: /(background|color)$/i,
+      date: /Date$/,
+    },
+  },
+  msw: {
+    handlers: handlers,
+  },
+};
+/* ================================================================================ */
+// config-overrides.js
+const { override, addWebpackModuleRule } = require('customize-cra');
+
+module.exports = override(
+  addWebpackModuleRule({
+    test: /\.svg$/,
+    use: ['@svgr/webpack'],
+  })
+);
+/* ================================================================================ */
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+
+/* ================================================================================ */
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="%PUBLIC_URL%/favicon.ico"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#000000"><meta name="description" content="Web site created using create-react-app"><link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png"><link rel="manifest" href="%PUBLIC_URL%/manifest.json"><title>React App</title></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div></body></html>
+/* ================================================================================ */
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ================================================================================ */
+import logo from './assets/logo.svg';
+import './App.css';
+import React, { useState } from 'react';
+import { AiOutlineExpand, AiOutlinePlus, AiOutlineImport } from 'react-icons/ai';
+import CenterView from './CenterView';
+import ProjectsPanel from './ProjectsPanel';
+import ImportPanel from './ImportPanel';
+import { HypeStudioProvider } from './contexts/HypeStudioContext';
+
+const App = () => {
+  const [zoom, setZoom] = useState(1);
+  const [expanded, setExpanded] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const handleSliderChange = (e) => {
+    setZoom(e.target.value);
+  };
+
+  const toggleExpand = () => {
+    setExpanded(!expanded);
+  };
+
+  const toggleProjects = () => {
+    setProjectsOpen(!projectsOpen);
+  };
+
+  const toggleImport = () => {
+    setImportOpen(!importOpen);
+    if (projectsOpen) setProjectsOpen(false);
+  };
+
+  return (
+    <HypeStudioProvider>
+      <div className="flex h-screen">
+        {!expanded && (
+          <div className="bg-black w-16 flex flex-col items-center">
+            <button onClick={toggleImport} className="text-gray-200 hover:text-white mt-4 flex flex-col items-center">
+              <AiOutlineImport size={24} />
+              <span className="text-xs mt-1">Import</span>
+            </button>
+          </div>
+        )}
+        {importOpen && !expanded && (
+          <ImportPanel />
+        )}
+        {projectsOpen && !expanded && (
+          <ProjectsPanel />
+        )}
+        <div className="flex flex-col flex-grow">
+          {!expanded && (
+            <div className="bg-white h-8 p-1 pl-4 border-b border-gray-300">
+              <button onClick={toggleProjects} className="font-bold">
+                Projects
+              </button>
+            </div>
+          )}
+          <div className="flex flex-grow overflow-auto items-top p-4 justify-center overflow-hidden" style={{ minWidth: '90%' }}>
+            <CenterView zoom={zoom} />
+          </div>
+          <div className="bg-white h-8 border-t border-gray-300 flex items-center justify-end">
+            <input
+              type="range"
+              min="1"
+              max="3"
+              step="0.1"
+              value={zoom}
+              onChange={handleSliderChange}
+              className="mr-4"
+            />
+            <button onClick={toggleExpand} className="mr-4">
+              <AiOutlineExpand size={24} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </HypeStudioProvider>
+  );
+};
+
+export default App;
+/* ================================================================================ */
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn react/i);
+  expect(linkElement).toBeInTheDocument();
+});
+
+/* ================================================================================ */
+import React from 'react';
+import HypeStudio from './HypeStudio';
+
+const CenterView = ({ zoom }) => {
+  return (
+    <div
+      className="w-[80%] h-[80%] flex p-4"
+      style={{ transform: `scale(${zoom})` }}
+    >
+      <HypeStudio />
+    </div>
+  );
+};
+
+export default CenterView;
+
+/* ================================================================================ */
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import EnhancedZenObservable from '../observables/EnhancedZenObservable';
+import { MeshBuilder, Vector3, VertexBuffer, Mesh, NullEngine, Scene, Engine } from '@babylonjs/core';
+import { calculateSurfaceArea, applyPreciseTessellation } from '../utils/tesselationUtils';
+import { exportStateToJSON, importStateFromJSON } from '../utils/ioUtils';
+import { saveStateToLocalStorage, loadStateFromLocalStorage, clearStateFromLocalStorage } from '../utils/storageUtils';
+import { precomputeAdjacencyList, precomputeVertexClassifications } from '../utils/selectionUtils';
+import { Notification } from '../stories/Notification';
+import { useNotification } from '../hooks/useNotification';
+
+const initialHypeStudioState = {
+  projectName: 'My Project',
+  dimensions: '20mm x 40mm x 20mm',
+  units: 'mm',
+  elements: {
+    sketches: {},
+    extrusions: {},
+    shapes: {}
+    // Add other element types as needed
+  },
+  camera: {
+    position: null,
+    target: null
+  },
+  customProperties: {},
+  selectedElementId: null,
+  selectedElement: null,
+  selectedPart: null,
+  activeView: 'List View',
+  leftPanelContent: [],
+  currentModelView: '',
+  controlMode: 'rotate',
+  customPlanes: [],
+  planeStates: {
+    X: 'hidden',
+    Y: 'hidden',
+    Z: 'hidden'
+  },
+  selectedSketchType: null,
+  autosaveInterval: 30000,
+  stateVersion: '1.0.0',
+};
+
+const HypeStudioContext = createContext(null);
+
+const createHypeStudioModel = () => {
+  const model = new EnhancedZenObservable(initialHypeStudioState);
+
+  model.getStateVersion = function() {
+    return this.getState().stateVersion;
+  };
+
+  model.createSketch = function(sketchData) {
+    const id = this.addElement('sketches', sketchData);
+    return id;
+  };
+
+  model.getSketchById = function(id) {
+    return this.getState(`elements.sketches.${id}`);
+  };
+
+  model.updateSketch = function(id, updates) {
+    this.updateElement('sketches', id, updates);
+  };
+
+  model.getAdjacencyList = function(mesh) {
+    const shape = this.getState(`elements.shapes.${mesh.id}`);
+    return shape.adjacencyList;
+  }
+
+  model.getVertexClassifications = function(mesh) {
+    const shape = this.getState(`elements.shapes.${mesh.id}`);
+    return shape.vertexClassifications;
+  }
+
+  model.setProjectName = function(name) {
+    this.setState(state => ({ ...state, projectName: name }));
+  };
+
+  model.addElement = function(type, element) {
+    const id = `${type}_${Date.now()}`;
+    this.setState(state => {
+      const newElements = { ...state.elements };
+      newElements[type][id] = { ...element, id };
+      return { 
+        ...state, 
+        elements: newElements,
+        selectedElementId: id // Automatically select the new element
+      };
+    });
+    return id;
+  };
+
+  model.updateElement = function(type, id, updates) {
+    this.setState(state => {
+      const updatedElements = { ...state.elements };
+      if (!updatedElements[type][id]) {
+        console.error(`Element not found: ${type} ${id}`);
+        return state;
+      }
+      updatedElements[type][id] = { ...updatedElements[type][id], ...updates };
+      return { ...state, elements: updatedElements };
+    });
+  };
+
+  model.updateShapeComplexity = function(id, complexity) {
+    this.updateElement('shapes', id, { complexity: Math.max(1, Math.min(10, complexity)) });
+  };
+
+  model.updateShapeDimensions = function(id, dimensions) {
+    this.updateElement('shapes', id, { params: dimensions });
+  };
+
+  model.createShape = function(shapeData) {
+    const id = this.addElement('shapes', shapeData);
+    return id;
+  };
+
+  model.createTessellatedShape = function(tempScene, shapeData) {
+    const { type, params, triangleDensityTarget, estimatedTriangles } = shapeData;
+    
+    // Create a basic shape mesh
+    const mesh = type === 'box' 
+      ? MeshBuilder.CreateBox("box", params, tempScene)
+      : MeshBuilder.CreateCylinder("cylinder", params, tempScene);
+  
+    // Apply precise tessellation
+    const tessellatedMesh = applyPreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles);
+
+    // Extract geometry data
+    const positions = tessellatedMesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = tessellatedMesh.getIndices();
+    const normals = tessellatedMesh.getVerticesData(VertexBuffer.NormalKind);
+    const uvs = tessellatedMesh.getVerticesData(VertexBuffer.UVKind);
+
+    // Calculate actual surface area and triangle count
+    const surfaceArea = calculateSurfaceArea(tessellatedMesh);
+    const actualTriangles = indices.length / 3;
+    const actualDensity = actualTriangles / surfaceArea;
+  
+    // Add to the scene and state
+    const id = `shape_${Date.now()}`;
+    
+    const precomputedAdjacency = precomputeAdjacencyList(tessellatedMesh);
+
+    // Create the shape object to be stored in state
+    const shapeObject = {
+      id,
+      type,
+      params,
+      triangleDensityTarget,
+      estimatedTriangles,
+      actualTriangles,
+      actualDensity,
+      surfaceArea,
+      geometry: {
+        positions: Array.from(positions),
+        indices: Array.from(indices),
+        normals: Array.from(normals),
+        uvs: uvs ? Array.from(uvs) : null,
+      },
+      transform: {
+        position: tessellatedMesh.position.asArray(),
+        rotation: tessellatedMesh.rotation.asArray(),
+        scaling: tessellatedMesh.scaling.asArray(),
+      },
+      adjacencyList: precomputedAdjacency,
+      vertexClassifications: precomputeVertexClassifications(tessellatedMesh, precomputedAdjacency)
+    };
+
+    // Add to the application state
+    this.setState(state => ({
+      ...state,
+      elements: {
+        ...state.elements,
+        shapes: {
+          ...state.elements.shapes,
+          [id]: shapeObject
+        }
+      }
+    }));
+    
+    return id;
+  };
+
+  model.reconstructMeshFromState = function(shapeId) {
+    const shapeData = this.state.elements.shapes[shapeId];
+    if (!shapeData) return null;
+  
+    const mesh = new Mesh(shapeData.id, this.scene);
+    
+    const positions = new Float32Array(shapeData.geometry.positions);
+    const indices = new Uint32Array(shapeData.geometry.indices);
+    const normals = new Float32Array(shapeData.geometry.normals);
+    
+    mesh.setVerticesData(VertexBuffer.PositionKind, positions);
+    mesh.setIndices(indices);
+    mesh.setVerticesData(VertexBuffer.NormalKind, normals);
+    
+    if (shapeData.geometry.uvs) {
+      const uvs = new Float32Array(shapeData.geometry.uvs);
+      mesh.setVerticesData(VertexBuffer.UVKind, uvs);
+    }
+  
+    mesh.position = Vector3.FromArray(shapeData.transform.position);
+    mesh.rotation = Vector3.FromArray(shapeData.transform.rotation);
+    mesh.scaling = Vector3.FromArray(shapeData.transform.scaling);
+  
+    return mesh;
+  };
+
+  model.loadStateAndReconstructMeshes = function(savedState) {
+    this.setState(savedState);
+    
+    Object.keys(savedState.elements.shapes).forEach(shapeId => {
+      const mesh = this.reconstructMeshFromState(shapeId);
+      if (mesh) {
+        this.scene.addMesh(mesh);
+      }
+    });
+  };
+
+  model.deleteCustomPlane = function(planeId) {
+    this.setState(state => ({
+      ...state,
+      customPlanes: state.customPlanes.filter(plane => plane.id !== planeId),
+      planeStates: Object.fromEntries(
+        Object.entries(state.planeStates).filter(([key]) => key !== planeId)
+      ),
+    }));
+  };
+
+  model.deleteElement = function(type, id) {
+    this.setState(state => {
+      const newElements = { ...state.elements };
+      if (!newElements[type][id]) {
+        console.error(`Element not found: ${type} ${id}`);
+        return state;
+      }
+      delete newElements[type][id];
+      return { ...state, elements: newElements };
+    });
+  };
+
+  model.selectElement = function(elementId) {
+    this.setState(state => ({ 
+      ...state, 
+      selectedElementId: elementId,
+      selectedSketchType: null // Reset selected sketch type when selecting an element
+    }));
+  };
+
+  model.setCustomProperty = function(elementId, propertyName, value) {
+    if (!this.validateCustomProperty(propertyName, value)) {
+      console.error(`Invalid custom property: ${propertyName}`);
+      return false;
+    }
+
+    this.setState(state => {
+      const newCustomProperties = { ...state.customProperties };
+      if (!newCustomProperties[elementId]) {
+        newCustomProperties[elementId] = {};
+      }
+      newCustomProperties[elementId][propertyName] = value;
+      return { ...state, customProperties: newCustomProperties };
+    });
+    return true;
+  };
+
+  model.getCustomProperty = function(elementId, propertyName) {
+    const customProperties = this.getState(`customProperties.${elementId}`);
+    return customProperties ? customProperties[propertyName] : undefined;
+  };
+
+  model.validateCustomProperty = function(propertyName, value) {
+    if (typeof propertyName !== 'string' || propertyName.trim() === '') {
+      return false;
+    }
+
+    // Add more specific validation rules based on your application's requirements
+    if (propertyName === 'color' && (!Array.isArray(value) || value.length !== 3)) {
+      return false;
+    }
+
+    return true;
+  };
+
+  model.addToHistory = function(action) {
+    const undoAction = action();
+    this.history.push(undoAction);
+    this.undoneActions = []; // Clear redo stack when a new action is performed
+  };
+
+  // Placeholder for update notification
+  model.notifyUpdate = function() {
+    // This will be implemented in the provider
+  };
+
+  model.exportState = () => {
+    exportStateToJSON(model);
+  };
+
+  model.importState = (file) => {
+    importStateFromJSON(file, model);
+  };
+
+  model.saveState = () => {
+    saveStateToLocalStorage(model.getState());
+  };
+
+  model.loadState = () => {
+    const savedState = loadStateFromLocalStorage();
+    if (savedState) {
+      model.setState(() => savedState, false);
+    }
+  };
+
+  model.clearState = () => {
+    clearStateFromLocalStorage();
+  };
+
+  model.setAutosaveInterval = (interval) => {
+    model.setState(state => ({ ...state, autosaveInterval: interval }));
+  };
+
+  let autosaveRef = null;
+
+  model.startAutosave = () => {
+    if (autosaveRef) {
+      clearInterval(autosaveRef);
+    }
+    autosaveRef = setInterval(() => {
+      model.saveState();
+    }, model.getState('autosaveInterval'));
+  };
+
+  model.stopAutosave = () => {
+    if (autosaveRef) {
+      clearInterval(autosaveRef);
+      autosaveRef = null;
+    }
+  };
+
+  // Serialization methods
+  model.toJSON = function() {
+    return JSON.stringify({
+      projectName: this.getState('projectName'),
+      units: this.getState('units'),
+      elements: this.getState('elements'),
+      customProperties: this.getState('customProperties')
+    });
+  };
+
+  model.fromJSON = function(json) {
+    const data = JSON.parse(json);
+    this.setState(() => ({
+      projectName: data.projectName,
+      units: data.units,
+      elements: data.elements,
+      customProperties: data.customProperties
+    }));
+  };
+
+  return model;
+};
+
+export const HypeStudioProvider = ({ children }) => {
+
+  const [model, setModel] = useState(() => {
+    const model = createHypeStudioModel();
+    // model.loadState(); // Load state from localStorage on initialization
+    return model;
+  });
+
+  const { notifications, addNotification } = useNotification();
+
+  useEffect(() => {
+    // Create temp engine and scene for offscreen operations
+    const canvas = document.createElement('canvas'); 
+    const newTempEngine = new Engine(canvas, true);
+    const newTempScene = new Scene(newTempEngine);
+    model.tempEngine = newTempEngine;
+    model.tempScene = newTempScene;
+
+    return () => {
+      newTempEngine.dispose();
+      newTempScene.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    model.setStateProperty = (propertyName, value, recordHistory = true) => {
+      model.setState((prevModel) => ({ ...prevModel, [propertyName]: value }), recordHistory);
+    }
+
+    model.addNotification = (type, message) => {
+      addNotification(type, message);
+    }
+
+    model.notifyUpdate = () => {
+      model.version = (model.version || 0) + 1;
+      setModel(model);
+    };
+  }, [model]);
+
+  useEffect(() => {
+    model.startAutosave(); // Start autosave when component mounts
+
+    return () => {
+      model.stopAutosave(); // Clean up autosave when component unmounts
+    };
+  }, [model]);
+
+  useEffect(() => {
+    model.startAutosave(); // Restart autosave when autosave interval changes
+  }, [model]);
+
+  return (
+    <HypeStudioContext.Provider value={model}>
+      {children}
+      <Notification notifications={notifications} />
+    </HypeStudioContext.Provider>
+  );
+};
+
+export const useHypeStudioModel = () => {
+  const context = useContext(HypeStudioContext);
+  if (context === null) {
+    throw new Error('useHypeStudioModel must be used within a HypeStudioProvider');
+  }
+  return context;
+};
+
+export const useAutosaveControl = () => {
+  const context = useContext(HypeStudioContext);
+  if (context === null) {
+    throw new Error('useAutosaveControl must be used within a HypeStudioProvider');
+  }
+  return { startAutosave: context.startAutosave, stopAutosave: context.stopAutosave };
+};
+
+export const useNotificationControl = () => {
+  const context = useContext(HypeStudioContext);
+  if (context === null) {
+    throw new Error('useNotificationControl must be used within a HypeStudioProvider');
+  }
+  return { addNotification: context.addNotification, removeNotification: context.removeNotification };
+};
+
+export const useHypeStudioEngines = () => {
+  const context = useContext(HypeStudioContext);
+  if (!context) {
+    throw new Error('useHypeStudioEngines must be used within a HypeStudioProvider');
+  }
+  return {
+    getTempEngine: () => context.tempEngine,
+    getTempScene: () => context.tempScene
+  };
+};
+/* ================================================================================ */
+// useHypeStudioState.js
+import { useEffect, useState } from 'react';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+
+export function useHypeStudioState(key, defaultValue) {
+    const model = useHypeStudioModel();
+    const [value, setValue] = useState(() => {
+      const stateValue = model.getState(key);
+      if (stateValue === undefined) {
+        console.warn(`Warning: Using default value for '${key}'. Consider adding it to the initial state.`);
+        return defaultValue;
+      }
+      return stateValue;
+    });
+  
+    useEffect(() => {
+      const subscription = model.subscribe(key, newValue => {
+        if (newValue === undefined) {
+          console.warn(`Warning: Received undefined value for '${key}'. Using default value.`);
+          setValue(defaultValue);
+        } else {
+          setValue(newValue);
+        }
+      });
+      return () => subscription.unsubscribe();
+    }, [model, key, defaultValue]);
+  
+    return value;
+  }
+/* ================================================================================ */
+// src/hooks/useNotification.js
+
+import { useState, useCallback } from 'react';
+
+let idCounter = 0;
+
+export const useNotification = () => {
+  const [notifications, setNotifications] = useState([]);
+
+  const addNotification = useCallback((type, message) => {
+    const id = idCounter++;
+    setNotifications((prevNotifications) => [
+      ...prevNotifications,
+      { id, type, message },
+    ]);
+
+    setTimeout(() => {
+      setNotifications((prevNotifications) =>
+        prevNotifications.filter((notification) => notification.id !== id)
+      );
+    }, 5000);
+  }, []);
+
+  const removeNotification = useCallback((id) => {
+    setNotifications((prevNotifications) =>
+      prevNotifications.filter((notification) => notification.id !== id)
+    );
+  }, []);
+
+  return { notifications, addNotification, removeNotification };
+};
+
+/* ================================================================================ */
+// src/hooks/usePointerEvents.js
+import { useEffect } from 'react';
+
+export const usePointerEvents = (sceneRef, onPointerDown, onPointerMove, onPointerUp) => {
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (scene) {
+      scene.onPointerDown = (evt) => {
+        const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+        onPointerDown(evt, pickResult);
+      };
+      scene.onPointerMove = (evt) => {
+        const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+        onPointerMove(evt, pickResult);
+      };
+      scene.onPointerUp = onPointerUp;
+    }
+    return () => {
+      if (scene) {
+        scene.onPointerDown = null;
+        scene.onPointerMove = null;
+        scene.onPointerUp = null;
+      }
+    };
+  }, [sceneRef, onPointerDown, onPointerMove, onPointerUp]);
+};
+/* ================================================================================ */
+import { useState, useEffect } from 'react';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+
+export const useVersioning = (propertyNames) => {
+  const [version, setVersion] = useState(0);
+  const model = useHypeStudioModel();
+
+  useEffect(() => {
+    const subscriptions = propertyNames.map(propertyName => 
+      model.subscribe(propertyName, () => {
+        setVersion(v => v + 1);
+      })
+    );
+
+    return () => {
+      subscriptions.forEach(subscription => subscription.unsubscribe());
+    };
+  }, [model, propertyNames]);
+
+  return version;
+};
+/* ================================================================================ */
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Engine } from '@babylonjs/core';
+import { Header } from './stories/Header';
+import { Toolbar } from './stories/Toolbar';
+import { LeftPanel } from './stories/LeftPanel';
+import { BabylonViewport } from './stories/BabylonViewport';
+import { PropertyPanel } from './stories/PropertyPanel';
+import { BabylonControls } from './stories/BabylonControls';
+import { useHypeStudioModel } from './contexts/HypeStudioContext';
+
+const HypeStudio = React.memo(() => {
+  const model = useHypeStudioModel();
+  const [engine, setEngine] = useState(null);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      const newEngine = new Engine(canvasRef.current, true);
+      setEngine(newEngine);
+      newEngine.isEngineActive = true;
+
+      window.addEventListener('resize', () => newEngine.resize());
+
+      return () => {
+        window.removeEventListener('resize', () => newEngine.resize());
+        newEngine.isEngineActive = false;
+        newEngine.dispose();
+        setEngine(null);
+      };
+    }
+  }, []);
+
+  const handleSketchCreate = useCallback((type, sketchData) => {
+    const newSketch = { type, ...sketchData };
+    const sketchId = model.createSketch(newSketch);
+    console.log(`Created new sketch with ID: ${sketchId}`);
+    model.updateListViewContent();
+  }, [model]);
+
+  return (
+    <div className="h-full w-full" style={{ minWidth: '1150px' }}>
+      <Header />
+      <Toolbar />
+      <div className="flex flex-1">
+        <LeftPanel />
+        <div className="flex-1 relative pb-[48px]">
+          <canvas className="border-2 border-gray-300 outline-none" ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+          {engine && (<BabylonViewport engine={engine} canvas={canvasRef.current} />)}
+          <BabylonControls />
+        </div>
+        <PropertyPanel />
+      </div>
+    </div>
+  );
+});
+
+export default HypeStudio;
+/* ================================================================================ */
+import React from 'react';
+import { AiOutlinePlus } from 'react-icons/ai';
+
+const ImportPanel = () => {
+  return (
+    <div className="bg-black w-32 border-r border-gray-300">
+      <div className="flex items-center justify-between p-2 border-b border-gray-300 text-white">
+        <span>Import</span>
+        <AiOutlinePlus size={24} />
+      </div>
+    </div>
+  );
+};
+
+export default ImportPanel;
+
+/* ================================================================================ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.notification-enter {
+  @apply opacity-0 translate-y-4;
+}
+
+.notification-enter-active {
+  @apply opacity-100 translate-y-0;
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+.notification-exit {
+  @apply opacity-100 translate-y-0;
+}
+
+.notification-exit-active {
+  @apply opacity-0 translate-y-4;
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* ================================================================================ */
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+
+async function prepareApp() {
+  if (process.env.NODE_ENV === 'development') {
+    const { worker } = await import('./mocks/browser')
+    await worker.start({
+      onUnhandledRequest: 'bypass',
+    })
+  }
+}
+
+prepareApp().then(() => {
+  const root = createRoot(document.getElementById('root'));
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+});
+
+reportWebVitals();
+/* ================================================================================ */
+// src/mocks/browser.js
+import { setupWorker } from 'msw/browser';
+import { handlers } from './handlers';
+
+export const worker = setupWorker(...handlers);
+
+/* ================================================================================ */
+import { http, HttpResponse } from 'msw';
+
+export const handlers = [
+  http.get('/api/project', () => {
+    return HttpResponse.json({
+      name: 'My Project',
+      dimensions: '20mm x 40mm x 60mm'
+    }, { status: 200 });
+  }),
+
+  http.get('/api/list-view', () => {
+    return HttpResponse.json(
+      ['Sketch1', 'Sketch2', 'Fillet1', 'Sketch3'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/sketch-view', () => {
+    return HttpResponse.json(
+      ['New Sketch', 'Edit Sketch', 'Delete Sketch'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/extrude-view', () => {
+    return HttpResponse.json(
+      ['Extrude1', 'Extrude2', 'New Extrude'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/import-export-view', () => {
+    return HttpResponse.json(
+      ['Import CAD', 'Export STL', 'Export OBJ'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/fillet-chamfer-view', () => {
+    return HttpResponse.json(
+      ['Fillet1', 'Chamfer1', 'New Fillet/Chamfer'],
+      { status: 200 }
+    );
+  }),
+
+  http.get('/api/dimension-tool-view', () => {
+    return HttpResponse.json(
+      ['Dimension1', 'Dimension2', 'Add Dimension'],
+      { status: 200 }
+    );
+  }),
+];
+/* ================================================================================ */
+import ZenObservable from 'zen-observable';
+import { computeDiff as computeDiffUtil, computeArrayDiff as computeArrayDiffUtil } from '../utils/observableUtils';
+
+class EnhancedSubscription {
+  constructor(subscribe) {
+    this._zenObservable = new ZenObservable(subscribe);
+    this._subscriptions = new Map();
+    this._parentObservable = null;
+  }
+
+  subscribe(observerOrNext, error, complete) {
+    let observer;
+    if (typeof observerOrNext === 'function') {
+      observer = {
+        next: observerOrNext,
+        error: error || (() => {}),
+        complete: complete || (() => {})
+      };
+    } else {
+      observer = observerOrNext;
+    }
+
+    const subscription = this._zenObservable.subscribe(observer);
+    this._subscriptions.set(subscription, observer);
+
+    return {
+      then: this,
+      unsubscribe: () => {
+        subscription.unsubscribe();
+        this._subscriptions.delete(subscription);
+      }
+    };
+  }
+
+  map(project) {
+    const mapped = new EnhancedSubscription(observer => 
+      this._zenObservable.subscribe({
+        next: value => observer.next(project(value)),
+        error: error => observer.error(error),
+        complete: () => observer.complete()
+      })
+    );
+    mapped._parentObservable = this;
+    return mapped;
+  }
+
+  filter(predicate) {
+    const filtered = new EnhancedSubscription(observer => 
+      this._zenObservable.subscribe({
+        next: value => predicate(value) && observer.next(value),
+        error: error => observer.error(error),
+        complete: () => observer.complete()
+      })
+    );
+    filtered._parentObservable = this;
+    return filtered;
+  }
+
+  notify(value) {
+    this._subscriptions.forEach((observer) => {
+      observer.next(value);
+    });
+  }
+
+  notifyError(error) {
+    this._subscriptions.forEach((observer) => {
+      observer.error(error);
+    });
+  }
+
+  notifyComplete() {
+    this._subscriptions.forEach((observer) => {
+      observer.complete();
+    });
+  }
+}
+
+class HistoryModel {
+  constructor() {
+    this.past = [];
+    this.future = [];
+  }
+
+  push(state) {
+    this.past.push(state);
+    this.future = [];
+  }
+
+  undo(currentState) {
+    if (this.canUndo()) {
+      const pastState = this.past.pop();
+      this.future.unshift(currentState);
+      return pastState;
+    }
+    return null;
+  }
+
+  redo(currentState) {
+    if (this.canRedo()) {
+      const nextState = this.future.shift();
+      this.past.push(currentState);
+      return nextState;
+    }
+    return null;
+  }
+
+  canUndo() {
+    return this.past.length > 0;
+  }
+
+  canRedo() {
+    return this.future.length > 0;
+  }
+
+  clear() {
+    this.past = [];
+    this.future = [];
+  }
+}
+
+class EnhancedZenObservable {
+  constructor(initialState = {}) {
+    this.state = initialState;
+    this.historyModel = new HistoryModel();
+    this.currentIndex = 0;
+    this.observables = new Map();
+    this.diffObservables = new Map();
+  }
+
+  applyDiff(diff, currentState = this.state, prefix = '') {
+    for (const key in diff) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      if (diff[key].type === 'replace') {
+        currentState[key] = diff[key].value;
+        this.notifyObservers(fullKey, currentState[key], diff[key]);
+      } else if (diff[key].type === 'object') {
+        if (typeof currentState[key] !== 'object') {
+          currentState[key] = {};
+        }
+        this.applyDiff(diff[key].value, currentState[key], fullKey);
+      } else if (diff[key].type === 'array') {
+        if (!Array.isArray(currentState[key])) {
+          currentState[key] = [];
+        }
+        this.applyArrayDiff(diff[key].value, currentState[key], fullKey);
+      }
+    }
+  }
+
+  applyArrayDiff(arrayDiff, currentArray, prefix) {
+    arrayDiff.removed.forEach(({ index }) => {
+      currentArray.splice(index, 1);
+    });
+    arrayDiff.added.forEach(({ index, value }) => {
+      currentArray.splice(index, 0, value);
+    });
+    arrayDiff.changed.forEach(({ index, value }) => {
+      this.applyDiff(value, currentArray[index], `${prefix}.${index}`);
+    });
+    this.notifyObservers(prefix, currentArray, arrayDiff);
+  }
+
+  notifyObservers(key, value, diff) {
+    // Notify exact matches
+    if (this.observables.has(key)) {
+      const observable = this.observables.get(key);
+      observable.notify(value);
+    }
+    if (this.diffObservables.has(key)) {
+      const diffObservable = this.diffObservables.get(key);
+      diffObservable.notify(diff);
+    }
+
+    // Notify partial matches
+    for (const [observerKey, observable] of this.observables.entries()) {
+      if (key.startsWith(observerKey) && key !== observerKey) {
+        observable.notify(this.getState(observerKey));
+      }
+    }
+    for (const [observerKey, diffObservable] of this.diffObservables.entries()) {
+      if (key.startsWith(observerKey) && key !== observerKey) {
+        diffObservable.notify({
+          type: 'nested',
+          path: key.slice(observerKey.length + 1),
+          value: diff
+        });
+      }
+    }
+  }
+
+  computeDiff(oldObj, newObj) {
+    return computeDiffUtil(oldObj, newObj);
+  }
+
+  computeArrayDiff(oldArray, newArray) {
+    return computeArrayDiffUtil(oldArray, newArray);
+  }
+
+  subscribe(key, callback, useDiff = false) {
+    if (typeof key !== 'string') {
+      console.error('Invalid key for subscribe method');
+      return new EnhancedSubscription(() => {}).subscribe(() => {});
+    }
+
+    const observables = useDiff ? this.diffObservables : this.observables;
+
+    // Create observables for all parts of the path
+    const parts = key.split('.');
+    let currentKey = '';
+    for (const part of parts) {
+      currentKey = currentKey ? `${currentKey}.${part}` : part;
+      if (!observables.has(currentKey)) {
+        observables.set(currentKey, new EnhancedSubscription(() => {}));
+      }
+    }
+
+    const subscription = observables.get(key);
+    return subscription.subscribe(callback);
+  }
+
+  setState(updater, recordHistory = true) {
+    try {
+      const prevState = JSON.parse(JSON.stringify(this.state));
+      const newState = typeof updater === 'function' ? updater(this.state) : updater;
+      const prevVersion = prevState.stateVersion;
+      newState.stateVersion = this.generateNewVersion();
+      const diff = this.computeDiff(this.state, newState);
+      if (Object.keys(diff).length === 1) {
+        newState.stateVersion = prevVersion;
+        return; // no changes except for state version
+      }
+      this.applyDiff(diff);
+
+      if (recordHistory) {
+        this.historyModel.push(prevState);
+      }
+
+    } catch (error) {
+      console.error('Error setting state:', error);
+    }
+  }
+
+  undo() {
+    const currentState = JSON.parse(JSON.stringify(this.state));
+    const previousState = this.historyModel.undo(currentState);
+    if (previousState) {
+      this.setState(() => previousState, false);
+    }
+  }
+
+  redo() {
+    const currentState = JSON.parse(JSON.stringify(this.state));
+    const nextState = this.historyModel.redo(currentState);
+    if (nextState) {
+      this.setState(() => nextState, false);
+    }
+  }
+
+  canUndo() {
+    return this.historyModel.canUndo();
+  }
+
+  canRedo() {
+    return this.historyModel.canRedo();
+  }
+
+  getState(key) {
+    if (!key) return JSON.parse(JSON.stringify(this.state));
+    const keys = key.split('.');
+    let value = this.state;
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (value === undefined || value === null) {
+        console.warn(`Warning: Property '${keys.slice(0, i + 1).join('.')}' is undefined in the state object. Consider adding it to the initial state.`);
+        return undefined;
+      }
+      value = value[k];
+    }
+    if (value === undefined) {
+      console.warn(`Warning: Property '${key}' is undefined in the state object. Consider adding it to the initial state.`);
+    }
+    return value !== undefined ? JSON.parse(JSON.stringify(value)) : undefined;
+  }
+
+   generateNewVersion() {
+     const timestamp = Date.now().toString(36);
+     const randomStr = Math.random().toString(36).substr(2, 5);
+     return `${timestamp}-${randomStr}`;
+  }
+}
+
+export default EnhancedZenObservable;
+/* ================================================================================ */
+import React from 'react';
+import { AiOutlinePlus } from 'react-icons/ai';
+
+const ProjectsPanel = () => {
+  return (
+    <div className="bg-white w-32 border-r border-gray-300">
+      <div className="flex items-center justify-between p-2 border-b border-gray-300">
+        <span>Projects</span>
+        <AiOutlinePlus size={24} />
+      </div>
+    </div>
+  );
+};
+
+export default ProjectsPanel;
+
+/* ================================================================================ */
+const reportWebVitals = onPerfEntry => {
+  if (onPerfEntry && onPerfEntry instanceof Function) {
+    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+      getCLS(onPerfEntry);
+      getFID(onPerfEntry);
+      getFCP(onPerfEntry);
+      getLCP(onPerfEntry);
+      getTTFB(onPerfEntry);
+    });
+  }
+};
+
+export default reportWebVitals;
+
+/* ================================================================================ */
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+
+/* ================================================================================ */
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}

@@ -1,0 +1,1954 @@
+// src/components/AutosaveControl.js
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useHypeStudioModel } from '../context/HypeStudioContext';
+
+const AutosaveControl = () => {
+  const model = useHypeStudioModel();
+  const [interval, setInterval] = useState(model.getState('autosaveInterval'));
+  const autosaveRef = useRef(null);
+
+  useEffect(() => {
+    setInterval(model.getState('autosaveInterval'));
+  }, [model]);
+
+  const handleIntervalChange = (e) => {
+    const newInterval = parseInt(e.target.value, 10);
+    setInterval(newInterval);
+    model.setAutosaveInterval(newInterval);
+    model.startAutosave();
+  };
+
+  const handleToggleAutosave = () => {
+    if (autosaveRef.current) {
+      model.stopAutosave();
+      autosaveRef.current = null;
+    } else {
+      model.startAutosave();
+      autosaveRef.current = model.startAutosave;
+    }
+  };
+
+  return (
+    <div>
+      <label>
+        Autosave Interval (ms):
+        <input
+          type="number"
+          value={interval}
+          onChange={handleIntervalChange}
+          min="1000"
+        />
+      </label>
+      <button onClick={handleToggleAutosave}>
+        {autosaveRef.current ? 'Stop Autosave' : 'Start Autosave'}
+      </button>
+    </div>
+  );
+};
+
+export default AutosaveControl;
+
+/* ================================================================================ */
+import React, { useEffect, useState, memo } from 'react';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
+import { useVersioning } from '../hooks/useVersioning';
+import { FaSearchPlus, FaHandPaper, FaSyncAlt, FaSquare, FaEye, FaCamera, FaMousePointer, FaPencilAlt, FaRuler } from 'react-icons/fa';
+import { CameraIcon, CursorArrowRaysIcon } from '@heroicons/react/24/solid';
+
+const PlaneState = {
+  HIDDEN: 'hidden',
+  VISIBLE: 'visible',
+  ALIGNED: 'aligned'
+};
+
+export const BabylonControls = memo(() => {
+
+  const model = useHypeStudioModel();
+  const customPlanes = useHypeStudioState('customPlanes', []);
+  const currentModelView = useHypeStudioState('currentModelView', '');
+  const controlMode = useHypeStudioState('controlMode', 'rotate');
+  const planeStates = useHypeStudioState('planeStates', {
+    X: PlaneState.HIDDEN,
+    Y: PlaneState.HIDDEN,
+    Z: PlaneState.HIDDEN
+  });
+
+  const [cameraInfo, setCameraInfo] = useState(model.getState('camera'));
+
+  useEffect(() => {
+    const subscription = model.subscribe('camera', (newCameraInfo) => {
+      setCameraInfo(newCameraInfo);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [model]);
+
+  const { position, target } = cameraInfo;
+
+  const version = useVersioning(['currentModelView', 'controlMode', 'planeStates']);
+
+  const handleControlModeChange = (mode) => {
+    model.setState(state => ({ ...state, controlMode: mode }));
+  };
+
+  const onCyclePlaneState = (plane) => {
+    model.setState(state => {
+      const currentState = state.planeStates[plane];
+      let newState;
+      switch (currentState) {
+        case PlaneState.HIDDEN:
+          newState = PlaneState.VISIBLE;
+          break;
+        case PlaneState.VISIBLE:
+          newState = PlaneState.ALIGNED;
+          break;
+        case PlaneState.ALIGNED:
+          newState = PlaneState.HIDDEN;
+          break;
+        default:
+          newState = PlaneState.HIDDEN;
+      }
+      
+      return { 
+        ...state, 
+        planeStates: { 
+          ...state.planeStates, 
+          [plane]: newState 
+        } 
+      };
+    });
+  };
+
+  const getButtonStyle = (plane) => {
+    const state = planeStates[plane];
+    let bgColor, icon;
+    switch (state) {
+      case PlaneState.VISIBLE:
+        bgColor = 'bg-blue-500';
+        icon = <FaEye />;
+        break;
+      case PlaneState.ALIGNED:
+        bgColor = 'bg-green-500';
+        icon = <FaCamera />;
+        break;
+      default:
+        bgColor = 'bg-gray-500';
+        icon = <FaSquare />;
+    }
+    return { bgColor, icon };
+  };
+
+  return (
+    <>
+      <div id={`babylon-controls-${version}`} className="absolute top-2 right-2 text-white bg-black hover:bg-opacity-100 bg-opacity-50 p-2 rounded">
+        Current View: {currentModelView}
+      </div>
+      <div className="absolute bottom-[3.5rem] right-2 flex space-x-2">
+      <button 
+          title={'Pointer Mode'}
+          onClick={() => handleControlModeChange('pointer')}
+          className={`p-2 rounded ${controlMode === 'pointer' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
+        >
+          <FaMousePointer />
+        </button>
+        <button 
+          title={'Drawing Mode'}
+          onClick={() => handleControlModeChange('drawing')}
+          className={`p-2 rounded ${controlMode === 'drawing' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
+        >
+          <FaPencilAlt />
+        </button>
+        <button 
+          title={'Dimension Mode'}
+          onClick={() => handleControlModeChange('dimension')}
+          className={`p-2 rounded ${controlMode === 'dimension' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
+        >
+          <FaRuler />
+        </button>
+        <button 
+          title={'Zoom'}
+          onClick={() => handleControlModeChange('zoom')}
+          className={`p-2 rounded ${controlMode === 'zoom' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
+        >
+          <FaSearchPlus />
+        </button>
+        <button 
+          title={'Pan'}
+          onClick={() => handleControlModeChange('pan')}
+          className={`p-2 rounded ${controlMode === 'pan' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
+        >
+          <FaHandPaper />
+        </button>
+        <button 
+          title={'Rotate'}
+          onClick={() => handleControlModeChange('rotate')}
+          className={`p-2 rounded ${controlMode === 'rotate' ? 'bg-blue-500' : 'bg-gray-500'} hover:bg-opacity-100 bg-opacity-50 text-white`}
+        >
+          <FaSyncAlt />
+        </button>
+      </div>
+      <div className="absolute bottom-[3.5rem] left-2 flex space-x-2 flex-wrap">
+      {['X', 'Y', 'Z', ...customPlanes.map(plane => plane.id)].map(plane => {
+        const { bgColor, icon } = getButtonStyle(plane);
+        return (
+          <button 
+            key={plane}
+            onClick={() => onCyclePlaneState(plane)}
+            className={`p-2 rounded ${bgColor} text-white flex items-center hover:bg-opacity-100 bg-opacity-50 justify-center w-12 h-12 mb-2`}
+          >
+            {icon}
+            <span className="ml-1">{plane.slice(-1)}</span>
+          </button>
+        );
+      })}
+    </div>
+          <div className={`absolute bottom-2 w-full h-[2.5rem] left-1/2 transform -translate-x-1/2 bg-gray-800 bg-opacity-50 text-white p-2 rounded shadow flex items-center space-x-2`}
+          >     
+              <CameraIcon className="w-5 h-5" />
+              {position !== null && target !== null && (
+              <span>
+                {position.x.toFixed(1)}, {position.y.toFixed(1)}, {position.z.toFixed(1)}
+              </span>
+              )}
+              <CursorArrowRaysIcon className="w-5 h-5 ml-2" />
+              {position !== null && target !== null && (
+              <span>
+                {target.x.toFixed(1)}, {target.y.toFixed(1)}, {target.z.toFixed(1)}
+              </span>
+              )}
+          </div>
+    </>
+  );
+});
+/* ================================================================================ */
+import { useEffect, useRef, useCallback, memo } from 'react';
+import { HighlightLayer, Vector3, VertexBuffer, MeshBuilder, Color3, ShaderMaterial } from '@babylonjs/core';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
+import { createControlCube, getViewFromNormal } from '../utils/sceneUtils';
+import {
+  setupMainScene,
+  setupControlScene,
+  createPlane,
+  updatePlaneVisibility,
+  createPreviewMesh,
+  updatePreviewMesh,
+  getSketchDataFromPreview,
+  handleMeshSelection,
+  handleSketchInteraction,
+  handleExtrusionInteraction,
+  renderScene,
+  createShape,
+  updateShape,
+  removeShape
+} from '../utils/babylonUtils';
+import {
+  updateCameraControls,
+  updateCameraForPlane,
+  updateCameraPosition
+} from '../utils/cameraUtils';
+import { usePointerEvents } from '../hooks/usePointerEvents';
+import {
+  selectEdge,
+  selectFace,
+  highlightEdge,
+  highlightFace,
+  selectCylinderPart,
+  highlightCylinderPart,
+  selectMeshPart,
+  highlightMeshPart
+} from '../utils/selectionUtils';
+
+export const BabylonViewport = memo(({ engine, canvas }) => {
+  const modelRef = useRef(useHypeStudioModel());
+  const activeView = useHypeStudioState('activeView', 'List View');
+  const selectedSketchType = useHypeStudioState('selectedSketchType', null);
+
+  const sceneRef = useRef(null);
+  const controlSceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const meshesRef = useRef({});
+  const planesRef = useRef({});
+  const shapesRef = useRef({});
+
+  const shapes = useHypeStudioState('elements.shapes', {});
+
+  const isDrawingRef = useRef(false);
+  const startPointRef = useRef(null);
+  const previewMeshRef = useRef(null);
+  const currentViewRef = useRef('Front');
+
+  const highlightLayerRef = useRef(null);
+  const highlightedMeshRef = useRef(null);
+
+  useEffect(() => {
+    if (!engine || !canvas || !engine.isEngineActive) return;
+
+    // Main scene setup
+    const { scene, camera } = setupMainScene(engine, canvas, meshesRef);
+    sceneRef.current = scene;
+    cameraRef.current = camera;
+
+    // Control scene setup
+    const { scene: controlScene } = setupControlScene(engine, canvas);
+    controlSceneRef.current = controlScene;
+
+    createControlCube(controlScene, (normal) => {
+      const newView = getViewFromNormal(normal);
+      currentViewRef.current = newView;
+      modelRef.current.setState(state => ({ ...state, currentModelView: newView }));
+    });
+
+    modelRef.current.setState(state => ({ ...state, currentModelView: currentViewRef.current }), false);
+
+    highlightLayerRef.current = new HighlightLayer("highlightLayer", scene);
+
+    // Plane setup
+    planesRef.current = {
+      X: createPlane(scene, 'X'),
+      Y: createPlane(scene, 'Y'),
+      Z: createPlane(scene, 'Z')
+    };
+
+    // Subscriptions
+    const controlModeSubscription = modelRef.current.subscribe('controlMode', (newControlMode) => 
+      updateCameraControls(camera, newControlMode, canvas)
+    );
+
+    const planeStatesSubscription = modelRef.current.subscribe('planeStates', (newPlaneStates) => 
+      updatePlaneVisibility(planesRef.current, newPlaneStates, (plane) => updateCameraForPlane(camera, plane))
+    );
+
+    const currentModelViewSubscription = modelRef.current.subscribe('currentModelView', (newCurrentModelView) => {
+      currentViewRef.current = newCurrentModelView;
+      updateCameraPosition(cameraRef.current, newCurrentModelView);
+    });
+
+    const customPlanesSubscription = modelRef.current.subscribe('customPlanes', (newCustomPlanes) => {
+      newCustomPlanes.forEach(plane => {
+        if (!planesRef.current[plane.id]) {
+          planesRef.current[plane.id] = createPlane(sceneRef.current, plane.id, new Vector3(plane.normal.x, plane.normal.y, plane.normal.z));
+        }
+      });
+      
+      // Remove any planes that no longer exist
+      Object.keys(planesRef.current).forEach(planeId => {
+        if (!['X', 'Y', 'Z'].includes(planeId) && !newCustomPlanes.find(p => p.id === planeId)) {
+          planesRef.current[planeId].dispose();
+          delete planesRef.current[planeId];
+        }
+      });
+    });
+
+    const shapesSubscription = modelRef.current.subscribe('elements.shapes', (newShapes) => {
+      // Handle added or updated shapes
+      Object.entries(newShapes).forEach(([id, shapeData]) => {
+        if (!shapesRef.current[id]) {
+          // New shape
+          const newMesh = createShape(sceneRef.current, id, shapeData);
+          if (newMesh) {
+
+            // Extract positions, indices, and normals from the mesh
+            const positions = newMesh.getVerticesData(VertexBuffer.PositionKind);
+            const indices = newMesh.getIndices();
+            const normals = newMesh.getVerticesData(VertexBuffer.NormalKind);
+
+            const linesDataMap = new Map();
+            const normalGroups = {};
+            const threshold = 0.5; // Adjust the threshold as needed
+
+            // Function to group normals by axis components within a threshold
+            function groupNormals(normal) {
+              const key = `${Math.round(normal.x / threshold) * threshold},${Math.round(normal.y / threshold) * threshold},${Math.round(normal.z / threshold) * threshold}`;
+              if (!normalGroups[key]) {
+                  normalGroups[key] = [];
+              }
+              normalGroups[key].push(normal);
+              return key;
+            }
+
+            const vertexToTrianglesMap = new Map(); // Map to track which triangles each vertex is part of
+            const normalToTrianglesMap = new Map();
+
+            // Function to generate a unique key for a vertex
+            function getVertexKey(vertex) {
+                return `${vertex.x},${vertex.y},${vertex.z}`;
+            }
+
+            // Loop through indices and track which vertices are part of which triangles
+            for (let i = 0; i < indices.length; i += 3) {
+                const v1Index = indices[i];
+                const v2Index = indices[i + 1];
+                const v3Index = indices[i + 2];
+
+                const v1 = new Vector3(
+                    positions[v1Index * 3], 
+                    positions[v1Index * 3 + 1], 
+                    positions[v1Index * 3 + 2]
+                );
+                const v2 = new Vector3(
+                    positions[v2Index * 3], 
+                    positions[v2Index * 3 + 1], 
+                    positions[v2Index * 3 + 2]
+                );
+                const v3 = new Vector3(
+                    positions[v3Index * 3], 
+                    positions[v3Index * 3 + 1], 
+                    positions[v3Index * 3 + 2]
+                );
+
+                const n1 = new Vector3(
+                  normals[indices[i] * 3], 
+                  normals[indices[i] * 3 + 1], 
+                  normals[indices[i] * 3 + 2]
+              );
+              const n2 = new Vector3(
+                  normals[indices[i + 1] * 3], 
+                  normals[indices[i + 1] * 3 + 1], 
+                  normals[indices[i + 1] * 3 + 2]
+              );
+              const n3 = new Vector3(
+                  normals[indices[i + 2] * 3], 
+                  normals[indices[i + 2] * 3 + 1], 
+                  normals[indices[i + 2] * 3 + 2]
+              );
+
+              const key1 = groupNormals(n1);
+              const key2 = groupNormals(n2);
+              const key3 = groupNormals(n3);
+
+              if (!linesDataMap.has(key1)) linesDataMap.set(key1, []);
+              if (!linesDataMap.has(key2)) linesDataMap.set(key2, []);
+              if (!linesDataMap.has(key3)) linesDataMap.set(key3, []);
+
+              linesDataMap.get(key1).push([v1, v2], [v2, v3], [v3, v1]);
+
+                const triangle = [v1, v2, v3];
+
+                const v1Key = getVertexKey(v1);
+                const v2Key = getVertexKey(v2);
+                const v3Key = getVertexKey(v3);
+
+                const n1Key = getVertexKey(n1);
+                const n2Key = getVertexKey(n2);
+                const n3Key = getVertexKey(n3);
+
+                // Update the map with the triangle information
+                if (!vertexToTrianglesMap.has(v1Key)) vertexToTrianglesMap.set(v1Key, []);
+                if (!vertexToTrianglesMap.has(v2Key)) vertexToTrianglesMap.set(v2Key, []);
+                if (!vertexToTrianglesMap.has(v3Key)) vertexToTrianglesMap.set(v3Key, []);
+
+                vertexToTrianglesMap.get(v1Key).push(triangle);
+                vertexToTrianglesMap.get(v2Key).push(triangle);
+                vertexToTrianglesMap.get(v3Key).push(triangle);
+
+                if (!normalToTrianglesMap.has(n1Key)) normalToTrianglesMap.set(n1Key, []);
+                if (!normalToTrianglesMap.has(n2Key)) normalToTrianglesMap.set(n2Key, []);
+                if (!normalToTrianglesMap.has(n3Key)) normalToTrianglesMap.set(n3Key, []);
+
+                normalToTrianglesMap.get(n1Key).push(triangle);
+                normalToTrianglesMap.get(n2Key).push(triangle);
+                normalToTrianglesMap.get(n3Key).push(triangle);
+            }
+
+            // Calculate average normals for each group
+            const averageNormals = {};
+            for (const [key, normals] of Object.entries(normalGroups)) {
+                const sum = normals.reduce((acc, normal) => acc.addInPlace(normal), new Vector3(0, 0, 0));
+                const averageNormal = sum.scale(1 / normals.length);
+                averageNormals[key] = averageNormal;
+            }
+
+            const areNormalsSimilar = (normal1, normal2) => Vector3.DistanceSquared(normal1, normal2) < threshold * threshold;
+
+
+            // Find ordered pairs of group keys
+            const groupPairs = [];
+            const groupKeys = Object.keys(normalGroups);
+            for (let i = 0; i < groupKeys.length; i++) {
+                for (let j = i + 1; j < groupKeys.length; j++) {
+                    if (areNormalsSimilar(averageNormals[groupKeys[i]], averageNormals[groupKeys[j]])) {
+                      groupPairs.push([groupKeys[i], groupKeys[j]]);
+                    }
+                }
+            }
+
+            // Check for shared vertices and compare average normals
+            const groupsToMerge = new Map();
+
+            function areTrianglesSimilar(t1, t2) {
+              for (let tr1 of t1) {
+                for (let tr2 of t2) {
+                  const isSimilar = areNormalsSimilar(tr1[0], tr2[0])
+                    ||
+                    areNormalsSimilar(tr1[0], tr2[1])
+                    ||
+                    areNormalsSimilar(tr1[0], tr2[2])
+                    ||
+                    areNormalsSimilar(tr1[1], tr2[1])
+                    ||
+                    areNormalsSimilar(tr1[1], tr2[2])
+                    ||
+                    areNormalsSimilar(tr1[2], tr2[2]);
+                  if (isSimilar)
+                    return true;
+                }
+              }
+              return false;
+            }
+
+            for (const [groupKey1, groupKey2] of groupPairs) {
+                const verticesGroup1 = normalGroups[groupKey1].map(normal => {
+                    const normalKey1 = getVertexKey(normal);
+                    return normalToTrianglesMap.get(normalKey1);
+                });
+
+                for (const normal of normalGroups[groupKey2]) {
+                  const normalKey2 = getVertexKey(normal);
+                  const triangle = normalToTrianglesMap.get(normalKey2);
+
+                    for (const v1 of verticesGroup1) {
+                        if (areTrianglesSimilar(triangle, v1)) {
+
+                            if (!groupsToMerge.has(groupKey1)) groupsToMerge.set(groupKey1, new Set());
+                            groupsToMerge.get(groupKey1).add(groupKey2);
+
+                            break; // No need to check other vertices in group1 if one is already shared
+                        }
+                    }
+                }
+            }
+
+            // Merge groups
+            const mergedGroups = new Map();
+            const visitedGroups = new Set();
+
+            for (const [groupKey, mergeSet] of groupsToMerge.entries()) {
+                if (!visitedGroups.has(groupKey)) {
+                    const mergedSet = new Set();
+                    const queue = [groupKey];
+
+                    while (queue.length > 0) {
+                        const currentKey = queue.shift();
+                        if (visitedGroups.has(currentKey)) continue;
+
+                        visitedGroups.add(currentKey);
+                        mergedSet.add(currentKey);
+
+                        if (groupsToMerge.has(currentKey)) {
+                            for (const adjacentKey of groupsToMerge.get(currentKey)) {
+                                if (!visitedGroups.has(adjacentKey)) {
+                                    queue.push(adjacentKey);
+                                }
+                            }
+                        }
+                    }
+
+                    // Add merged set to mergedGroups and remove all keys in mergedSet from mergedGroups
+                    mergedSet.delete(groupKey);
+                    mergedGroups.set(groupKey, mergedSet);
+                    // mergedSet.forEach(key => mergedGroups.delete(key));
+                }
+            }
+
+            // Function to generate random colors
+            function getRandomColor() {
+                return new Color3(Math.random(), Math.random(), Math.random());
+            }
+
+            // Create separate line systems for each merged group
+            let index = 0;
+            for (const [groupKey, groupSet] of mergedGroups.entries()) {
+                const linesData = [];
+
+                if (linesDataMap.has(groupKey)) {
+                  linesData.push(...linesDataMap.get(groupKey));
+                }
+
+                // Gather lines for the current group and merged groups
+                for (const key of groupSet) {
+                    if (linesDataMap.has(key)) {
+                        linesData.push(...linesDataMap.get(key));
+                    }
+                }
+
+                // Create line system for the merged group
+                if (linesData.length > 0) {
+                    const lineSystem = MeshBuilder.CreateLineSystem(`lines_${index}`, { lines: linesData }, sceneRef.current);
+                    lineSystem.color = getRandomColor();
+                    lineSystem.renderingGroupId = 1;
+                    index++;
+                }
+            }
+
+            // Handle standalone normal groups (not part of merged groups)
+            for (const groupKey of linesDataMap.keys()) {
+              if (!mergedGroups.has(groupKey) && ![...mergedGroups.values()].some(set => set.has(groupKey))) {
+                const linesData = linesDataMap.get(groupKey);
+                if (linesData.length > 0) {
+                  const lineSystem = MeshBuilder.CreateLineSystem(`lines_${index}`, { lines: linesData }, sceneRef.current);
+                  lineSystem.color = getRandomColor();
+                  lineSystem.renderingGroupId = 1;
+                  index++;
+                }
+              }
+            }
+
+            shapesRef.current[id] = newMesh;
+          }
+        } else {
+          // Updated shape
+          updateShape(shapesRef.current[id], shapeData);
+        }
+      });
+
+      // Handle removed shapes
+      Object.keys(shapesRef.current).forEach((id) => {
+        if (!newShapes[id]) {
+          removeShape(sceneRef.current, shapesRef.current[id]);
+          delete shapesRef.current[id];
+        }
+      });
+    });
+
+    const renderSubscription = modelRef.current.subscribe('elements', () => {
+      meshesRef.current = renderScene(scene, modelRef.current, meshesRef.current);
+    });
+  
+    engine.runRenderLoop(() => {
+      sceneRef.current.render();
+      controlSceneRef.current.render();
+    });
+
+    window.addEventListener("resize", () => engine.resize());
+
+    return () => {
+      if (engine.isEngineActive) {
+        controlModeSubscription.unsubscribe();
+        planeStatesSubscription.unsubscribe();
+        customPlanesSubscription.unsubscribe();
+        shapesSubscription.unsubscribe();
+        renderSubscription.unsubscribe();
+        currentModelViewSubscription.unsubscribe();
+
+        if (highlightedMeshRef.current) {
+          highlightLayerRef.current.removeMesh(highlightedMeshRef.current);
+          highlightedMeshRef.current.dispose();
+        }
+        highlightLayerRef.current.dispose();
+        
+        window.removeEventListener("resize", engine.resize);
+        scene.dispose();
+        controlScene.dispose();
+      }
+    };
+  }, [engine, canvas]);
+
+  const handlePointerDown = useCallback((evt, pickResult) => {
+    if (evt.button === 2) {
+      evt.preventDefault();
+      return;
+    }
+
+    const controlMode = modelRef.current.state.controlMode;
+    if (controlMode === 'rotate' || controlMode === 'pan' || controlMode === 'zoom') {
+      return;
+    }
+
+    const scene = sceneRef.current;
+
+    // Clear selection when clicking on empty space
+  if (!pickResult.hit) {
+    if (highlightedMeshRef.current) {
+      highlightLayerRef.current.removeMesh(highlightedMeshRef.current);
+      highlightedMeshRef.current.dispose();
+      highlightedMeshRef.current = null;
+    }
+    modelRef.current.setState(state => ({
+      ...state,
+      selectedPart: null,
+      selectedElementId: null
+    }));
+    return;
+  }
+
+    if (activeView === 'Sketch View' && selectedSketchType && pickResult.hit && pickResult.pickedMesh.name.includes('Plane')) {
+      isDrawingRef.current = true;
+      startPointRef.current = pickResult.pickedPoint;
+      previewMeshRef.current = createPreviewMesh(scene, selectedSketchType, pickResult.pickedPoint);
+    } else if (pickResult.hit) {
+      const mesh = pickResult.pickedMesh;
+      let selection;
+  
+      // Clear previous highlight
+      if (highlightedMeshRef.current) {
+        highlightLayerRef.current.removeMesh(highlightedMeshRef.current);
+        highlightedMeshRef.current.dispose();
+        highlightedMeshRef.current = null;
+      }
+  
+      // if (mesh.shape === 'cylinder') {
+      //   selection = selectCylinderPart(mesh, pickResult);
+      //   if (selection) {
+      //     highlightedMeshRef.current = highlightCylinderPart(mesh, selection);
+      //   }
+      // } else {
+        // First, try to select a specific edge
+      //   const edgeIndex = selectEdge(mesh, pickResult);
+      //   if (edgeIndex !== -1) {
+      //     selection = { type: 'edge', data: edgeIndex };
+      //     highlightedMeshRef.current = highlightEdge(mesh, edgeIndex);
+      //   } else {
+      //     // If no edge is selected, try to select a face
+      //     const faceIndex = selectFace(mesh, pickResult);
+      //     if (faceIndex !== -1) {
+      //       selection = { type: 'face', data: faceIndex };
+      //       highlightedMeshRef.current = highlightFace(mesh, faceIndex);
+      //     } else {
+      //       // If no specific part is selected, fall back to general mesh part selection
+      //       selection = selectMeshPart(mesh, pickResult, modelRef.current.getAdjacencyList(mesh));
+      //       if (selection) {
+      //         highlightedMeshRef.current = highlightMeshPart(mesh, selection);
+      //       }
+      //     }
+      //   }
+      // }
+
+      selection = selectMeshPart(mesh, pickResult, modelRef.current.getAdjacencyList(mesh));
+      if (selection) {
+        highlightedMeshRef.current = highlightMeshPart(mesh, selection);
+      }
+  
+      if (highlightedMeshRef.current) {
+        highlightLayerRef.current.addMesh(highlightedMeshRef.current, new Vector3(1, 1, 0));
+      }
+  
+      if (selection) {
+        modelRef.current.setState(state => ({
+          ...state,
+          selectedPart: {
+            meshId: mesh.id,
+            ...selection
+          }
+        }));
+  
+        // // Handle mesh selection and interaction as before
+        // const selectedNodeId = handleMeshSelection(pickResult, meshesRef.current, scene, modelRef.current, (nodeId) => {
+        //   // This is where you would call your onSelectionChange function if needed
+        // });
+  
+        // if (selectedNodeId) {
+        //   const elementType = selectedNodeId.split('_')[0];
+        //   let dragCallback;
+        //   switch (elementType) {
+        //     case 'sketch':
+        //       dragCallback = handleSketchInteraction(modelRef.current, selectedNodeId, pickResult);
+        //       break;
+        //     case 'extrusion':
+        //       dragCallback = handleExtrusionInteraction(modelRef.current, selectedNodeId, pickResult);
+        //       break;
+        //     // Add cases for other element types
+        //   }
+        //   if (dragCallback) {
+        //     scene.onPointerMove = (moveEvt) => {
+        //       const dragResult = scene.pick(moveEvt.offsetX, moveEvt.offsetY);
+        //       if (dragResult.hit) {
+        //         dragCallback(dragResult.pickedPoint);
+        //       }
+        //     };
+        //     scene.onPointerUp = () => {
+        //       scene.onPointerMove = null;
+        //       scene.onPointerUp = null;
+        //     };
+        //   }
+        // }
+      }
+    }
+  }, [activeView, selectedSketchType]);
+
+  const handlePointerMove = useCallback((evt, pickResult) => {
+    if (isDrawingRef.current && previewMeshRef.current) {
+      if (pickResult.hit) {
+        updatePreviewMesh(previewMeshRef.current, startPointRef.current, pickResult.pickedPoint, selectedSketchType);
+      }
+    }
+  }, [selectedSketchType]);
+
+  const handlePointerUp = useCallback(() => {
+    if (isDrawingRef.current && previewMeshRef.current) {
+      isDrawingRef.current = false;
+      const sketchData = getSketchDataFromPreview(previewMeshRef.current, selectedSketchType);
+      modelRef.current.createSketch({ type: selectedSketchType, ...sketchData });
+      previewMeshRef.current.dispose();
+      previewMeshRef.current = null;
+    }
+
+    if (cameraRef.current) {
+      modelRef.current.setState(state => ({
+        ...state,
+        camera: {
+          position: {
+            x: cameraRef.current.position.x,
+            y: cameraRef.current.position.y,
+            z: cameraRef.current.position.z
+          },
+          target: {
+            x: cameraRef.current.target.x,
+            y: cameraRef.current.target.y,
+            z: cameraRef.current.target.z
+          }}
+        }
+      ), false);
+    }
+  }, [selectedSketchType]);
+
+  usePointerEvents(sceneRef, handlePointerDown, handlePointerMove, handlePointerUp);
+
+  return null;
+});
+/* ================================================================================ */
+import { fn } from '@storybook/test';
+import { BabylonViewport } from './BabylonViewport';
+
+export default {
+  title: 'Components/BabylonViewport',
+  component: BabylonViewport,
+  parameters: {
+    layout: 'fullscreen',
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    controlMode: {
+      control: 'select',
+      options: ['zoom', 'pan', 'rotate'],
+    },
+  },
+  args: { onViewChange: fn() },
+};
+
+export const Default = {
+  args: {
+    controlMode: 'rotate',
+  },
+};
+
+export const ZoomMode = {
+  args: {
+    controlMode: 'zoom',
+  },
+};
+
+export const PanMode = {
+  args: {
+    controlMode: 'pan',
+  },
+};
+/* ================================================================================ */
+import React, { useState } from 'react';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
+import { Vector3 } from '@babylonjs/core';
+import { FaPlus, FaTrash } from 'react-icons/fa';
+import { useVersioning } from '../hooks/useVersioning';
+
+export const CustomPlanesView = () => {
+    const model = useHypeStudioModel();
+    const customPlanes = useHypeStudioState('customPlanes', []);
+    const [normal, setNormal] = useState({ x: 0, y: 0, z: 1 });
+  
+    const version = useVersioning(['customPlanes']);
+
+    const availableLetters = () => {
+      const usedLetters = new Set(customPlanes.map(plane => plane.id.charAt(plane.id.length - 1)));
+      return 'ABCDEFGHIJKLMNOPQRSTUVW'.split('').filter(letter => !usedLetters.has(letter));
+    };
+  
+    const handleAddPlane = () => {
+      if (availableLetters().length === 0) return; // No more letters available
+  
+      const newPlaneLetter = availableLetters()[0];
+      const normalized = new Vector3(normal.x, normal.y, normal.z).normalize();
+      const newPlane = {
+        id: `custom_plane_${newPlaneLetter}`,
+        normal: {
+            x: normalized.x.toFixed(4),
+            y: normalized.y.toFixed(4),
+            z: normalized.z.toFixed(4)
+        },
+      };
+      model.setState(state => ({
+        ...state,
+        customPlanes: [...state.customPlanes, newPlane],
+        planeStates: {
+          ...state.planeStates,
+          [newPlane.id]: 'hidden',
+        },
+      }));
+      setNormal({ x: 0, y: 0, z: 1 }); // Reset input after adding
+    };
+  
+    return (
+      <div className="space-y-4" id={`custom-planes-view-v-${version}`}>
+        <h3 className="text-lg font-semibold text-gray-700">Custom Planes</h3>
+        <div className="bg-white shadow-md rounded-lg p-4">
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {['x', 'y', 'z'].map((axis) => (
+              <div key={axis} className="flex flex-col">
+                <label htmlFor={`normal-${axis}`} className="text-sm font-medium text-gray-600 mb-1">
+                  {axis.toUpperCase()}
+                </label>
+                <input
+                  id={`normal-${axis}`}
+                  type="number"
+                  value={normal[axis]}
+                  onChange={(e) => setNormal({ ...normal, [axis]: parseFloat(e.target.value) })}
+                  className="border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={handleAddPlane}
+            disabled={availableLetters().length === 0}
+            className={`w-full font-bold py-2 px-4 rounded-md transition duration-200 ease-in-out flex items-center justify-center
+              ${availableLetters().length > 0 
+                ? 'bg-blue-500 hover:bg-blue-600 text-white' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+          >
+            <FaPlus className="mr-2" /> Add Plane
+          </button>
+        </div>
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          <ul className="divide-y divide-gray-200">
+            {customPlanes.map((plane) => 
+              (<li key={plane.id} className="p-4 hover:bg-gray-50 transition duration-150 ease-in-out">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-900">
+                    Plane {plane.id.charAt(plane.id.length - 1)}: ({Number(plane.normal.x).toFixed(2)}, {Number(plane.normal.y).toFixed(2)}, {Number(plane.normal.z).toFixed(2)})
+                  </span>
+                  <button
+                    onClick={() => model.deleteCustomPlane(plane.id)}
+                    className="text-red-500 hover:text-red-700 transition duration-150 ease-in-out"
+                  >
+                    <FaTrash />
+                  </button>
+                </div>
+              </li>)
+            )}
+          </ul>
+        </div>
+      </div>
+    );
+  };
+/* ================================================================================ */
+header {
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 20px,
+      #4c97d2 20px,
+      #4c97d2 44px,
+      #4c97d2 44px
+    );
+    background-size: 100% 50px;
+    padding: 0px;
+    height: 50px;
+    position: relative;
+  }
+  
+  .white-stripes {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 20px,
+      #4c97d2 20px,
+      #4c97d2 40px,
+      #4c97d2 40px
+    );
+    background-size: 100% 50px;
+    padding: 0px;
+    height: 50px;
+    width: 168px;
+  }
+  
+  .black-stripes {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 20px,
+      #000000 20px,
+      #000000 40px,
+      #000000 40px
+    );
+    background-size: 100% 30px;
+    padding: 0px;
+    height: 30px;
+    width: 168px;
+  }
+  
+  .all-black {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background-color: black;
+    height: 30px;
+    width: 140px;
+    color: white;
+  }
+  
+  .all-black > div {
+    padding-left: 20px;
+    font-family: Calibri, sans-serif;
+    font-size: 20px;
+    font-weight: bold;
+  }
+  
+  .all-blue {
+    position: absolute;
+    top: 30px;
+    left: 0px;
+    background-color: white;
+    height: 20px;
+    width: 188px;
+  }
+  
+  .right-side {
+    background-color: #4c97d2;
+    height: 50px;
+    width: 865px;
+    position: absolute;
+    right: 0px;
+    top: 0px;
+  }
+  
+  @media (min-width: 1565px) and (max-width: 1585px) {
+  .right-higher {
+    background-color: #4c97d2;
+    height: 25px;
+    width: 891px;
+    position: absolute;
+    right: 0px;
+    top: 0px;
+  }
+}
+
+.white-stripes-right {
+    position: absolute;
+    top: 0px;
+    left: 167px;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 35px,
+      #4c97d2 35px,
+      #4c97d2 60px,
+      #4c97d2 60px
+    );
+    background-size: 100px 50px;
+    padding: 0px;
+    margin: 0px;
+    height: 50px;
+    width: 100px;
+  }
+
+  .white-stripes-right-2 {
+    position: absolute;
+    top: 0px;
+    left: 232px;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 35px,
+      #4c97d2 35px,
+      #4c97d2 65px,
+      #4c97d2 65px
+    );
+    background-size: 100px 50px;
+    padding: 0px;
+    margin: 0px;
+    height: 25px;
+    width: 100px;
+  }
+
+  .white-stripes-right-3 {
+    position: absolute;
+    top: 25px;
+    left: 257px;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #FFFFFF,
+      #FFFFFF 35px,
+      #4c97d2 35px,
+      #4c97d2 65px,
+      #4c97d2 65px
+    );
+    background-size: 100px 50px;
+    padding: 0px;
+    margin: 0px;
+    height: 25px;
+    width: 100px;
+  }
+
+  .white-stripes-right-4 {
+    position: absolute;
+    top: 0px;
+    left: 262px;
+    background-color: #4c97d2;
+    padding: 0px;
+    margin: 0px;
+    height: 25px;
+    width: 200px;
+  }
+
+  .white-stripes-right-5 {
+    position: absolute;
+    top: 25px;
+    left: 287px;
+    background-color: #4c97d2;
+    padding: 0px;
+    margin: 0px;
+    height: 25px;
+    width: 200px;
+  }
+  
+  .white-banner {
+    background-color: white;
+    height: 40px;
+    width: 653px;
+    position: absolute;
+    right: 210px;
+    top: 5px;
+  }
+  
+  .white-banner > div {
+    padding-left: 15px;
+    padding-top: 8px;
+    font-family: Calibri, sans-serif;
+    font-size: 18px;
+    font-weight: 400;
+  }
+
+ .side {
+   position: absolute;
+   right: 0px;
+   top: 50px;
+ }
+ 
+ .side img {
+   height: 155px; /* Adjust this value as needed */
+   width: auto;
+ }
+
+ .undo {
+  position:absolute;
+  right: 47px;
+  top: -14px;
+ }
+
+ .redo {
+  position:absolute;
+  right: 0px;
+  top: -8px;
+ }
+
+ .undo-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.redo-icon {
+  width: 44px;
+  height: 44px;
+}
+/* ================================================================================ */
+import React, { memo } from 'react';
+import { useHypeStudioState, useHistoryState } from '../hooks/useHypeStudioState';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import './Header.css'; // We'll create this file for the styles
+import sideImage from '../assets/side.png';
+import UndoIcon from '../assets/left-arrow.svg';
+import RedoIcon from '../assets/right-arrow.svg';
+import { useVersioning } from '../hooks/useVersioning';
+
+export const Header = memo(() => {
+  const model = useHypeStudioModel();
+  const projectName = useHypeStudioState('projectName', 'My Project');
+  const dimensions = useHypeStudioState('dimensions', '20mm x 40mm x 20mm');
+  const version = useVersioning(['projectName', 'dimensions', 'stateVersion']);
+
+  const canUndo = model.canUndo();
+  const canRedo = model.canRedo();
+
+  const handleUndo = () => {
+    if (model.canUndo()) {
+      model.undo();
+      model.addNotification('info', 'Undo complete');
+    }
+  };
+
+  const handleRedo = () => {
+    if (model.canRedo()) {
+      model.redo();
+    }
+  };
+
+  return (
+    <header id={`header-${version}`}>
+      <div className="white-stripes"></div>
+      <div className="black-stripes"></div>
+      <div className="all-black">
+        <div>Hype Studio</div>
+      </div>
+      <div className="all-blue"></div>
+      <div className="right-side"></div>
+      <div className="right-higher"></div>
+      <div className="white-stripes-right"></div>
+      <div className="white-stripes-right-2"></div>
+      <div className="white-stripes-right-3"></div>
+      <div className="white-stripes-right-4"></div>
+      <div className="white-stripes-right-5"></div>
+      <div className="white-banner">
+        <div>{`${projectName} - ${dimensions}`}</div>
+        <div className={`undo cursor-pointer ${canUndo ? 'text-black' : 'opacity-50'}`}>
+          <UndoIcon className="undo-icon w-6 h-6" onClick={handleUndo} />
+        </div>
+        <div className={`redo cursor-pointer ${canRedo ? 'text-black' : 'opacity-50'}`}>
+          <RedoIcon className="redo-icon w-6 h-6" onClick={handleRedo} />
+        </div>
+      </div>
+      <div className="side">
+        <img src={sideImage} alt="Side" />
+      </div>
+    </header>
+  );
+});
+/* ================================================================================ */
+import { fn } from '@storybook/test';
+import { Header } from './Header';
+
+export default {
+  title: 'Components/Header',
+  component: Header,
+  parameters: {
+    layout: 'centered',
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    projectName: { control: 'text' },
+    dimensions: { control: 'text' },
+  },
+  args: { onMenuClick: fn() },
+};
+
+export const Default = {
+  args: {
+    projectName: 'My Project',
+    dimensions: '20mm x 40mm x 60mm',
+  },
+};
+
+export const LongProjectName = {
+  args: {
+    projectName: 'Very Long Project Name That Might Overflow',
+    dimensions: '20mm x 40mm x 60mm',
+  },
+};
+/* ================================================================================ */
+// Icon.jsx
+import React from 'react';
+
+const Icon = ({ icon: SvgIcon, className }) => (
+  <SvgIcon className={className} />
+);
+
+export default Icon;
+/* ================================================================================ */
+import React from 'react';
+import { useHypeStudioModel } from '../context/HypeStudioContext';
+
+const ImportExportButtons = () => {
+  const model = useHypeStudioModel();
+
+  const handleExport = () => {
+    model.exportState();
+  };
+
+  const handleImport = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      model.importState(file);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={handleExport}>Export JSON</button>
+      <input type="file" onChange={handleImport} accept=".json" />
+    </div>
+  );
+};
+
+export default ImportExportButtons;
+/* ================================================================================ */
+import React, { useCallback, memo, useState, useMemo } from 'react';
+import { FaSquare, FaCircle, FaCube, FaGripLines, FaVectorSquare, FaPlus } from 'react-icons/fa';
+import { useHypeStudioModel, useHypeStudioEngines } from '../contexts/HypeStudioContext';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
+import { useVersioning } from '../hooks/useVersioning';
+import { SettingsView } from './SettingsView';
+import { ShapeCreator } from './ShapeCreator';
+import { CustomPlanesView } from './CustomPlanesView';
+
+export const LeftPanel = memo(() => {
+
+  const model = useHypeStudioModel();
+  const { getTempEngine, getTempScene } = useHypeStudioEngines();
+  const activeView = useHypeStudioState('activeView', 'List View');
+  const selectedSketchType = useHypeStudioState('selectedSketchType', null);
+  const selectedElementId = useHypeStudioState('selectedElementId', null);
+  const selectedElement = useHypeStudioState('selectedElement', null);
+  const elements = useHypeStudioState('elements', {});
+  const content = useHypeStudioState('leftPanelContent', []);
+
+  const version = useVersioning(['activeView', 'selectedSketchType', 'selectedElementId', 'leftPanelContent']);
+
+  const handleSketchTypeSelect = useCallback((type) => {
+    model.setState(state => ({ ...state, selectedSketchType: type }));
+  }, [model]);
+
+  const handleListItemSelect = useCallback((id) => {
+    model.selectElement(id);
+  }, [model]);
+
+  const handleCreateShape = useCallback((shapeData) => {
+    model.createTessellatedShape(getTempScene(), shapeData);
+  }, [model]);
+
+  const renderSelectionInfo = () => {
+    if (!selectedElement) return null;
+
+    return (
+      <div className="mt-4">
+        <h3 className="font-bold mb-2">Selection Info</h3>
+        <p>Type: {selectedElement.type}</p>
+        {selectedElement.type === 'edge' && <FaGripLines className="mt-2" size={24} />}
+        {selectedElement.type === 'face' && <FaVectorSquare className="mt-2" size={24} />}
+        {selectedElement.type === 'mesh' && (
+          <p>Shape: {elements.shapes[selectedElement.meshId]?.type}</p>
+        )}
+      </div>
+    );
+  };
+
+  return (<div id={`left-panel-${version}`} className="w-48 bg-white p-2 overflow-y-auto">
+    <h2 className="font-bold mb-2">{activeView}</h2>
+    {activeView === 'Custom Planes View' && <CustomPlanesView />}
+    {activeView === 'Settings View' && <SettingsView />}
+    {activeView === 'Shape Tool View' && (
+        <>
+        <ShapeCreator onCreateShape={handleCreateShape} />
+        {renderSelectionInfo()}
+      </>
+      )}
+    {activeView === 'Sketch View' && (
+      <ul>
+        <li 
+          onClick={() => handleSketchTypeSelect('circle')} 
+          className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedSketchType === 'circle' ? 'bg-blue-100' : ''}`}
+        >
+          <FaCircle className="mr-2" />
+          Circle
+        </li>
+        <li 
+          onClick={() => handleSketchTypeSelect('rectangle')} 
+          className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedSketchType === 'rectangle' ? 'bg-blue-100' : ''}`}
+        >
+          <FaSquare className="mr-2" />
+          Rectangle
+        </li>
+      </ul>
+    )}
+    { activeView === 'List View' && (
+      <ul>
+        {content.map((item) => (
+          <li 
+            key={item.id}
+            onClick={() => handleListItemSelect(item.id)}
+            className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedElementId === item.id ? 'bg-blue-100' : ''}`}
+          >
+            {item.type === 'circle' ? <FaCircle className="mr-2" /> : <FaSquare className="mr-2" />}
+            {item.name}
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+  );
+});
+/* ================================================================================ */
+import { LeftPanel } from './LeftPanel';
+
+export default {
+  title: 'Components/LeftPanel',
+  component: LeftPanel,
+  parameters: {
+    layout: 'centered',
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    content: { control: 'array' },
+  },
+};
+
+export const Default = {
+  args: {
+    content: ['Sketch1', 'Sketch2', 'Fillet1', 'Sketch3'],
+  },
+};
+
+export const EmptyPanel = {
+  args: {
+    content: [],
+  },
+};
+
+export const LongList = {
+  args: {
+    content: Array.from({ length: 20 }, (_, i) => `Item ${i + 1}`),
+  },
+};
+/* ================================================================================ */
+import React, { useRef } from 'react';
+import PropTypes from 'prop-types';
+import { TransitionGroup, CSSTransition } from 'react-transition-group';
+
+export const Notification = ({ notifications }) => {
+  // Create a Map to store refs for each notification
+  const nodeRef = useRef(new Map());
+
+  return (
+    <div className="fixed top-5 right-5 z-50 space-y-4">
+      <TransitionGroup>
+        {notifications.map(({ id, type, message }) => {
+          // Create a new ref if it doesn't exist for this notification
+          if (!nodeRef.current.has(id)) {
+            nodeRef.current.set(id, React.createRef());
+          }
+          return (
+            <CSSTransition
+              key={id}
+              nodeRef={nodeRef.current.get(id)}
+              timeout={500}
+              classNames="notification"
+            >
+              <div
+                ref={nodeRef.current.get(id)}
+                className={`notification p-4 rounded shadow-md transition-transform transform ${
+                  type === 'info'
+                    ? 'bg-blue-500 text-white'
+                    : type === 'warning'
+                    ? 'bg-yellow-500 text-black'
+                    : 'bg-red-500 text-white'
+                }`}
+              >
+                {message}
+              </div>
+            </CSSTransition>
+          );
+        })}
+      </TransitionGroup>
+    </div>
+  );
+};
+
+Notification.propTypes = {
+  notifications: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.number.isRequired,
+      type: PropTypes.oneOf(['info', 'warning', 'error']).isRequired,
+      message: PropTypes.string.isRequired,
+    })
+  ).isRequired,
+};
+/* ================================================================================ */
+import React, { useState, useCallback, memo } from 'react';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
+import { useVersioning } from '../hooks/useVersioning';
+
+const formatVector = (vector) => {
+  return `(${vector.x.toFixed(2)}, ${vector.y.toFixed(2)}, ${vector.z.toFixed(2)})`;
+};
+
+export const PropertyPanel = memo(() => {
+  const model = useHypeStudioModel();
+  const selectedElementId = useHypeStudioState('selectedElementId', null);
+  const selectedPart = useHypeStudioState('selectedPart', null);
+  const customProperties = useHypeStudioState('customProperties', {});
+  const [modifiedProperties, setModifiedProperties] = useState({});
+  const [errors, setErrors] = useState({});
+
+  // Use versioning hook
+  const version = useVersioning(['selectedElementId', 'selectedPart', 'elements', 'customProperties']);
+
+  const selectedElement = selectedElementId ? model.getState(`elements.${selectedElementId.split('_')[0]}.${selectedElementId}`) : null;
+
+  const handlePropertyChange = useCallback((propertyName, value) => {
+    setModifiedProperties(prev => ({
+      ...prev,
+      [propertyName]: value
+    }));
+  }, []);
+
+  const applyChanges = useCallback(() => {
+    Object.entries(modifiedProperties).forEach(([propertyName, value]) => {
+      if (customProperties[selectedElementId] && propertyName in customProperties[selectedElementId]) {
+        const success = model.setCustomProperty(selectedElementId, propertyName, value);
+        if (!success) {
+          setErrors(prev => ({
+            ...prev,
+            [propertyName]: 'Invalid value'
+          }));
+        } else {
+          setErrors(prev => ({
+            ...prev,
+            [propertyName]: undefined
+          }));
+        }
+      } else {
+        model.updateElement(selectedElementId.split('_')[0], selectedElementId, { [propertyName]: value });
+      }
+    });
+    setModifiedProperties({});
+  }, [model, selectedElementId, modifiedProperties, customProperties]);
+
+  const renderPropertyInput = useCallback((propertyName, value, isCustom = false) => {
+    const currentValue = modifiedProperties[propertyName] !== undefined ? modifiedProperties[propertyName] : value;
+    const isModified = modifiedProperties[propertyName] !== undefined;
+    const error = errors[propertyName];
+
+    return (
+      <div key={propertyName} className={`mb-2 ${isModified ? 'modified' : ''} ${error ? 'error' : ''}`}>
+        <label className="block text-sm font-medium text-gray-700">
+          {propertyName}:
+          <input
+            type={typeof value === 'number' ? 'number' : 'text'}
+            value={currentValue}
+            onChange={(e) => handlePropertyChange(propertyName, e.target.value)}
+            className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-1 ${isModified ? 'bg-yellow-100' : ''}`}
+          />
+        </label>
+        {error && <div className="text-red-500 text-xs">{error}</div>}
+      </div>
+    );
+  }, [modifiedProperties, errors, handlePropertyChange]);
+
+  const renderSketchProperties = useCallback(() => {
+    if (!selectedElement) return null;
+    switch (selectedElement.type) {
+      case 'circle':
+        return renderPropertyInput('radius', selectedElement.radius || 0);
+      case 'rectangle':
+        return (
+          <>
+            {renderPropertyInput('width', selectedElement.width || 0)}
+            {renderPropertyInput('height', selectedElement.height || 0)}
+          </>
+        );
+      default:
+        return null;
+    }
+  }, [selectedElement, renderPropertyInput]);
+
+  const renderSelectedPartInfo = () => {
+    if (!selectedPart) return null;
+
+    return (
+      <div className="mt-4">
+        <h3 className="font-bold mb-2">Selected Part</h3>
+        <p>Type: {selectedPart.type}</p>
+        {selectedPart.part && <p>Part: {selectedPart.part}</p>}
+        {renderPartDetails()}
+      </div>
+    );
+  };
+
+  const renderPartDetails = () => {
+    switch (selectedPart.type) {
+      case 'edge':
+        if (selectedPart.data.start && selectedPart.data.end) {
+          return (
+            <>
+              <p>Start: {formatVector(selectedPart.data.start)}</p>
+              <p>End: {formatVector(selectedPart.data.end)}</p>
+            </>
+          );
+        } else {
+          return <p>Edge Index: {selectedPart.data}</p>;
+        }
+      case 'face':
+        if (selectedPart.data.normal) {
+          return <p>Normal: {formatVector(selectedPart.data.normal)}</p>;
+        } else {
+          return <p>Face Index: {selectedPart.data}</p>;
+        }
+      case 'mesh':
+        return <p>Entire mesh selected</p>;
+      default:
+        return null;
+    }
+  };
+
+  if (!selectedElement && !selectedPart) {
+    return (
+      <div className='w-48 bg-white p-2 z-10'>
+        <h2 className="font-bold mb-2 p-2">Properties View</h2>
+        <div className="w-48 bg-white p-2">No element or part selected</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-48 bg-white p-2 z-10" id={`property-panel-${version}`}>
+      {selectedElement && (
+        <>
+          <h2 className="font-bold mb-2">Properties: {selectedElement.name || selectedElement.id}</h2>
+          {renderPropertyInput('name', selectedElement.name || '')}
+          {renderSketchProperties()}
+          <h3 className="font-bold mt-4 mb-2">Custom Properties</h3>
+          {Object.entries(customProperties[selectedElementId] || {}).map(([key, value]) => 
+            renderPropertyInput(key, value, true)
+          )}
+          {Object.keys(modifiedProperties).length > 0 && (
+            <button 
+              onClick={applyChanges}
+              className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            >
+              Apply Changes
+            </button>
+          )}
+        </>
+      )}
+      {renderSelectedPartInfo()}
+    </div>
+  );
+});
+/* ================================================================================ */
+import React, { useState } from 'react';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+
+export const SettingsView = () => {
+  const model = useHypeStudioModel();
+  const [projectName, setProjectName] = useState(model.getState('projectName'));
+  const [units, setUnits] = useState(model.getState('units'));
+
+  const handleProjectNameChange = (e) => setProjectName(e.target.value);
+  const handleUnitsChange = (e) => setUnits(e.target.value);
+
+  const handleSave = () => {
+    model.setStateProperty('projectName', projectName)
+    model.setStateProperty('units', units);
+  };
+
+  return (
+    <div className="settings-view p-6 bg-white rounded-lg">
+      <div className="mb-4">
+        <label className="block text-gray-700 font-semibold mb-2">
+          Project Name:
+          <input
+            type="text"
+            value={projectName}
+            onChange={handleProjectNameChange}
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+          />
+        </label>
+      </div>
+      <div className="mb-4">
+        <label className="block text-gray-700 font-semibold mb-2">
+          Units:
+          <input
+            type="text"
+            value={units}
+            onChange={handleUnitsChange}
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+          />
+        </label>
+      </div>
+      <button
+        onClick={handleSave}
+        className="bg-blue-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-600"
+      >
+        Save
+      </button>
+    </div>
+  );
+};
+
+/* ================================================================================ */
+import React, { useCallback, memo, useState, useMemo } from 'react';
+import { FaSquare, FaCircle, FaCube, FaGripLines, FaVectorSquare, FaPlus } from 'react-icons/fa';
+
+export const ShapeCreator = ({ onCreateShape }) => {
+    const [shapeType, setShapeType] = useState(null);
+    const [dimensions, setDimensions] = useState({ width: 100, height: 100, depth: 100, diameter: 100 }); // in mm
+    const [complexity, setComplexity] = useState(1);
+  
+    const handleDimensionChange = (dim, value) => {
+      setDimensions(prev => ({ ...prev, [dim]: parseFloat(value) }));
+    };
+  
+    const triangleDensityTarget = useMemo(() => {
+      // Base density is 1 triangle per 100 mm² at complexity 1
+      // Double the density for each complexity level
+      return Math.pow(2, complexity - 1) / 100; // triangles per mm²
+    }, [complexity]);
+  
+    const estimatedTriangles = useMemo(() => {
+      if (!shapeType) return 0;
+  
+      let surfaceArea;
+  
+      if (shapeType === 'box') {
+        surfaceArea = 2 * (
+          dimensions.width * dimensions.height +
+          dimensions.width * dimensions.depth +
+          dimensions.height * dimensions.depth
+        );
+      } else { // cylinder
+        const radius = dimensions.diameter / 2;
+        surfaceArea = 2 * Math.PI * radius * (radius + dimensions.height);
+      }
+  
+      return Math.ceil(surfaceArea * triangleDensityTarget);
+    }, [shapeType, dimensions, triangleDensityTarget]);
+  
+    const handleCreateShape = () => {
+      onCreateShape({
+        type: shapeType,
+        params: shapeType === 'box' 
+          ? { width: dimensions.width, height: dimensions.height, depth: dimensions.depth }
+          : { height: dimensions.height, diameter: dimensions.diameter },
+        triangleDensityTarget,
+        estimatedTriangles
+      });
+      setShapeType(null);
+    };
+  
+    return (
+      <div className="mb-4">
+        <h3 className="font-bold mb-2">Create Shape</h3>
+        <div className="flex mb-2">
+          <button 
+            title={`Box`}
+            onClick={() => setShapeType('box')} 
+            className={`mr-2 p-2 ${shapeType === 'box' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          >
+            <FaCube />
+          </button>
+          <button 
+            title={`Cylinder`}
+            onClick={() => setShapeType('cylinder')} 
+            className={`p-2 ${shapeType === 'cylinder' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          >
+            <FaCircle />
+          </button>
+        </div>
+        {shapeType && (
+          <>
+            <div className="mb-2">
+              <label className="block">Complexity:</label>
+              <input 
+                type="range" 
+                min="1" 
+                max="10" 
+                value={complexity} 
+                onChange={(e) => setComplexity(parseInt(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            <div className="mb-2">
+              <label className="block">Triangle Density Target:</label>
+              <p className="text-sm text-gray-600">
+                {triangleDensityTarget.toFixed(4)} triangles per mm²
+              </p>
+            </div>
+            <div className="mb-2">
+              <label className="block">Estimated Triangles:</label>
+              <p className="text-sm text-gray-600">
+                {estimatedTriangles.toLocaleString()}
+              </p>
+            </div>
+            {shapeType === 'box' ? (
+              <>
+                <div className="mb-2 inline-flex">
+                  <label className="block p-1">Width:</label>
+                  <input 
+                    type="number" 
+                    value={dimensions.width} 
+                    onChange={(e) => handleDimensionChange('width', e.target.value)}
+                    step="0.1"
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+                <div className="mb-2 inline-flex">
+                  <label className="block p-1">Height:</label>
+                  <input 
+                    type="number" 
+                    value={dimensions.height} 
+                    onChange={(e) => handleDimensionChange('height', e.target.value)}
+                    step="0.1"
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+                <div className="mb-2 inline-flex">
+                  <label className="block p-1">Depth:</label>
+                  <input 
+                    type="number" 
+                    value={dimensions.depth} 
+                    onChange={(e) => handleDimensionChange('depth', e.target.value)}
+                    step="0.1"
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-2 inline-flex">
+                  <label className="block p-1">Height:</label>
+                  <input 
+                    type="number" 
+                    value={dimensions.height} 
+                    onChange={(e) => handleDimensionChange('height', e.target.value)}
+                    step="0.1"
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+                <div className="mb-2 inline-flex">
+                  <label className="block p-1">Diameter:</label>
+                  <input 
+                    type="number" 
+                    value={dimensions.diameter} 
+                    onChange={(e) => handleDimensionChange('diameter', e.target.value)}
+                    step="0.1"
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+              </>
+            )}
+            <button 
+              onClick={handleCreateShape}
+              className="w-full bg-green-500 text-white p-2 rounded flex items-center justify-center"
+            >
+              <FaPlus className="mr-2" /> Add Shape
+            </button>
+          </>
+        )}
+      </div>
+    );
+  };
+/* ================================================================================ */
+.icon-small {
+    width: 50px;
+    height: 50px;
+}
+/* ================================================================================ */
+import React, { memo } from 'react';
+import MyListIcon from '../assets/list.svg';
+import MySketchIcon from '../assets/sketch.svg';
+import MyImportExportIcon from '../assets/import-export.svg';
+import MyExtrudeIcon from '../assets/extrude.svg';
+import MySettingsIcon from '../assets/settings.svg';
+import MyMirroringIcon from '../assets/mirror.svg';
+import MyPatternIcon from '../assets/pattern.svg';
+import MyFormulaIcon from '../assets/formula.svg';
+import MyShapeIcon from '../assets/shape.svg';
+import MyPlanesIcon from '../assets/planes.svg';
+import MyStructuralAnalysisIcon from '../assets/analysis.svg';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
+import { useVersioning } from '../hooks/useVersioning';
+import './Toolbar.css';
+
+const toolbarItems = [
+  { icon: MyListIcon, name: 'List View' },
+  { icon: MySketchIcon, name: 'Sketch View' },
+  { icon: MyExtrudeIcon, name: 'Extrude View' },
+  { icon: MyImportExportIcon, name: 'Import/Export View' },
+  { icon: MyShapeIcon, name: 'Shape Tool View' },
+  { icon: MyPlanesIcon, name: 'Custom Planes View'},
+  { icon: MyMirroringIcon, name: 'Mirroring View' },
+  { icon: MyPatternIcon, name: 'Pattern View' },
+  { icon: MyFormulaIcon, name: 'Formula View' },
+  { icon: MyStructuralAnalysisIcon, name: 'Structural Analysis View' },
+  { icon: MySettingsIcon, name: 'Settings View' },
+];
+
+export const Toolbar = memo(() => {
+
+  const model = useHypeStudioModel();
+  const activeView = useHypeStudioState('activeView', 'List View');
+
+  const version = useVersioning(['activeView']);
+
+  const handleItemClick = (viewName) => {
+    model.setState(state => ({ ...state, activeView: viewName }), false);
+  };
+
+  return (
+  <div id={`toolbar-${version}`} className="bg-white p-2 flex space-x-4">
+    {toolbarItems.map((item, index) => (
+      <button
+        key={index}
+        onClick={() => handleItemClick(item.name)}
+        title={item.name}
+        className={`p-2 rounded transition-all duration-200 ease-in-out ${
+          activeView === item.name 
+            ? 'bg-blue-200 outline outline-2 outline-green-500' 
+            : 'hover:bg-blue-100'
+        }`}
+      >
+        <item.icon className="icon-small" />
+      </button>
+    ))}
+  </div>
+  );
+});
+/* ================================================================================ */
+import { fn } from '@storybook/test';
+import { Toolbar } from './Toolbar';
+
+export default {
+  title: 'Components/Toolbar',
+  component: Toolbar,
+  parameters: {
+    layout: 'centered',
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    activeView: {
+      control: 'select',
+      options: ['List View', 'Sketch View', 'Extrude View', 'Import/Export View', 'Fillet/Chamfer View', 'Dimension Tool View'],
+    },
+  },
+  args: { onItemClick: fn() },
+};
+
+export const Default = {
+  args: {
+    activeView: 'List View',
+  },
+};
+
+export const SketchViewActive = {
+  args: {
+    activeView: 'Sketch View',
+  },
+};

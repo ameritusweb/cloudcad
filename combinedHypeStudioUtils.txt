@@ -1,0 +1,1913 @@
+// src/utils/babylonUtils.js
+
+import { 
+    Scene, ArcRotateCamera, Vector3, HemisphericLight, MeshBuilder, 
+    StandardMaterial, Color3, Camera, Viewport, TransformNode, Mesh, VertexData
+  } from '@babylonjs/core';
+import * as meshUtils from './meshUtils';
+  
+export const createShape = (scene, id, shapeData) => {
+  let mesh;
+
+  if (shapeData.type && ['box', 'cylinder'].includes(shapeData.type)) {
+    // Handle predefined shapes
+    switch (shapeData.type) {
+      case 'box':
+        mesh = MeshBuilder.CreateBox(id, shapeData.params, scene);
+        break;
+      case 'cylinder':
+        mesh = MeshBuilder.CreateCylinder(id, shapeData.params, scene);
+        break;
+    }
+  } else if (shapeData.geometry) {
+    // Handle custom shapes with provided geometry
+    mesh = new Mesh(id, scene);
+  } else {
+    console.warn(`Unable to create shape for ${id}: No recognized type or geometry provided`);
+    return null;
+  }
+
+  const vertexData = new VertexData();
+    
+  vertexData.positions = shapeData.geometry.positions;
+  vertexData.indices = shapeData.geometry.indices;
+  vertexData.normals = shapeData.geometry.normals;
+  if (shapeData.geometry.uvs) {
+    vertexData.uvs = shapeData.geometry.uvs;
+  }
+
+  vertexData.applyToMesh(mesh);
+
+  const material = new StandardMaterial(`${id}_material`, scene);
+  material.diffuseColor = new Color3(0.5, 0.5, 0.5);
+  mesh.material = material;
+
+  if (shapeData.position) mesh.position = new Vector3(shapeData.position.x, shapeData.position.y, shapeData.position.z);
+  if (shapeData.rotation) mesh.rotation = new Vector3(shapeData.rotation.x, shapeData.rotation.y, shapeData.rotation.z);
+  if (shapeData.scaling) mesh.scaling = new Vector3(shapeData.scaling.x, shapeData.scaling.y, shapeData.scaling.z);
+
+  return mesh;
+};
+
+export const updateShape = (mesh, shapeData) => {
+  if (shapeData.params && ['box', 'cylinder'].includes(shapeData.type)) {
+    // Update parameters for predefined shapes
+    Object.entries(shapeData.params).forEach(([key, value]) => {
+      mesh[key] = value;
+    });
+  }
+
+  if (shapeData.geometry) {
+    // Update geometry for custom shapes
+    const vertexData = new VertexData();
+    vertexData.positions = shapeData.geometry.positions;
+    vertexData.indices = shapeData.geometry.indices;
+    vertexData.normals = shapeData.geometry.normals;
+    if (shapeData.geometry.uvs) {
+      vertexData.uvs = shapeData.geometry.uvs;
+    }
+    vertexData.applyToMesh(mesh, true);  // The 'true' parameter updates the mesh in place
+  }
+
+  // Update other properties
+  if (shapeData.position) mesh.position.copyFrom(new Vector3(shapeData.position.x, shapeData.position.y, shapeData.position.z));
+  if (shapeData.rotation) mesh.rotation.copyFrom(new Vector3(shapeData.rotation.x, shapeData.rotation.y, shapeData.rotation.z));
+  if (shapeData.scaling) mesh.scaling.copyFrom(new Vector3(shapeData.scaling.x, shapeData.scaling.y, shapeData.scaling.z));
+};
+
+export const removeShape = (scene, mesh) => {
+  if (mesh) {
+    mesh.dispose();
+  }
+};
+
+  export const setupMainScene = (engine, canvas, meshesRef) => {
+    const scene = new Scene(engine);
+    scene.clearColor = new Color3(0.95, 0.95, 0.95);
+  
+    const camera = new ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2, 10, Vector3.Zero(), scene);
+    camera.attachControl(canvas, true);
+  
+    const light = new HemisphericLight("light", new Vector3(0, 1, -1), scene);
+    light.intensity = 0.9;
+
+    return { scene, camera };
+  };
+  
+  export const setupControlScene = (engine, canvas) => {
+    const scene = new Scene(engine);
+    scene.autoClear = false;
+    scene.detachControl();
+    scene.attachControl(canvas, true);
+
+    const camera = new ArcRotateCamera("controlCamera", Math.PI / 4, Math.PI / 3, 10, Vector3.Zero(), scene);
+    camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+    camera.orthoTop = 1;
+    camera.orthoBottom = -1;
+    camera.orthoLeft = -1;
+    camera.orthoRight = 1;
+  
+    const light = new HemisphericLight("controlLight", new Vector3(0, 1, 0), scene);
+  
+    scene.createDefaultCamera = false;
+    scene.createDefaultLight = false;
+    const viewport = new Viewport(0.75, 0.45, 0.25, 0.5);
+    camera.viewport = viewport;
+  
+    return { scene, camera };
+  };
+  
+  export const createPlane = (scene, planeId, normal) => {
+    const plane = MeshBuilder.CreatePlane(planeId, { size: 10 }, scene);
+    const material = new StandardMaterial(`${planeId}Material`, scene);
+    material.diffuseColor = new Color3(0.5, 0.5, 0.5);
+    material.alpha = 0.5;
+    material.backFaceCulling = false;
+    plane.material = material;
+  
+    if (normal) {
+      plane.lookAt(normal);
+    } else {
+      switch(planeId) {
+        case 'X':
+          plane.rotation.y = Math.PI / 2;
+          break;
+        case 'Y':
+          plane.rotation.x = Math.PI / 2;
+          break;
+        default:
+        case 'Z':
+          // No rotation needed
+          break;
+      }
+    }
+  
+    plane.isVisible = false;
+    return plane;
+  };
+  
+  export const updatePlaneVisibility = (planes, planeStates, updateCameraForPlane) => {
+    Object.entries(planeStates).forEach(([plane, state]) => {
+      const planeMesh = planes[plane];
+      if (planeMesh) {
+        planeMesh.isVisible = state !== 'hidden';
+        if (state === 'aligned') {
+          updateCameraForPlane(plane);
+        }
+      }
+    });
+  };
+  
+  export const createPreviewMesh = (scene, type, startPoint) => {
+    let mesh;
+    if (type === 'circle') {
+      mesh = MeshBuilder.CreateDisc('preview', { radius: 0.1 }, scene);
+    } else if (type === 'rectangle') {
+      mesh = MeshBuilder.CreatePlane('preview', { width: 0.1, height: 0.1 }, scene);
+    }
+    
+    if (mesh) {
+      mesh.position = startPoint;
+      const material = new StandardMaterial("previewMaterial", scene);
+      material.diffuseColor = new Color3(0, 1, 0);
+      material.alpha = 0.5;
+      mesh.material = material;
+    }
+    
+    return mesh;
+  };
+  
+  export const updatePreviewMesh = (mesh, startPoint, endPoint, type) => {
+    if (type === 'circle') {
+      const radius = Vector3.Distance(startPoint, endPoint);
+      mesh.scaling = new Vector3(radius, radius, 1);
+    } else if (type === 'rectangle') {
+      const width = Math.abs(endPoint.x - startPoint.x);
+      const height = Math.abs(endPoint.y - startPoint.y);
+      mesh.scaling = new Vector3(width, height, 1);
+      mesh.position = new Vector3(
+        (startPoint.x + endPoint.x) / 2,
+        (startPoint.y + endPoint.y) / 2,
+        startPoint.z
+      );
+    }
+  };
+  
+  export const getSketchDataFromPreview = (previewMesh, type) => {
+    if (type === 'circle') {
+      return {
+        center: previewMesh.position,
+        radius: previewMesh.scaling.x
+      };
+    } else if (type === 'rectangle') {
+      return {
+        center: previewMesh.position,
+        width: previewMesh.scaling.x,
+        height: previewMesh.scaling.y
+      };
+    }
+  };
+
+  export const handleMeshSelection = (pickResult, meshes, scene, model, onSelectionChange) => {
+    if (pickResult.hit) {
+      let pickedNode = pickResult.pickedMesh;
+      while (pickedNode && !(pickedNode instanceof TransformNode)) {
+        pickedNode = pickedNode.parent;
+      }
+      
+      if (pickedNode) {
+        const nodeId = pickedNode.id;
+  
+        // Clear previous selection
+        if (model.state.selectedElementId && meshes[model.state.selectedElementId]) {
+          meshUtils.unhighlightMesh(meshes[model.state.selectedElementId]);
+        }
+  
+        // Set new selection
+        model.selectElement(nodeId);
+        meshUtils.highlightMesh(scene, pickedNode);
+        
+        onSelectionChange(nodeId);
+  
+        return nodeId;
+      }
+    } else {
+      // Clear selection if clicking on empty space
+      if (model.state.selectedElementId && meshes[model.state.selectedElementId]) {
+        meshUtils.unhighlightMesh(meshes[model.state.selectedElementId]);
+      }
+      model.selectElement(null);
+      onSelectionChange(null);
+    }
+    return null;
+  };
+  
+  export const handleSketchInteraction = (model, sketchId, pickResult) => {
+    const sketch = model.state.elements.sketches[sketchId];
+    if (sketch) {
+      const closestPointIndex = meshUtils.findClosestPointIndex(sketch.geometry, pickResult.pickedPoint);
+      if (closestPointIndex !== -1) {
+        return (dragPoint) => {
+          const newGeometry = [...sketch.geometry];
+          newGeometry[closestPointIndex] = {
+            x: dragPoint.x,
+            y: dragPoint.y
+          };
+          model.updateElement('sketches', sketchId, { geometry: newGeometry });
+        };
+      }
+    }
+    return null;
+  };
+  
+  export const handleExtrusionInteraction = (model, extrusionId, pickResult) => {
+    const extrusion = model.state.elements.extrusions[extrusionId];
+    if (extrusion) {
+      const startDepth = extrusion.depth;
+      const startY = pickResult.pickedPoint.y;
+  
+      return (dragPoint) => {
+        const depthChange = dragPoint.y - startY;
+        const newDepth = Math.max(0, startDepth + depthChange);
+        model.updateElement('extrusions', extrusionId, { depth: newDepth });
+      };
+    }
+    return null;
+  };
+
+  export const renderScene = (scene, model, meshes) => {
+    // Clear existing meshes
+    Object.values(meshes).forEach(mesh => mesh.dispose());
+    meshes = {};
+  
+    // Render sketches
+    Object.values(model.state.elements.sketches).forEach(sketch => {
+      const mesh = meshUtils.createSketchMesh(scene, sketch);
+      meshes[sketch.id] = mesh;
+    });
+  
+    // Render extrusions
+    Object.values(model.state.elements.extrusions).forEach(extrusion => {
+      const mesh = meshUtils.createExtrusionMesh(scene, extrusion, model.state.elements.sketches[extrusion.baseSketchId]);
+      meshes[extrusion.id] = mesh;
+    });
+  
+    // ... render other element types as needed
+  
+    return meshes;
+  };
+/* ================================================================================ */
+import { 
+    Vector3
+  } from '@babylonjs/core';
+
+export const updateCameraControls = (camera, controlMode, canvas) => {
+    camera.inputs.clear();
+  
+    switch (controlMode) {
+      case 'pointer':
+      case 'drawing':
+      case 'dimension':
+      case 'zoom':
+        camera.inputs.addMouseWheel();
+
+        // Adjust zoom speed
+        camera.inputs.attached.mousewheel.wheelPrecisionY = 5; 
+
+        // Adjust zoom step size
+        camera.wheelDeltaPercentage = 0.02; 
+        break;
+      case 'pan':
+        camera.inputs.addPointers();
+        camera.panningSensibility = 150;
+        camera.inputs.attached.pointers.buttons = [0]; // Left mouse button
+        camera.inputs.attached.pointers.angularSensibilityX = 0;
+        camera.inputs.attached.pointers.angularSensibilityY = 0;
+        
+        // Override onButtonDown for custom pan behavior
+        const originalOnButtonDown = camera.inputs.attached.pointers.onButtonDown;
+        camera.inputs.attached.pointers.onButtonDown = (evt) => {
+          if (evt.button === 0) { // Left mouse button
+            camera.inputs.attached.pointers._isPanClick = true;
+            evt.preventDefault();
+          } else {
+            originalOnButtonDown(evt);
+          }
+        };
+        break;
+      case 'rotate':
+      default:
+        camera.inputs.addMouseWheel();
+        camera.inputs.addPointers();
+        break;
+    }
+  
+    camera.attachControl(canvas, true);
+  };
+
+export const updateCameraForPlane = (camera, plane) => {
+    switch (plane) {
+      default:
+      case 'X':
+        camera.setPosition(new Vector3(10, 0, 0));
+        break;
+      case 'Y':
+        camera.setPosition(new Vector3(0, 10, 0));
+        break;
+      case 'Z':
+        camera.setPosition(new Vector3(0, 0, 10));
+        break;
+    }
+    camera.setTarget(Vector3.Zero());
+  };
+
+  export const updateCameraPosition = (camera, view) => {
+    if (!camera) return;
+
+    console.log("Updating camera position for view:", view);  // Debug log
+    
+    switch (view) {
+      case "Front":
+        camera.setPosition(new Vector3(0, 0, -10));
+        break;
+      case "Back":
+        camera.setPosition(new Vector3(0, 0, 10));
+        break;
+      case "Left":
+        camera.setPosition(new Vector3(-10, 0, 0));
+        break;
+      case "Right":
+        camera.setPosition(new Vector3(10, 0, 0));
+        break;
+      case "Top":
+        camera.setPosition(new Vector3(0, 10, 0));
+        break;
+      case "Bottom":
+        camera.setPosition(new Vector3(0, -10, 0));
+        break;
+      default:
+        break;
+    }
+    camera.setTarget(Vector3.Zero());
+  };
+/* ================================================================================ */
+// src/utils/ioUtils.js
+
+import { saveStateToLocalStorage } from '../utils/storageUtils';
+
+export const exportStateToJSON = (model) => {
+  const stateJSON = model.toJSON();
+  const blob = new Blob([stateJSON], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'hypeStudioState.json';
+  a.click();
+  
+  URL.revokeObjectURL(url);
+};
+
+export const importStateFromJSON = async (file, model) => {
+  const reader = new FileReader();
+  reader.readAsText(file);
+  
+  reader.onload = (event) => {
+    const json = event.target.result;
+    model.fromJSON(json);
+    saveStateToLocalStorage(model);  // Save imported state to localStorage
+  };
+  
+  reader.onerror = (error) => {
+    console.error('Error reading JSON file:', error);
+  };
+};
+
+/* ================================================================================ */
+import { 
+  Vector3, MeshBuilder, StandardMaterial, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
+} from '@babylonjs/core';
+
+let highlightLayer;
+
+// Function to manage spline sketch meshes
+const manageSplineSketchMesh = (scene, sketch, existingMesh = null) => {
+  const points = [];
+  
+  // Use a simple quadratic Bezier curve for demonstration purposes
+  for (let t = 0; t <= 1; t += 0.01) {
+    const x = (1 - t) * (1 - t) * sketch.start.x + 2 * (1 - t) * t * sketch.control.x + t * t * sketch.end.x;
+    const y = (1 - t) * (1 - t) * sketch.start.y + 2 * (1 - t) * t * sketch.control.y + t * t * sketch.end.y;
+    points.push(new Vector3(x, y, 0));
+  }
+  
+  let mesh;
+  if (existingMesh) {
+    mesh = MeshBuilder.CreateLines("spline", { points: points, instance: existingMesh });
+  } else {
+    mesh = MeshBuilder.CreateLines("spline", { points: points, updatable: true }, scene);
+    mesh.color = new Color3(0, 0, 1); // Blue color for sketches
+  }
+  
+  return mesh;
+};
+
+// Function to manage arc sketch meshes
+const manageArcSketchMesh = (scene, sketch, existingMesh = null) => {
+  const points = [];
+  const step = (sketch.endAngle - sketch.startAngle) / 64;
+  
+  for (let i = sketch.startAngle; i <= sketch.endAngle; i += step) {
+    points.push(new Vector3(
+      sketch.center.x + sketch.radius * Math.cos(i),
+      sketch.center.y + sketch.radius * Math.sin(i),
+      0
+    ));
+  }
+  
+  let mesh;
+  if (existingMesh) {
+    mesh = MeshBuilder.CreateLines("arc", { points: points, instance: existingMesh });
+  } else {
+    mesh = MeshBuilder.CreateLines("arc", { points: points, updatable: true }, scene);
+    mesh.color = new Color3(0, 0, 1); // Blue color for sketches
+  }
+  
+  return mesh;
+};
+
+// Function to manage line sketch meshes
+const manageLineSketchMesh = (scene, sketch, existingMesh = null) => {
+  const points = [
+    new Vector3(sketch.start.x, sketch.start.y, 0),
+    new Vector3(sketch.end.x, sketch.end.y, 0)
+  ];
+  
+  let mesh;
+  if (existingMesh) {
+    mesh = MeshBuilder.CreateLines("line", { points: points, instance: existingMesh });
+  } else {
+    mesh = MeshBuilder.CreateLines("line", { points: points, updatable: true }, scene);
+    mesh.color = new Color3(0, 0, 1); // Blue color for sketches
+  }
+  
+  return mesh;
+};
+
+// Function to manage polygon sketch meshes
+const managePolygonSketchMesh = (scene, sketch, existingMesh = null) => {
+  const options = {
+    shape: sketch.points.map(point => new Vector3(point.x, point.y, 0)),
+    updatable: true
+  };
+  
+  let mesh;
+  if (existingMesh) {
+    existingMesh.dispose();
+    mesh = MeshBuilder.CreatePolygon("polygon", options, scene);
+  } else {
+    mesh = MeshBuilder.CreatePolygon("polygon", options, scene);
+  }
+  
+  mesh.position = new Vector3(0, 0, 0);
+  
+  const material = new StandardMaterial("polygonMaterial", scene);
+  material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+  material.wireframe = true;
+  mesh.material = material;
+  
+  return mesh;
+};
+
+// Function to manage ellipse sketch meshes
+const manageEllipseSketchMesh = (scene, sketch, existingMesh = null) => {
+  const options = {
+    diameterX: sketch.radiusX * 2,
+    diameterY: sketch.radiusY * 2,
+    tessellation: 64
+  };
+  
+  let mesh;
+  if (existingMesh) {
+    existingMesh.dispose();
+    mesh = MeshBuilder.CreateDisc("ellipse", options, scene);
+  } else {
+    mesh = MeshBuilder.CreateDisc("ellipse", options, scene);
+  }
+  
+  mesh.position = new Vector3(sketch.center.x, sketch.center.y, 0);
+  mesh.rotation.x = Math.PI / 2; // Rotate to lie flat on the XY plane
+  
+  const material = new StandardMaterial("ellipseMaterial", scene);
+  material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+  material.wireframe = true;
+  mesh.material = material;
+  
+  return mesh;
+};
+
+// Function to manage circle sketch meshes
+const manageCircleSketchMesh = (scene, sketch, existingMesh = null) => {
+  const options = {
+    diameter: sketch.radius * 2,
+    thickness: 0.01,
+    tessellation: 64
+  };
+  
+  let mesh;
+  if (existingMesh) {
+    mesh = MeshBuilder.CreateTorus("circle", options, scene);
+    existingMesh.dispose();
+  } else {
+    mesh = MeshBuilder.CreateTorus("circle", options, scene);
+  }
+  
+  mesh.position = new Vector3(sketch.center.x, sketch.center.y, 0);
+  mesh.rotation.x = Math.PI / 2; // Rotate to lie flat on the XY plane
+  
+  const material = new StandardMaterial("circleMaterial", scene);
+  material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+  material.wireframe = true;
+  mesh.material = material;
+  
+  return mesh;
+};
+
+// Function to manage rectangle sketch meshes
+const manageRectangleSketchMesh = (scene, sketch, existingMesh = null) => {
+  const options = {
+    width: sketch.width,
+    height: sketch.height,
+    updatable: true
+  };
+  
+  let mesh;
+  if (existingMesh) {
+    mesh = MeshBuilder.CreatePlane("rectangle", options, scene);
+    existingMesh.dispose();
+  } else {
+    mesh = MeshBuilder.CreatePlane("rectangle", options, scene);
+  }
+  
+  mesh.position = new Vector3(sketch.center.x, sketch.center.y, 0);
+  
+  const material = new StandardMaterial("rectangleMaterial", scene);
+  material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+  material.wireframe = true;
+  mesh.material = material;
+  
+  return mesh;
+};
+
+// Exported function to create a sketch mesh
+export const createSketchMesh = (scene, sketch) => {
+  return manageSketchMesh(scene, sketch);
+};
+
+// Exported function to create an extrusion mesh
+export const createExtrusionMesh = (scene, extrusion, baseSketch) => {
+  return manageExtrusionMesh(scene, extrusion, baseSketch.geometry, extrusion.customProperties);
+};
+
+// Exported function to manage a sketch mesh
+export const manageSketchMesh = (scene, sketch, existingMesh = null) => {
+  try {
+    let mesh;
+    switch (sketch.type) {
+      case 'circle':
+        mesh = manageCircleSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'rectangle':
+        mesh = manageRectangleSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'ellipse':
+        mesh = manageEllipseSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'polygon':
+        mesh = managePolygonSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'line':
+        mesh = manageLineSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'arc':
+        mesh = manageArcSketchMesh(scene, sketch, existingMesh);
+        break;
+      case 'spline':
+        mesh = manageSplineSketchMesh(scene, sketch, existingMesh);
+        break;
+      default:
+        const points = sketch.geometry.map(point => new Vector3(point.x, point.y, 0));
+        if (existingMesh) {
+          mesh = MeshBuilder.CreateLines("sketch", { points: points, instance: existingMesh });
+        } else {
+          mesh = MeshBuilder.CreateLines("sketch", { points: points, updatable: true }, scene);
+          mesh.color = new Color3(0, 0, 1); // Blue color for sketches
+        }
+    }
+    mesh.name = `sketch_${sketch.id}`;
+    return mesh;
+  } catch (error) {
+    console.error(`Error managing sketch mesh: ${error.message}`);
+    return null;
+  }
+};
+
+// Function to manage an extrusion mesh
+export const manageExtrusionMesh = (scene, extrusion, sketchGeometry, customProperties, existingNode = null) => {
+  try {
+    const extrusionNode = existingNode || new TransformNode(`extrusionNode_${extrusion.id}`, scene);
+    extrusionNode.name = `extrusion_${extrusion.id}`;
+
+    // Sketch lines (child of extrusionNode)
+    const lines = manageSketchMesh(scene, { id: extrusion.id, geometry: sketchGeometry }, extrusionNode.getChildMeshes(false)[0]);
+    lines.parent = extrusionNode;
+
+    // Extruded shape (child of extrusionNode)
+    const shape = sketchGeometry.map(point => new Vector3(point.x, point.y, 0));
+    const path = [new Vector3(0, 0, 0), new Vector3(0, 0, extrusion.depth)];
+    
+    let extrudeMesh;
+    if (extrusionNode.getChildMeshes(false)[1]) {
+      extrudeMesh = MeshBuilder.ExtrudeShape("extrusion", {
+        shape: shape,
+        path: path,
+        instance: extrusionNode.getChildMeshes(false)[1]
+      });
+    } else {
+      extrudeMesh = MeshBuilder.ExtrudeShape("extrusion", {
+        shape: shape,
+        path: path,
+        updatable: true
+      }, scene);
+      extrudeMesh.parent = extrusionNode;
+    }
+    extrudeMesh.name = `extrudedMesh_${extrusion.id}`;
+
+    applyCustomProperties(extrudeMesh, customProperties, scene);
+    return extrusionNode;
+  } catch (error) {
+    console.error(`Error managing extrusion mesh: ${error.message}`);
+    return null;
+  }
+};
+
+// Function to apply custom properties to a mesh
+const applyCustomProperties = (mesh, customProperties, scene) => {
+  if (customProperties?.material) {
+    const material = new StandardMaterial("customMaterial", scene);
+    material.diffuseColor = new Color3(...customProperties.material);
+    mesh.material = material;
+  }
+  // Apply other custom properties as needed
+};
+
+// Function to highlight a mesh
+export const highlightMesh = (scene, mesh) => {
+  if (!highlightLayer) {
+    highlightLayer = new HighlightLayer("highlightLayer", scene);
+  }
+  highlightLayer.addMesh(mesh, Color3.Yellow());
+};
+
+// Function to unhighlight a mesh
+export const unhighlightMesh = (mesh) => {
+  if (highlightLayer) {
+    highlightLayer.removeMesh(mesh);
+  }
+};
+
+// Function to manage an element mesh
+export const manageElementMesh = (scene, element, elementType, existingNode = null, customProperties = null) => {
+  switch (elementType) {
+    case 'sketches':
+      return createSketchMesh(scene, element);
+    case 'extrusions':
+      const baseSketch = scene.getSketchById(element.baseSketchId);
+      return createExtrusionMesh(scene, element, baseSketch);
+    // Add cases for other element types
+    default:
+      console.error(`Unknown element type: ${elementType}`);
+      return null;
+  }
+};
+
+// Function to clear all meshes
+export const clearMeshes = (meshes) => {
+  Object.values(meshes).forEach(mesh => disposeMesh(mesh));
+};
+
+// Function to dispose of a mesh
+export const disposeMesh = (mesh) => {
+  if (mesh) {
+    if (mesh instanceof TransformNode) {
+      mesh.getChildMeshes().forEach(childMesh => {
+        if (childMesh.material) {
+          childMesh.material.dispose();
+        }
+        childMesh.dispose();
+      });
+    } else if (mesh.material) {
+      mesh.material.dispose();
+    }
+    mesh.dispose();
+  }
+};
+
+// Function to update mesh visibility
+export const updateMeshVisibility = (mesh, isVisible) => {
+  if (mesh) {
+    if (mesh instanceof TransformNode) {
+      mesh.getChildMeshes().forEach(childMesh => {
+        childMesh.isVisible = isVisible;
+      });
+    } else {
+      mesh.isVisible = isVisible;
+    }
+  }
+};
+
+// Function to get a sketch from the scene by ID
+export const getSketchFromScene = (scene, sketchId) => {
+  return scene.getMeshByName(`sketch_${sketchId}`);
+};
+
+// Function to get an extrusion from the scene by ID
+export const getExtrusionFromScene = (scene, extrusionId) => {
+  return scene.getTransformNodeByName(`extrusion_${extrusionId}`);
+};
+
+// Function to start a drag operation
+export const startDragOperation = (scene, dragCallback, endCallback) => {
+  let dragging = false;
+
+  const onPointerMove = (evt) => {
+    if (!dragging) return;
+    const pickResult = scene.pick(evt.x, evt.y);
+    if (pickResult.hit) {
+      dragCallback(pickResult.pickedPoint);
+    }
+  };
+
+  const onPointerUp = () => {
+    dragging = false;
+    scene.onPointerMove = null;
+    scene.onPointerUp = null;
+    if (endCallback) endCallback();
+  };
+
+  const onPointerDown = (evt) => {
+    dragging = true;
+    const pickResult = scene.pick(evt.x, evt.y);
+    if (pickResult.hit) {
+      dragCallback(pickResult.pickedPoint);
+    }
+  };
+
+  scene.onPointerDown = onPointerDown;
+  scene.onPointerMove = onPointerMove;
+  scene.onPointerUp = onPointerUp;
+
+  return () => {
+    // Cleanup function
+    scene.onPointerDown = null;
+    scene.onPointerMove = null;
+    scene.onPointerUp = null;
+  };
+};
+
+// Function to find the closest point index from an array of points
+export const findClosestPointIndex = (points, pickedPoint) => {
+  let closestIndex = -1;
+  let minDistance = Infinity;
+  points.forEach((point, index) => {
+    const distance = Vector3.Distance(
+      new Vector3(point.x, point.y, 0),
+      new Vector3(pickedPoint.x, pickedPoint.y, pickedPoint.z)
+    );
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestIndex = index;
+    }
+  });
+  return closestIndex;
+};
+
+/* ================================================================================ */
+// src/utils/observableUtils.js
+
+export const computeDiff = (oldObj, newObj) => {
+  const diff = {};
+  const allKeys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
+
+  for (const key of allKeys) {
+    const oldValue = oldObj[key];
+    const newValue = newObj[key];
+
+    if (oldValue === newValue) continue;
+
+    if (oldValue === null || newValue === null) {
+      diff[key] = { type: 'replace', value: newValue };
+    } else if (typeof oldValue !== typeof newValue) {
+      diff[key] = { type: 'replace', value: newValue };
+    } else if (typeof newValue === 'object') {
+      if (Array.isArray(newValue)) {
+        diff[key] = { type: 'array', value: computeArrayDiff(oldValue, newValue) };
+      } else {
+        const nestedDiff = computeDiff(oldValue, newValue);
+        if (Object.keys(nestedDiff).length > 0) {
+          diff[key] = { type: 'object', value: nestedDiff };
+        }
+      }
+    } else {
+      diff[key] = { type: 'replace', value: newValue };
+    }
+  }
+
+  return diff;
+};
+
+export const computeArrayDiff = (oldArray, newArray) => {
+  const diff = { removed: [], added: [], changed: [] };
+  const maxLength = Math.max(oldArray.length, newArray.length);
+  for (let i = 0; i < maxLength; i++) {
+    if (i >= oldArray.length) {
+      diff.added.push({ index: i, value: newArray[i] });
+    } else if (i >= newArray.length) {
+      diff.removed.push({ index: i });
+    } else if (JSON.stringify(oldArray[i]) !== JSON.stringify(newArray[i])) {
+      diff.changed.push({ index: i, value: computeDiff(oldArray[i], newArray[i]) });
+    }
+  }
+  return diff;
+};
+
+/* ================================================================================ */
+// src/utils/sceneUtils.js
+
+import { MeshBuilder, StandardMaterial, Vector3, Color3, ActionManager, ExecuteCodeAction } from '@babylonjs/core';
+
+export const createControlCube = (scene, onFaceClick) => {
+  const cube = MeshBuilder.CreateBox("controlCube", { size: 0.5 }, scene);
+  const cubeMaterial = new StandardMaterial("cubeMaterial", scene);
+  cubeMaterial.wireframe = true;
+  cube.material = cubeMaterial;
+
+  const faceNames = ["Front", "Back", "Left", "Right", "Top", "Bottom"];
+  const faceNormals = [
+    new Vector3(0, 0, 1),
+    new Vector3(0, 0, -1),
+    new Vector3(-1, 0, 0),
+    new Vector3(1, 0, 0),
+    new Vector3(0, 1, 0),
+    new Vector3(0, -1, 0)
+  ];
+
+  let hoverFace = null;
+
+  faceNames.forEach((name, index) => {
+    const faceMesh = MeshBuilder.CreatePlane(name, { size: 0.65 }, scene);
+    faceMesh.parent = cube;
+    faceMesh.position = faceNormals[index].scale(0.5);
+    faceMesh.lookAt(faceMesh.position.add(faceNormals[index]));
+
+    const faceMaterial = new StandardMaterial(name + "Material", scene);
+    faceMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5);
+    faceMaterial.alpha = 0.7;
+    faceMesh.material = faceMaterial;
+
+    faceMesh.actionManager = new ActionManager(scene);
+    faceMesh.actionManager.registerAction(
+      new ExecuteCodeAction(
+        ActionManager.OnPickTrigger,
+        () => {
+          onFaceClick(hoverFace || faceNormals[index]);
+        }
+      )
+    );
+
+    faceMesh.actionManager.registerAction(
+      new ExecuteCodeAction(
+        ActionManager.OnPointerOverTrigger,
+        () => {
+          faceMaterial.emissiveColor = new Color3(0.3, 0.3, 0.3);
+          hoverFace = name;
+        }
+      )
+    );
+
+    faceMesh.actionManager.registerAction(
+      new ExecuteCodeAction(
+        ActionManager.OnPointerOutTrigger,
+        () => {
+          faceMaterial.emissiveColor = new Color3(0, 0, 0);
+          hoverFace = null;
+        }
+      )
+    );
+  });
+
+  return cube;
+};
+
+export const getViewFromNormal = (normal) => {
+  if (typeof normal === 'string') return normal;
+  if (normal.equalsWithEpsilon(Vector3.Right())) return "Right";
+  if (normal.equalsWithEpsilon(Vector3.Left())) return "Left";
+  if (normal.equalsWithEpsilon(Vector3.Up())) return "Top";
+  if (normal.equalsWithEpsilon(Vector3.Down())) return "Bottom";
+  if (normal.equalsWithEpsilon(Vector3.Forward())) return "Front";
+  if (normal.equalsWithEpsilon(Vector3.Backward())) return "Back";
+  return "Front";
+};
+/* ================================================================================ */
+import { 
+    Vector3, MeshBuilder, Color4, StandardMaterial, ShaderMaterial, Quaternion, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
+  } from '@babylonjs/core';
+import earcut from 'earcut';
+
+const EDGE_THRESHOLD = 0.01;
+const FACE_NORMAL_THRESHOLD = 0.2;
+
+// Constants
+const FLAT_ANGLE_THRESHOLD = 0.1; // (Radians) Controls flatness sensitivity
+
+// Utility function to create a unique key for an edge
+const getEdgeKey = (v1Index, v2Index) => {
+  return v1Index < v2Index ? `${v1Index}-${v2Index}` : `${v2Index}-${v1Index}`;
+};
+
+// Function to select an edge based on a pick result
+export function selectEdge(mesh, pickResult) {
+  const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+  const indices = mesh.getIndices();
+  
+  for (let i = 0; i < indices.length; i += 3) {
+    const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+    const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+    const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+
+    if (Vector3.DistanceSquared(pickResult.pickedPoint, v1) < EDGE_THRESHOLD ||
+        Vector3.DistanceSquared(pickResult.pickedPoint, v2) < EDGE_THRESHOLD ||
+        Vector3.DistanceSquared(pickResult.pickedPoint, v3) < EDGE_THRESHOLD) {
+      return i / 3;  // Return the index of the triangle
+    }
+  }
+
+  return -1;  // No edge found
+}
+
+// Function to select a face based on a pick result
+export function selectFace(mesh, pickResult) {
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = mesh.getIndices();
+    const normals = mesh.getVerticesData(VertexBuffer.NormalKind);
+    const faceId = pickResult.faceId;
+  
+    if (faceId >= 0) {
+      const selectedNormal = new Vector3(
+        normals[indices[faceId * 3] * 3],
+        normals[indices[faceId * 3] * 3 + 1],
+        normals[indices[faceId * 3] * 3 + 2]
+      );
+  
+      let faceVertices = new Set();
+      for (let i = 0; i < indices.length; i += 3) {
+        const normal = new Vector3(
+          normals[indices[i] * 3],
+          normals[indices[i] * 3 + 1],
+          normals[indices[i] * 3 + 2]
+        );
+  
+        if (normal.equalsWithEpsilon(selectedNormal, 0.01)) {
+          for (let j = 0; j < 3; j++) {
+            const vertexIndex = indices[i + j];
+            faceVertices.add(vertexIndex);
+          }
+        }
+      }
+  
+      const worldMatrix = mesh.getWorldMatrix();
+      const vertices = Array.from(faceVertices).map(index => {
+        const vertex = new Vector3(
+          positions[index * 3],
+          positions[index * 3 + 1],
+          positions[index * 3 + 2]
+        );
+        const worldVertex = Vector3.TransformCoordinates(vertex, worldMatrix);
+        return { x: worldVertex.x, y: worldVertex.y, z: worldVertex.z };
+      });
+  
+      const worldNormal = Vector3.TransformNormal(selectedNormal, worldMatrix);
+  
+      return {
+        faceId: faceId,
+        normal: { x: worldNormal.x, y: worldNormal.y, z: worldNormal.z },
+        vertices: vertices
+      };
+    }
+  
+    return null;
+  }
+
+// Function to highlight an edge based on its index
+export function highlightEdge(mesh, edgeIndex) {
+  const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+  const indices = mesh.getIndices();
+
+  const v1 = new Vector3(positions[indices[edgeIndex * 3] * 3], positions[indices[edgeIndex * 3] * 3 + 1], positions[indices[edgeIndex * 3] * 3 + 2]);
+  const v2 = new Vector3(positions[indices[edgeIndex * 3 + 1] * 3], positions[indices[edgeIndex * 3 + 1] * 3 + 1], positions[indices[edgeIndex * 3 + 1] * 3 + 2]);
+  const v3 = new Vector3(positions[indices[edgeIndex * 3 + 2] * 3], positions[indices[edgeIndex * 3 + 2] * 3 + 1], positions[indices[edgeIndex * 3 + 2] * 3 + 2]);
+
+  const lines = [
+    [v1, v2],
+    [v2, v3],
+    [v3, v1]
+  ];
+
+  const highlightMesh = MeshBuilder.CreateLineSystem("highlightEdge", { lines: lines }, mesh.getScene());
+  highlightMesh.color = new Color3(1, 1, 0);  // Yellow highlight
+  highlightMesh.parent = mesh;
+
+  return highlightMesh;
+}
+
+// Function to highlight a face based on its index
+export function highlightFace(mesh, faceData) {
+    mesh.material.alpha = 0.5;
+    const { vertices, normal } = faceData;
+  
+  // Calculate the center of the face
+   // Calculate the center of the face
+   const center = vertices.reduce((acc, vertex) => {
+    return acc.add(new Vector3(vertex.x, vertex.y, vertex.z).clone()); // Clone before adding
+}, new Vector3()); // Start with a fresh Vector3 
+center.scaleInPlace(1 / vertices.length);
+
+  // Create a disc to represent the circular face
+  const radius = Math.max(...vertices.map(v => 
+    Vector3.Distance(new Vector3(v.x, v.y, v.z), center)
+  ));
+  const highlightMesh = MeshBuilder.CreateDisc("highlightFace", { radius: radius, tessellation: 64 }, mesh.getScene());
+  
+  // Position and orient the highlight mesh
+  highlightMesh.position = center;
+  // Orient the highlight mesh
+  const normalVector = new Vector3(normal.x, normal.y, normal.z);
+  
+ // Calculate rotation from initial (0, 0, 1) to face normal
+ const rotationAxis = Vector3.Cross(Vector3.Forward(), normalVector); 
+ const rotationAngle = Math.acos(Vector3.Dot(Vector3.Forward(), normalVector));
+ const rotationQuaternion = Quaternion.RotationAxis(rotationAxis, rotationAngle);
+ highlightMesh.rotationQuaternion = rotationQuaternion;
+
+  // Move the highlight slightly above the face to prevent z-fighting
+  highlightMesh.position.addInPlace(new Vector3(normal.x, normal.y, normal.z).scale(0.01));
+
+  const highlightMaterial = new StandardMaterial("highlightMaterial", mesh.getScene());
+  highlightMaterial.emissiveColor = new Color3(0, 1, 0);  // Green highlight
+  highlightMaterial.alpha = 0.5;
+  highlightMaterial.backFaceCulling = false;
+  highlightMesh.material = highlightMaterial;
+
+  highlightMesh.renderingGroupId = 1;
+  mesh.getScene().setRenderingAutoClearDepthStencil(1, false);
+
+  return highlightMesh;
+}
+
+// Function to select a specific part of a cylinder
+export function selectCylinderPart(mesh, pickResult) {
+  if (mesh.shape !== 'cylinder') {
+    return null;
+  }
+
+  const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+  const indices = mesh.getIndices();
+  const pickedPoint = pickResult.pickedPoint;
+
+  // Check if we're close to the top or bottom face
+  const topCenter = new Vector3(0, mesh.scaling.y / 2, 0).addInPlace(mesh.position);
+  const bottomCenter = new Vector3(0, -mesh.scaling.y / 2, 0).addInPlace(mesh.position);
+  
+  if (Vector3.Distance(pickedPoint, topCenter) < mesh.scaling.x * 0.1) {
+    return { type: 'face', part: 'top' };
+  }
+  
+  if (Vector3.Distance(pickedPoint, bottomCenter) < mesh.scaling.x * 0.1) {
+    return { type: 'face', part: 'bottom' };
+  }
+
+  // Check if we're close to the curved edge
+  const radiusVector = new Vector3(pickedPoint.x - mesh.position.x, 0, pickedPoint.z - mesh.position.z);
+  const distanceFromAxis = radiusVector.length();
+  
+  if (Math.abs(distanceFromAxis - mesh.scaling.x / 2) < 0.1) {
+    return { type: 'edge', part: 'curved' };
+  }
+
+  // If we're here, we didn't select any specific part
+  return null;
+}
+
+// Function to highlight a specific part of a cylinder
+export function highlightCylinderPart(mesh, selection) {
+  const scene = mesh.getScene();
+  let highlightMesh;
+
+  switch(selection.part) {
+    case 'top':
+    case 'bottom':
+      const y = selection.part === 'top' ? mesh.scaling.y / 2 : -mesh.scaling.y / 2;
+      highlightMesh = MeshBuilder.CreateDisc("highlightFace", { radius: mesh.scaling.x / 2, tessellation: 64 }, scene);
+      highlightMesh.position.y = y;
+      highlightMesh.rotation.x = Math.PI / 2;
+      break;
+    case 'curved':
+      highlightMesh = MeshBuilder.CreateTorus("highlightEdge", { diameter: mesh.scaling.x, thickness: 0.05, tessellation: 64 }, scene);
+      break;
+  }
+
+  if (highlightMesh) {
+    const material = new StandardMaterial("highlightMaterial", scene);
+    material.emissiveColor = selection.type === 'face' ? new Color3(0, 1, 0) : new Color3(1, 1, 0);
+    material.alpha = 0.5;
+    highlightMesh.material = material;
+    highlightMesh.parent = mesh;
+  }
+
+  return highlightMesh;
+}
+
+/**
+ * Precompute adjacency list for efficient neighbor lookup.
+ * @param {Mesh} mesh - The mesh to compute adjacency list for.
+ * @returns {Object} An adjacency list mapping vertex indices to triangle indices.
+ */
+export function precomputeAdjacencyList(mesh) {
+    const indices = mesh.getIndices();
+    const adjacencyList = {};
+
+    // Pre-initialize empty arrays for all vertices
+    for (let i = 0; i < mesh.getTotalVertices(); i++) {
+        adjacencyList[i] = [];
+    }
+
+    for (let i = 0; i < indices.length; i += 3) {
+        const triangleIndex = i / 3;
+        const [v1Index, v2Index, v3Index] = indices.slice(i, i + 3); // Get vertex indices directly
+
+        // Add triangle index to each vertex's adjacency list ONLY ONCE
+        adjacencyList[v1Index].push(triangleIndex); 
+        adjacencyList[v2Index].push(triangleIndex);
+        adjacencyList[v3Index].push(triangleIndex);
+    }
+
+    return adjacencyList;
+}
+
+/**
+ * Selects contiguous non-flat regions of a mesh.
+ * @param {Mesh} mesh - The mesh to select from.
+ * @param {PickingInfo} pickResult - The picking result.
+ * @param {Array} adjacencyList - The pre-computed adjacency list.
+ * @returns {Object|null} Selection data or null if no valid selection.
+ */
+export function selectMeshPart(mesh, pickResult, adjacencyList) {
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = mesh.getIndices();
+
+    // Ensure valid faceId
+    if (pickResult.faceId === undefined || pickResult.faceId < 0) {
+        return null;
+    }
+
+    const pickedTriangleIndex = Math.floor(pickResult.faceId / 3); // faceId is the index in the index array
+    const selectedTriangles = [];
+    const processedTriangles = new Set();
+
+    floodFill(mesh, pickedTriangleIndex, selectedTriangles, processedTriangles, adjacencyList, true); // 'true' indicates the starting point
+
+    return selectedTriangles.length > 0 ? { type: 'face', data: selectedTriangles } : null;
+}
+
+/**
+ * Recursively selects connected, non-flat triangles.
+ * @param {Mesh} mesh - The mesh to perform the flood fill on.
+ * @param {number} triangleIndex - The index of the starting triangle.
+ * @param {Array} selectedTriangles - The array to store selected triangles.
+ * @param {Set} processedTriangles - The set of processed triangles.
+ * @param {Array} adjacencyList - The pre-computed adjacency list.
+ */
+function floodFill(mesh, triangleIndex, selectedTriangles, processedTriangles, adjacencyList, initial = false) {
+    if (processedTriangles.has(triangleIndex)) {
+        return;
+    }
+    processedTriangles.add(triangleIndex);
+    selectedTriangles.push(triangleIndex);
+
+    const neighbors = getNeighboringTriangles(mesh, triangleIndex, adjacencyList);
+
+    for (const neighbor of neighbors) {
+        if (!processedTriangles.has(neighbor)) {
+            const connected = isConnected(mesh, triangleIndex, neighbor);
+            const flat = isFlat(mesh, triangleIndex, neighbor);
+
+            if (initial || connected) {
+                // For initial or connected triangles, include them regardless of flatness
+                floodFill(mesh, neighbor, selectedTriangles, processedTriangles, adjacencyList, false);
+            } else if (!flat) {
+                // For unconnected, non-flat triangles, start a new flood fill
+                floodFill(mesh, neighbor, selectedTriangles, processedTriangles, adjacencyList, true);
+            }
+        }
+    }
+}
+/**
+ * Get neighboring triangle indices using the adjacency list.
+ * @param {Mesh} mesh - The mesh to find neighbors in.
+ * @param {number} triangleIndex - The index of the triangle.
+ * @param {Array} adjacencyList = The pre-computed adjacency list.
+ * @returns {Array} An array of neighboring triangle indices.
+ */
+function getNeighboringTriangles(mesh, triangleIndex, adjacencyList) {
+    const indices = mesh.getIndices();
+    const triangleVertices = indices.slice(triangleIndex * 3, triangleIndex * 3 + 3);
+
+    const neighbors = new Set();
+    triangleVertices.forEach(vertexIndex => {
+        if (adjacencyList[vertexIndex]) {
+            adjacencyList[vertexIndex].forEach(neighborIndex => neighbors.add(neighborIndex));
+        }
+    });
+
+    neighbors.delete(triangleIndex); // Remove the current triangle itself
+    return Array.from(neighbors);
+}
+
+/**
+ * Check if two triangles share a vertex (are connected).
+ * @param {Mesh} mesh - The mesh containing the triangles.
+ * @param {number} triangleIndex1 - The index of the first triangle.
+ * @param {number} triangleIndex2 - The index of the second triangle.
+ * @returns {boolean} True if the triangles are connected, otherwise false.
+ */
+function isConnected(mesh, triangleIndex1, triangleIndex2) {
+    const indices = mesh.getIndices();
+    const vertices1 = indices.slice(triangleIndex1 * 3, triangleIndex1 * 3 + 3);
+    const vertices2 = indices.slice(triangleIndex2 * 3, triangleIndex2 * 3 + 3);
+    return vertices1.some(vertex => vertices2.includes(vertex));
+}
+
+/**
+ * Check if the angle between two triangle normals is below the flatness threshold.
+ * @param {Mesh} mesh - The mesh containing the triangles.
+ * @param {number} triangleIndex1 - The index of the first triangle.
+ * @param {number} triangleIndex2 - The index of the second triangle.
+ * @returns {boolean} True if the triangles are flat relative to each other.
+ */
+function isFlat(mesh, triangleIndex1, triangleIndex2) {
+    const normals = mesh.getVerticesData(VertexBuffer.NormalKind);
+    const indices = mesh.getIndices();
+
+    const normal1 = Vector3.FromArray(normals, indices[triangleIndex1 * 3] * 3);
+    const normal2 = Vector3.FromArray(normals, indices[triangleIndex2 * 3] * 3);
+
+    // Calculate the angle between the two normals
+    const angle = Vector3.GetAngleBetweenVectors(normal1, normal2, normal1);
+
+    return Math.abs(angle) < FLAT_ANGLE_THRESHOLD;
+}
+
+// Precompute vertex classifications based on their normal vectors
+export function precomputeVertexClassifications(mesh, adjacencyList) {
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = mesh.getIndices();
+    const normals = mesh.getVerticesData(VertexBuffer.NormalKind);   
+
+    const vertexClassifications = {};
+
+    for (let i = 0; i < indices.length; i += 3) {
+        const triangleIndex = i / 3;
+        const v1Index = indices[i];
+        const v2Index = indices[i + 1];
+        const v3Index = indices[i + 2];
+
+        const normal1 = Vector3.FromArray(normals, v1Index * 3);
+        const normal2 = Vector3.FromArray(normals, v2Index * 3);
+        const normal3 = Vector3.FromArray(normals, v3Index * 3);
+
+        // Classify each vertex based on adjacent triangles
+        for (const vertexIndex of [v1Index, v2Index, v3Index]) {
+            vertexClassifications[vertexIndex] = vertexClassifications[vertexIndex] || { flat: 0, curved: 0 };
+
+            for (const adjTriangleIndex of adjacencyList[vertexIndex]) {
+                if (adjTriangleIndex !== triangleIndex) {
+                    const adjNormal = Vector3.FromArray(normals, indices[adjTriangleIndex * 3] * 3); // Get normal of the first vertex of the adjacent triangle
+                    const isAdjCurved = !normal1.equalsWithEpsilon(adjNormal, FACE_NORMAL_THRESHOLD);
+
+                    if (isAdjCurved) {
+                        vertexClassifications[vertexIndex].curved++;
+                    } else {
+                        vertexClassifications[vertexIndex].flat++;
+                    }
+                }
+            }
+        }
+    }
+
+    // Final classification based on the counts
+    for (const vertexIndex in vertexClassifications) {
+        const { flat, curved } = vertexClassifications[vertexIndex];
+        vertexClassifications[vertexIndex] = {
+            flat: flat > 0,
+            curved: curved > 0,
+            both: flat > 0 && curved > 0
+        };
+    }
+
+    return vertexClassifications;
+}
+
+// Function to find edges based on vertex classifications
+export function findEdges(mesh, vertexClassifications) {
+    const adjacencyList = precomputeAdjacencyList(mesh);
+    const edges = new Set();
+
+    for (const vertexIndex in vertexClassifications) {
+        const classification = vertexClassifications[vertexIndex];
+
+        // Check if vertex is part of an edge (either only on curved surface or on the boundary of flat and curved surfaces)
+        if (classification.curved && !classification.both) { 
+            // Check neighboring triangles for edges
+            for (const neighborTriangleIndex of adjacencyList[vertexIndex]) {
+                const neighborVertices = mesh.getIndices().slice(neighborTriangleIndex * 3, neighborTriangleIndex * 3 + 3);
+                for (const neighborVertexIndex of neighborVertices) {
+                    if (neighborVertexIndex !== vertexIndex) {
+                        const neighborClassification = vertexClassifications[neighborVertexIndex];
+                        // If neighbor is part of a flat face, this is an edge
+                        if (neighborClassification.flat) { 
+                            edges.add(getEdgeKey(vertexIndex, neighborVertexIndex));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return Array.from(edges); // Convert the Set to an array for convenience
+}
+
+/**
+ * Highlights selected triangles by creating a polygon mesh.
+ * @param {Mesh} mesh - The mesh to highlight a part in.
+ * @param {Object} selection - The selection data.
+ * @returns {Mesh|null} The highlight mesh or null if none.
+ */
+export function highlightMeshPart(mesh, selection) {
+    mesh.material.alpha = 0.5;
+    const scene = mesh.getScene();
+    let highlightMesh;
+
+    if (selection.type === 'face') {
+        const { data: triangleIndices } = selection;
+        const vertices = [];
+
+        triangleIndices.forEach(triangleIndex => {
+            const indices = mesh.getIndices().slice(triangleIndex * 3, triangleIndex * 3 + 3);
+            indices.forEach(index => {
+                const position = Vector3.FromArray(mesh.getVerticesData(VertexBuffer.PositionKind), index * 3);
+                vertices.push(position);
+            });
+        });
+
+        // Triangulate the vertices using earcut
+        const flattenedVertices = vertices.flatMap(vertex => [vertex.x, vertex.y, vertex.z]);
+        const triangles = earcut(flattenedVertices); // Flatten vertices into a single array
+
+        // Create a polygon mesh using the triangulated indices
+        highlightMesh = MeshBuilder.CreatePolygon("highlightFace", { 
+            shape: vertices, 
+            faceUV: [], // You may need to provide UV coordinates if your mesh has textures
+            faceColors: [new Color4(0, 1, 0, 0.5)], // Green color with alpha for transparency
+            indices: triangles, // Use the triangulated indices
+            sideOrientation: Mesh.DOUBLESIDE 
+        }, scene, earcut);
+
+        const material = new StandardMaterial("highlightMaterial", scene);
+        material.emissiveColor = new Color3(0, 1, 0); // Green for faces
+        material.alpha = 0.5;
+        highlightMesh.material = material;
+    } else {
+        return null;
+    }
+
+    if (highlightMesh) {
+        highlightMesh.parent = mesh;
+    }
+
+    return highlightMesh;
+}
+/* ================================================================================ */
+// src/utils/storageUtils.js
+
+const LOCAL_STORAGE_KEY = 'hypeStudioState';
+
+export const saveStateToLocalStorage = (state) => {
+  try {
+    const serializedState = JSON.stringify(state);
+    localStorage.setItem(LOCAL_STORAGE_KEY, serializedState);
+  } catch (error) {
+    console.error('Error saving state to localStorage:', error);
+  }
+};
+
+export const loadStateFromLocalStorage = () => {
+  try {
+    const serializedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (serializedState === null) {
+      return undefined;
+    }
+    return JSON.parse(serializedState);
+  } catch (error) {
+    console.error('Error loading state from localStorage:', error);
+    return undefined;
+  }
+};
+
+export const clearStateFromLocalStorage = () => {
+  try {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+  } catch (error) {
+    console.error('Error clearing state from localStorage:', error);
+  }
+};
+
+/* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+
+class PreciseTessellation {
+  constructor(mesh, triangleDensityTarget, estimatedTriangles, options = {}) {
+    this.mesh = mesh;
+    this.triangleDensityTarget = triangleDensityTarget;
+    this.estimatedTriangles = estimatedTriangles;
+    this.tolerance = options.tolerance || 0.05; // 5% tolerance
+    this.maxIterations = options.maxIterations || 1; // Prevent infinite loops
+    this.maxEdgeLength = options.maxEdgeLength || 1.0; // Max length of an edge
+    this.angleTolerance = options.angleTolerance || Math.PI / 6; // Angle tolerance for curvature
+    this.distanceThreshold = options.distanceThreshold || 0.25; // Threshold for acceptable distance change
+  }
+
+  tessellate() {
+    let currentTriangles = this.mesh.getTotalIndices() / 3;
+    let iterations = 0;
+    let surfaceArea = this.calculateSurfaceArea();
+
+    while (iterations < this.maxIterations) {
+      let currentDensity = currentTriangles / surfaceArea;
+
+      if (Math.abs(currentDensity - this.triangleDensityTarget) / this.triangleDensityTarget <= this.tolerance) {
+        // We've reached our target density within tolerance
+        break;
+      }
+
+      if (currentTriangles >= this.estimatedTriangles) {
+        // We've exceeded our estimated triangle count
+        break;
+      }
+
+      this.adaptiveSubdivide();
+      currentTriangles = this.mesh.getTotalIndices() / 3;
+      iterations++;
+    }
+
+    return this.mesh;
+  }
+
+  adaptiveSubdivide() {
+    const positions = this.mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+    const indices = this.mesh.getIndices();
+    const normals = this.mesh.getVerticesData(BABYLON.VertexBuffer.NormalKind);
+    const uvs = this.mesh.getVerticesData(BABYLON.VertexBuffer.UVKind);
+
+    const newPositions = [];
+    const newIndices = [];
+    const newNormals = [];
+    const newUVs = [];
+
+    // Step 1: Calculate face points
+    const facePoints = this.calculateFacePoints(positions, indices, uvs);
+
+    // Step 2: Calculate edge points
+    const edgePoints = this.calculateEdgePoints(positions, indices, facePoints, uvs);
+
+    // Step 3: Update original vertices
+    const updatedVertices = this.updateOriginalVertices(positions, indices, facePoints, edgePoints);
+
+    // Step 4: Validate new positions
+    this.validateNewPositions(positions, updatedVertices);
+
+    // Step 5: Create new mesh structure
+    this.createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices, newUVs);
+
+    // Step 6: Calculate new normals
+    this.calculateNewNormals(newPositions, newIndices, newNormals);
+
+    // Step 7: Calculate distances between old and new triangles
+    this.calculateTriangleDistances(indices, positions, newIndices, newPositions);
+
+    // Update the mesh with new data
+    this.mesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, newPositions);
+    this.mesh.setIndices(newIndices);
+    this.mesh.setVerticesData(BABYLON.VertexBuffer.NormalKind, newNormals);
+    this.mesh.setVerticesData(BABYLON.VertexBuffer.UVKind, newUVs);
+
+    // Step 8: Check for orphaned triangles
+    this.checkForOrphanedTriangles(newIndices);
+  }
+
+  calculateFacePoints(positions, indices, uvs) {
+    const facePoints = [];
+    for (let i = 0; i < indices.length; i += 3) {
+      const v1 = new BABYLON.Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+      const v2 = new BABYLON.Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+      const v3 = new BABYLON.Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+      const facePoint = v1.add(v2).add(v3).scale(1 / 3);
+
+      const uv1 = new BABYLON.Vector2(uvs[indices[i] * 2], uvs[indices[i] * 2 + 1]);
+      const uv2 = new BABYLON.Vector2(uvs[indices[i + 1] * 2], uvs[indices[i + 1] * 2 + 1]);
+      const uv3 = new BABYLON.Vector2(uvs[indices[i + 2] * 2], uvs[indices[i + 2] * 2 + 1]);
+      const faceUV = uv1.add(uv2).add(uv3).scale(1 / 3);
+
+      facePoints.push({ position: facePoint, uv: faceUV });
+    }
+    console.log("Face Points:", facePoints);
+    return facePoints;
+  }
+
+  calculateEdgePoints(positions, indices, facePoints, uvs) {
+    const edgePoints = new Map();
+    for (let i = 0; i < indices.length; i += 3) {
+      for (let j = 0; j < 3; j++) {
+        const v1Index = indices[i + j];
+        const v2Index = indices[i + (j + 1) % 3];
+        const edgeKey = this.getEdgeKey(v1Index, v2Index);
+
+        if (!edgePoints.has(edgeKey)) {
+          const v1 = new BABYLON.Vector3(positions[v1Index * 3], positions[v1Index * 3 + 1], positions[v1Index * 3 + 2]);
+          const v2 = new BABYLON.Vector3(positions[v2Index * 3], positions[v2Index * 3 + 1], positions[v2Index * 3 + 2]);
+          const facePoint = facePoints[Math.floor(i / 3)].position;
+          const edgePoint = v1.add(v2).add(facePoint).scale(1 / 3);
+
+          const uv1 = new BABYLON.Vector2(uvs[v1Index * 2], uvs[v1Index * 2 + 1]);
+          const uv2 = new BABYLON.Vector2(uvs[v2Index * 2], uvs[v2Index * 2 + 1]);
+          const faceUV = facePoints[Math.floor(i / 3)].uv;
+          const edgeUV = uv1.add(uv2).add(faceUV).scale(1 / 3);
+
+          edgePoints.set(edgeKey, { position: edgePoint, uv: edgeUV });
+        }
+      }
+    }
+    console.log("Edge Points:", edgePoints);
+    return edgePoints;
+  }
+
+  updateOriginalVertices(positions, indices, facePoints, edgePoints) {
+    const updatedVertices = [];
+    const vertexFaces = new Map();
+    const vertexEdges = new Map();
+
+    // Collect face and edge information for each vertex
+    for (let i = 0; i < indices.length; i += 3) {
+      for (let j = 0; j < 3; j++) {
+        const vIndex = indices[i + j];
+        if (!vertexFaces.has(vIndex)) vertexFaces.set(vIndex, []);
+        if (!vertexEdges.has(vIndex)) vertexEdges.set(vIndex, []);
+        vertexFaces.get(vIndex).push(Math.floor(i / 3));
+        vertexEdges.get(vIndex).push(this.getEdgeKey(vIndex, indices[i + (j + 1) % 3]));
+        vertexEdges.get(vIndex).push(this.getEdgeKey(vIndex, indices[i + (j + 2) % 3]));
+      }
+    }
+
+    // Update each vertex
+    for (let i = 0; i < positions.length / 3; i++) {
+      const v = new BABYLON.Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+      const n = vertexFaces.get(i).length;
+
+      let avgVector = new BABYLON.Vector3(0, 0, 0);
+
+      vertexFaces.get(i).forEach(fIndex => {
+        avgVector = avgVector.add(BABYLON.Vector3.Normalize(facePoints[fIndex].position.subtract(v)));
+      });
+
+      vertexEdges.get(i).forEach(eKey => {
+        avgVector = avgVector.add(BABYLON.Vector3.Normalize(edgePoints.get(eKey).position.subtract(v)));
+      });
+
+      avgVector = avgVector.scale(1 / (vertexFaces.get(i).length + vertexEdges.get(i).length / 2)).normalize();
+
+      // Dynamic scaling based on the average distance of face and edge points from the original vertex
+      let avgDistance = 0;
+
+      vertexFaces.get(i).forEach(fIndex => {
+        avgDistance += facePoints[fIndex].position.subtract(v).length();
+      });
+
+      vertexEdges.get(i).forEach(eKey => {
+        avgDistance += edgePoints.get(eKey).position.subtract(v).length();
+      });
+
+      avgDistance /= (vertexFaces.get(i).length + vertexEdges.get(i).length / 2);
+
+      const moveDistance = 0 * avgDistance;  // Adjust scaling factor
+
+      const updatedV = v.add(avgVector.scale(moveDistance));
+      updatedVertices.push(updatedV);
+    }
+
+    console.log("Updated Vertices:", updatedVertices);
+    return updatedVertices;
+}
+
+
+
+  validateNewPositions(oldPositions, newPositions) {
+    newPositions.forEach((newPos, index) => {
+      const oldVector = new BABYLON.Vector3(oldPositions[index * 3], oldPositions[index * 3 + 1], oldPositions[index * 3 + 2]);
+      const newVector = newPos;
+      const distance = BABYLON.Vector3.Distance(oldVector, newVector);
+      if (distance > this.distanceThreshold) {
+        console.warn(`Vertex ${index} moved ${distance} units, which exceeds the threshold.`);
+      }
+    });
+  }
+
+  getFaceKey(v1, v2, v3) {
+    // Sort vertex indices to create a unique key for the face
+    const sortedIndices = [v1, v2, v3].sort((a, b) => a - b);
+    return `f${sortedIndices.join('-')}`; // Example: f1-3-5
+}
+
+  createNewMeshStructure(updatedVertices, facePoints, edgePoints, indices, newPositions, newIndices, newUVs) {
+    const vertexMap = new Map();
+
+    // Add updated original vertices (no duplication)
+    updatedVertices.forEach((v, i) => {
+        vertexMap.set(i, i); 
+        newPositions.push(v.x, v.y, v.z);
+    });
+
+    // // Add face points
+    // facePoints.forEach((f, i) => {
+    //     vertexMap.set(`f${i}`, newPositions.length / 3);
+    //     newPositions.push(f.position.x, f.position.y, f.position.z);
+    //     newUVs.push(f.uv.x, f.uv.y);
+    // });
+
+    // Add face points (using face keys)
+    indices.forEach((_, i) => { 
+      const v1 = indices[i * 3];
+      const v2 = indices[i * 3 + 1];
+      const v3 = indices[i * 3 + 2];
+      const faceKey = this.getFaceKey(v1, v2, v3); 
+      vertexMap.set(faceKey, newPositions.length / 3); 
+      if (facePoints[i]) {
+        newPositions.push(facePoints[i].position.x, facePoints[i].position.y, facePoints[i].position.z);
+        newUVs.push(facePoints[i].uv.x, facePoints[i].uv.y);
+      } else {
+        console.warn('aa');
+      }
+  });
+
+    // Add edge points
+    edgePoints.forEach((e, key) => {
+        vertexMap.set(key, newPositions.length / 3);
+        newPositions.push(e.position.x, e.position.y, e.position.z);
+        newUVs.push(e.uv.x, e.uv.y);
+    });
+
+     // Create new faces (using getFaceKey)
+     for (let i = 0; i < indices.length; i += 3) {
+      const v1 = indices[i];
+      const v2 = indices[i + 1];
+      const v3 = indices[i + 2];
+      const f = this.getFaceKey(v1, v2, v3); // Get face key using the new function
+
+      const e1 = this.getEdgeKey(v1, v2);
+      const e2 = this.getEdgeKey(v2, v3);
+      const e3 = this.getEdgeKey(v3, v1);
+
+      // Fractal subdivision pattern (example)
+      newIndices.push(
+          vertexMap.get(v2), vertexMap.get(f), vertexMap.get(v1),
+          vertexMap.get(v3), vertexMap.get(f), vertexMap.get(v2),
+          vertexMap.get(v1), vertexMap.get(f), vertexMap.get(v3)
+      );
+  }
+
+    // // Create new faces (fractal subdivision)
+    // for (let i = 0; i < indices.length; i += 3) {
+    //     const v1 = indices[i];
+    //     const v2 = indices[i + 1];
+    //     const v3 = indices[i + 2];
+    //     const f = `f${Math.floor(i / 3)}`;
+
+    //     const e1 = this.getEdgeKey(v1, v2);
+    //     const e2 = this.getEdgeKey(v2, v3);
+    //     const e3 = this.getEdgeKey(v3, v1);
+
+    //     // Fractal subdivision pattern
+    //     newIndices.push(
+    //         // vertexMap.get(v1), vertexMap.get(e1), vertexMap.get(e3), // Top triangle
+    //         // vertexMap.get(v2), vertexMap.get(e2), vertexMap.get(e1), // Right triangle
+    //         // vertexMap.get(v3), vertexMap.get(e3), vertexMap.get(e2), // Bottom triangle
+    //         // vertexMap.get(e1), vertexMap.get(e2), vertexMap.get(e3),  // Inner triangle
+    //         vertexMap.get(v1), vertexMap.get(e1), vertexMap.get(v3),
+    //         vertexMap.get(v1), vertexMap.get(e2), vertexMap.get(v3),
+    //         vertexMap.get(v1), vertexMap.get(e3), vertexMap.get(v3),
+    //         vertexMap.get(v2), vertexMap.get(e1), vertexMap.get(v3),
+    //         vertexMap.get(v2), vertexMap.get(e2), vertexMap.get(v3),
+    //         vertexMap.get(v2), vertexMap.get(e3), vertexMap.get(v3),
+    //         vertexMap.get(v2), vertexMap.get(e1), vertexMap.get(v1),
+    //         vertexMap.get(v2), vertexMap.get(e2), vertexMap.get(v1),
+    //         vertexMap.get(v2), vertexMap.get(e3), vertexMap.get(v1),
+    //     );
+    // }
+    console.log("New Positions:", newPositions);
+    console.log("New Indices:", newIndices);
+  }
+
+  calculateNewNormals(newPositions, newIndices, newNormals) {
+    // Initialize normals array
+    for (let i = 0; i < newPositions.length; i += 3) {
+      newNormals.push(0, 0, 0);
+    }
+
+    // Calculate flat normals and accumulate
+    for (let i = 0; i < newIndices.length; i += 3) {
+      const v1Index = newIndices[i];
+      const v2Index = newIndices[i + 1];
+      const v3Index = newIndices[i + 2];
+
+      const v1 = new BABYLON.Vector3(newPositions[v1Index * 3], newPositions[v1Index * 3 + 1], newPositions[v1Index * 3 + 2]);
+      const v2 = new BABYLON.Vector3(newPositions[v2Index * 3], newPositions[v2Index * 3 + 1], newPositions[v2Index * 3 + 2]);
+      const v3 = new BABYLON.Vector3(newPositions[v3Index * 3], newPositions[v3Index * 3 + 1], newPositions[v3Index * 3 + 2]);
+
+      const normal = BABYLON.Vector3.Cross(v2.subtract(v1), v3.subtract(v1)).normalize();
+
+      // Accumulate normals for shared vertices
+      newNormals[v1Index * 3] += normal.x;
+      newNormals[v1Index * 3 + 1] += normal.y;
+      newNormals[v1Index * 3 + 2] += normal.z;
+
+      newNormals[v2Index * 3] += normal.x;
+      newNormals[v2Index * 3 + 1] += normal.y;
+      newNormals[v2Index * 3 + 2] += normal.z;
+
+      newNormals[v3Index * 3] += normal.x;
+      newNormals[v3Index * 3 + 1] += normal.y;
+      newNormals[v3Index * 3 + 2] += normal.z;
+    }
+
+    // Normalize the normals
+    for (let i = 0; i < newNormals.length; i += 3) {
+      const normal = new BABYLON.Vector3(newNormals[i], newNormals[i + 1], newNormals[i + 2]).normalize();
+      newNormals[i] = normal.x;
+      newNormals[i + 1] = normal.y;
+      newNormals[i + 2] = normal.z;
+    }
+    console.log("New Normals:", newNormals);
+  }
+
+  getEdgeKey(v1, v2) {
+    return v1 < v2 ? `${v1}-${v2}` : `${v2}-${v1}`;
+  }
+
+  calculateSurfaceArea() {
+    const positions = this.mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+    const indices = this.mesh.getIndices();
+    let totalArea = 0;
+
+    for (let i = 0; i < indices.length; i += 3) {
+      const v1 = new BABYLON.Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+      const v2 = new BABYLON.Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+      const v3 = new BABYLON.Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+
+      const triangleArea = BABYLON.Vector3.Cross(v2.subtract(v1), v3.subtract(v1)).length() / 2;
+      totalArea += triangleArea;
+    }
+
+    return totalArea;
+  }
+
+  checkForOrphanedTriangles(indices) {
+    const edgeUsageCount = new Map();
+
+    // Count the usage of each edge
+    for (let i = 0; i < indices.length; i += 3) {
+      for (let j = 0; j < 3; j++) {
+        const v1 = indices[i + j];
+        const v2 = indices[i + (j + 1) % 3];
+        const edgeKey = this.getEdgeKey(v1, v2);
+        edgeUsageCount.set(edgeKey, (edgeUsageCount.get(edgeKey) || 0) + 1);
+      }
+    }
+
+    // Check for orphaned triangles
+    const orphanedTriangles = [];
+    for (let i = 0; i < indices.length; i += 3) {
+      let orphaned = false;
+      for (let j = 0; j < 3; j++) {
+        const v1 = indices[i + j];
+        const v2 = indices[i + (j + 1) % 3];
+        const edgeKey = this.getEdgeKey(v1, v2);
+        if (edgeUsageCount.get(edgeKey) === 1) {
+          orphaned = true;
+          break;
+        }
+      }
+      if (orphaned) {
+        orphanedTriangles.push([indices[i], indices[i + 1], indices[i + 2]]);
+      }
+    }
+
+    if (orphanedTriangles.length > 0) {
+      console.error('Orphaned triangles found:', orphanedTriangles);
+    } else {
+      console.log('No orphaned triangles found.');
+    }
+  }
+
+  calculateTriangleDistances(oldIndices, oldPositions, newIndices, newPositions) {
+    const oldTriangles = this.calculateTriangleCentroids(oldIndices, oldPositions);
+    const newTriangles = this.calculateTriangleCentroids(newIndices, newPositions);
+
+    oldTriangles.forEach((oldTriangle, index) => {
+      const newTriangle = newTriangles[index];
+      const distance = BABYLON.Vector3.Distance(oldTriangle, newTriangle);
+      if (distance > this.distanceThreshold) {
+        console.warn(`Triangle ${index} moved ${distance} units`);
+      }
+    });
+  }
+
+  calculateTriangleCentroids(indices, positions) {
+    const centroids = [];
+    for (let i = 0; i < indices.length; i += 3) {
+      const v1 = new BABYLON.Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+      const v2 = new BABYLON.Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+      const v3 = new BABYLON.Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+      const centroid = v1.add(v2).add(v3).scale(1 / 3);
+      centroids.push(centroid);
+    }
+    return centroids;
+  }
+}
+
+export function applyPreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles, options = {}) {
+  const tessellation = new PreciseTessellation(mesh, triangleDensityTarget, estimatedTriangles, options);
+  return tessellation.tessellate();
+}
+
+export function calculateSurfaceArea(tessellatedMesh) {
+  return new PreciseTessellation(tessellatedMesh, 0, 0).calculateSurfaceArea();
+}
