@@ -1,5 +1,5 @@
 import React, { memo, useState } from 'react';
-import { useHypeStudioModel } from '../contexts/HypeStudioContext';
+import { useHypeStudioModel } from '../../contexts/HypeStudioContext';
 import { MaterialLibrary } from './MaterialLibrary';
 import { CustomMaterialForm } from './CustomMaterialForm';
 import { LoadConstraintPresets } from './LoadConstraintPresets';
