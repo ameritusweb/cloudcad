@@ -60,8 +60,11 @@ export const handlers = [
   }),
 
   // Handler for retrieving all imported files
-  http.get('/api/imported-files', () => {
-    return HttpResponse.json(importedFiles, { status: 200 });
+  http.get('/api/imported-files', ({request, cookies, params}) => {
+    console.log(request);
+    return HttpResponse.json(importedFiles, { status: 200, headers: {
+      'Cache-Control': 'no-cache', // Set the header here
+    } });
   }),
 
   http.get('/api/project', () => {
