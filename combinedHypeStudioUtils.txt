@@ -297,6 +297,119 @@ export const removeShape = (scene, mesh) => {
     return meshes;
   };
 /* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+import { AdvancedDynamicTexture, Slider } from '@babylonjs/gui';
+
+/**
+ * Utility class for bending a long thin mesh (rectangle, cylinder, or any custom shape) into a bent shape like a semicircle or a ring.
+ */
+class BendUtils {
+  /**
+   * Creates an instance of BendUtils.
+   * @param {BABYLON.Scene} scene - The Babylon.js scene.
+   * @param {string} type - The type of mesh ('rectangle', 'cylinder', or custom mesh name).
+   * @param {number} length - The length of the mesh.
+   * @param {number} width - The width of the mesh.
+   * @param {number} segments - The number of segments for bending.
+   * @param {number} bendAmount - The amount of bend (0.0 to 1.0, where 1.0 is a full circle).
+   */
+  constructor(scene, type, length, width, segments, bendAmount) {
+    this.scene = scene;
+    this.type = type; // 'rectangle', 'cylinder', or custom mesh name
+    this.length = length;
+    this.width = width;
+    this.segments = segments;
+    this.bendAmount = bendAmount; // 0.0 to 1.0, where 1.0 represents a full circle
+    this.bendAxis = BABYLON.Axis.Z; // Default bending axis: Z
+
+    this.mesh = this.createMesh();
+    this.updateMesh();
+  }
+
+  /**
+   * Creates the initial mesh (rectangle, cylinder, or custom).
+   * @returns {BABYLON.Mesh} The created mesh.
+   */
+  createMesh() {
+    if (this.type === 'rectangle') {
+      return BABYLON.MeshBuilder.CreatePlane("bendablePlane", {
+        width: this.width,
+        height: this.length,
+        subdivisions: this.segments
+      }, this.scene);
+    } else if (this.type === 'cylinder') {
+      return BABYLON.MeshBuilder.CreateCylinder("bendableCylinder", {
+        height: this.length,
+        diameter: this.width,
+        tessellation: this.segments,
+        subdivisions: this.segments
+      }, this.scene);
+    } else {
+      // Assume it's a custom mesh
+      return this.scene.getMeshByName(this.type);
+    }
+  }
+
+  /**
+   * Updates the mesh to simulate bending.
+   */
+  updateMesh() {
+    const positions = this.mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+
+    const radius = (this.length / Math.PI) * this.bendAmount;
+    const angleStep = (Math.PI * 2 * this.bendAmount) / this.segments;
+
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i];
+      const y = positions[i + 1];
+      const z = positions[i + 2];
+
+      // Determine the axis to bend along
+      const bendCoord = this.bendAxis === BABYLON.Axis.X ? x : (this.bendAxis === BABYLON.Axis.Y ? y : z);
+
+      const angle = (bendCoord / this.length) * Math.PI * 2 * this.bendAmount;
+
+      // Calculate new coordinates based on bending axis
+      let newX = x, newY = y, newZ = z;
+      if (this.bendAxis === BABYLON.Axis.X) {
+        newY = radius * Math.sin(angle);
+        newZ = radius * (1 - Math.cos(angle));
+      } else if (this.bendAxis === BABYLON.Axis.Y) {
+        newX = radius * Math.sin(angle);
+        newZ = radius * (1 - Math.cos(angle));
+      } else { // Z-axis
+        newX = radius * Math.sin(angle);
+        newY = radius * (1 - Math.cos(angle));
+      }
+
+      positions[i] = newX;
+      positions[i + 1] = newY;
+      positions[i + 2] = newZ;
+    }
+
+    this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
+  }
+
+  /**
+   * Sets the bend amount and updates the mesh.
+   * @param {number} bendAmount - The new bend amount (0.0 to 1.0).
+   */
+  setBendAmount(bendAmount) {
+    this.bendAmount = bendAmount;
+    this.updateMesh();
+  }
+
+  /**
+   * Sets the bending axis and updates the mesh.
+   * @param {BABYLON.Vector3} axis - The axis to bend along.
+   */
+  setBendAxis(axis) {
+    this.bendAxis = axis;
+    this.updateMesh();
+  }
+}
+/* ================================================================================ */
 import { 
     Vector3
   } from '@babylonjs/core';
@@ -390,6 +503,627 @@ export const updateCameraForPlane = (camera, plane) => {
     }
     camera.setTarget(Vector3.Zero());
   };
+/* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+import { AdvancedDynamicTexture, Slider, StackPanel, TextBlock, Button } from '@babylonjs/gui';
+
+/**
+ * Represents a force applied to the mesh, including position, direction, and magnitude.
+ */
+export class Force {
+    constructor(position, direction, magnitude) {
+        this.position = position;
+        this.direction = direction;
+        this.magnitude = magnitude;
+    }
+}
+
+/**
+ * Utility class for simulating crushing of a mesh due to applied forces.
+ */
+export class CrushUtils {
+    /**
+     * Creates an instance of CrushUtils.
+     * @param {BABYLON.Scene} scene - The Babylon.js scene.
+     * @param {number} width - The width of the mesh.
+     * @param {number} height - The height of the mesh.
+     * @param {number} depth - The depth of the mesh.
+     * @param {number} segments - The number of segments for subdivisions.
+     * @param {number} materialStrength - The strength of the material (default: 1.0).
+     * @param {number} elasticity - The elasticity of the material (default: 0.5).
+     */
+    constructor(scene, width, height, depth, segments, materialStrength = 1.0, elasticity = 0.5) {
+        this.scene = scene;
+        this.width = width;
+        this.height = height;
+        this.depth = depth;
+        this.segments = segments;
+        this.materialStrength = materialStrength;
+        this.elasticity = elasticity;
+        this.forces = [];
+
+        this.mesh = this.createMesh();
+        this.createUIControls();
+    }
+
+    /**
+     * Creates the initial box mesh.
+     * @returns {BABYLON.Mesh} The created box mesh.
+     */
+    createMesh() {
+        return BABYLON.MeshBuilder.CreateBox("crushableBox", {
+            width: this.width,
+            height: this.height,
+            depth: this.depth,
+            subdivisions: this.segments
+        }, this.scene);
+    }
+
+    /**
+     * Applies all the forces to the mesh, deforming it accordingly.
+     */
+    applyForces() {
+        const positions = this.mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+        const originalPositions = [...positions];
+
+        for (const force of this.forces) {
+            const forceVector = force.direction.normalize().scale(force.magnitude);
+
+            for (let i = 0; i < positions.length; i += 3) {
+                const vertex = new BABYLON.Vector3(positions[i], positions[i + 1], positions[i + 2]);
+                const distance = BABYLON.Vector3.Distance(force.position, vertex);
+
+                if (distance < this.width / 2) {
+                    const deformation = forceVector.scale(
+                        Math.exp(-distance * distance / (2 * Math.pow(this.width / 4, 2))) * this.materialStrength
+                    );
+
+                    positions[i] += deformation.x * this.elasticity;
+                    positions[i + 1] += deformation.y * this.elasticity;
+                    positions[i + 2] += deformation.z * this.elasticity;
+                }
+            }
+        }
+
+        this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
+    }
+
+    /**
+     * Adds a new force to the list of applied forces and updates the mesh.
+     * @param {BABYLON.Vector3} position - The position where the force is applied.
+     * @param {BABYLON.Vector3} direction - The direction of the applied force.
+     * @param {number} magnitude - The magnitude of the applied force.
+     */
+    addForce(position, direction, magnitude) {
+        this.forces.push(new Force(position, direction, magnitude));
+        this.applyForces();
+    }
+
+    /**
+     * Creates the UI controls for adjusting force parameters and material properties.
+     */
+    createUIControls() {
+        const advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("UI");
+
+        const panel = new StackPanel();
+        panel.width = "220px";
+        panel.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        panel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        advancedTexture.addControl(panel);
+
+        const forceSlider = new Slider();
+        forceSlider.minimum = 0;
+        forceSlider.maximum = 10;
+        forceSlider.value = 1;
+        forceSlider.height = "20px";
+        forceSlider.width = "200px";
+        forceSlider.onValueChangedObservable.add(value => {
+            this.forceMagnitude = value;
+        });
+        panel.addControl(forceSlider);
+
+        const forceText = new TextBlock();
+        forceText.text = "Force Magnitude";
+        forceText.height = "30px";
+        forceText.color = "white";
+        panel.addControl(forceText);
+
+        const materialSlider = new Slider();
+        materialSlider.minimum = 0.1;
+        materialSlider.maximum = 2.0;
+        materialSlider.value = this.materialStrength;
+        materialSlider.height = "20px";
+        materialSlider.width = "200px";
+        materialSlider.onValueChangedObservable.add(value => {
+            this.materialStrength = value;
+        });
+        panel.addControl(materialSlider);
+
+        const materialText = new TextBlock();
+        materialText.text = "Material Strength";
+        materialText.height = "30px";
+        materialText.color = "white";
+        panel.addControl(materialText);
+
+        const elasticitySlider = new Slider();
+        elasticitySlider.minimum = 0.1;
+        elasticitySlider.maximum = 1.0;
+        elasticitySlider.value = this.elasticity;
+        elasticitySlider.height = "20px";
+        elasticitySlider.width = "200px";
+        elasticitySlider.onValueChangedObservable.add(value => {
+            this.elasticity = value;
+        });
+        panel.addControl(elasticitySlider);
+
+        const elasticityText = new TextBlock();
+        elasticityText.text = "Elasticity";
+        elasticityText.height = "30px";
+        elasticityText.color = "white";
+        panel.addControl(elasticityText);
+
+        const addForceButton = Button.CreateSimpleButton("addForceButton", "Add Force");
+        addForceButton.width = "150px";
+        addForceButton.height = "40px";
+        addForceButton.color = "white";
+        addForceButton.background = "red";
+        addForceButton.onPointerClickObservable.add(() => {
+            const forcePosition = new BABYLON.Vector3(0, 0, this.depth / 2); // Example position
+            const forceDirection = new BABYLON.Vector3(0, -1, 0); // Example force direction
+            const forceMagnitude = this.forceMagnitude;
+            this.addForce(forcePosition, forceDirection, forceMagnitude);
+        });
+        panel.addControl(addForceButton);
+    }
+}
+/* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+
+/**
+ * Class representing a custom curved plane created from an open wireframe geometry.
+ */
+export class CurvedPlane {
+    /**
+     * Create a CurvedPlane.
+     * @param {BABYLON.Scene} scene - The Babylon.js scene.
+     * @param {BABYLON.Vector3[]} wireframePoints - An array of points defining the wireframe.
+     * @param {number} [divisions=10] - Number of divisions for the curve interpolation.
+     */
+    constructor(scene, wireframePoints, divisions = 10) {
+        this.scene = scene;
+        this.wireframePoints = wireframePoints;
+        this.divisions = divisions;
+
+        this.curvedMesh = this.createCurvedMesh();
+    }
+
+    /**
+     * Creates the curved mesh by interpolating between the wireframe points.
+     * @returns {BABYLON.Mesh} - The created curved mesh.
+     */
+    createCurvedMesh() {
+        const path = BABYLON.Curve3.CreateCatmullRomSpline(this.wireframePoints, this.divisions);
+        const pathPoints = path.getPoints();
+        const width = 1.0; // Define the width of the curved plane
+        const shape = [
+            new BABYLON.Vector3(-width / 2, 0, 0),
+            new BABYLON.Vector3(width / 2, 0, 0)
+        ];
+
+        const extrudePath = pathPoints.map(p => new BABYLON.Vector3(p.x, p.y, p.z));
+        const curvedMesh = BABYLON.MeshBuilder.ExtrudeShape("curvedPlane", {
+            shape: shape,
+            path: extrudePath,
+            cap: BABYLON.Mesh.NO_CAP,
+            sideOrientation: BABYLON.Mesh.DOUBLESIDE
+        }, this.scene);
+
+        return curvedMesh;
+    }
+}
+/* ================================================================================ */
+import KDTree from 'kd-tree-javascript';
+
+// [REF_001] GridUtils class
+export class GridUtils {
+  constructor(scene, mesh, granularityX = 10, granularityY = 10) {
+    this.scene = scene;
+    this.mesh = mesh;
+    this.granularityX = granularityX;
+    this.granularityY = granularityY;
+    this.gridPoints = [];
+    this.tangentLines = [];
+    this.normalLines = [];
+    this.wireframe = null;
+    this.selectedPoint = null;
+    this.originPoint = Vector3.Zero(); // Default origin
+    
+    this.kdTree = this.buildKDTree();
+    this.generateGrid();
+    this.createWireframe();
+  }
+
+    // [REF_002] Build KD-tree
+    buildKDTree() {
+        const positions = this.mesh.getVerticesData(VertexBuffer.PositionKind);
+        const vertices = [];
+
+        for (let i = 0; i < positions.length; i += 3) {
+        vertices.push({
+            x: positions[i],
+            y: positions[i + 1],
+            z: positions[i + 2],
+            index: i / 3
+        });
+        }
+
+        const distance = (a, b) => Math.sqrt(
+        Math.pow(a.x - b.x, 2) + 
+        Math.pow(a.y - b.y, 2) + 
+        Math.pow(a.z - b.z, 2)
+        );
+
+        return new KDTree(vertices, distance, ['x', 'y', 'z']);
+    }
+
+    // [REF_003] Generate grid
+    generateGrid() {
+        this.clearPreviousGrid();
+        const positions = this.mesh.getVerticesData(VertexBuffer.PositionKind);
+        const indices = this.mesh.getIndices();
+        const normals = this.mesh.getVerticesData(VertexBuffer.NormalKind);
+
+        const totalDistanceX = this.calculateSurfaceDistance(positions, indices, 0);
+        const totalDistanceY = this.calculateSurfaceDistance(positions, indices, 1);
+
+        for (let i = 0; i <= this.granularityX; i++) {
+        for (let j = 0; j <= this.granularityY; j++) {
+            const u = i / this.granularityX;
+            const v = j / this.granularityY;
+            const point = this.getPointOnMesh(u * totalDistanceX, v * totalDistanceY);
+            if (point) {
+            const normal = this.interpolateNormal(point, positions, indices, normals);
+            const tangent = this.calculateTangent(point, normal);
+            this.createGridPoint(point, tangent, normal);
+            }
+        }
+        }
+    }
+
+     // [REF_004] Get point on mesh using KD-tree
+    getPointOnMesh(targetDistanceX, targetDistanceY) {
+        const queryPoint = { x: targetDistanceX, y: targetDistanceY, z: 0 };
+        const nearest = this.kdTree.nearest(queryPoint, 1)[0];
+        return new Vector3(nearest[0].x, nearest[0].y, nearest[0].z);
+    }
+
+    // [REF_005] Perform local subdivision
+    performLocalSubdivision(gridPointIndex) {
+        if (gridPointIndex < 0 || gridPointIndex >= this.gridPoints.length) {
+        console.error("Invalid grid point index");
+        return;
+        }
+    
+        const subdivisionPoint = this.gridPoints[gridPointIndex].position;
+        const positions = this.mesh.getVerticesData(VertexBuffer.PositionKind);
+        const indices = this.mesh.getIndices();
+        const normals = this.mesh.getVerticesData(VertexBuffer.NormalKind);
+    
+        // Find the triangle containing the subdivision point using KD-tree
+        const nearestVertex = this.kdTree.nearest(subdivisionPoint, 1)[0];
+        const nearestVertexIndex = nearestVertex[0].index;
+    
+        let targetTriangle = -1;
+        for (let i = 0; i < indices.length; i += 3) {
+        if (indices[i] === nearestVertexIndex || indices[i + 1] === nearestVertexIndex || indices[i + 2] === nearestVertexIndex) {
+            const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+            const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+            const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+    
+            if (this.isPointInTriangle(subdivisionPoint, v1, v2, v3)) {
+            targetTriangle = i;
+            break;
+            }
+        }
+        }
+    
+        if (targetTriangle === -1) {
+        console.error("Subdivision point is not within any triangle");
+        return;
+        }
+    
+        // [REF_005.1] Perform the subdivision
+        const newVertexIndex = positions.length / 3;
+        positions.push(subdivisionPoint.x, subdivisionPoint.y, subdivisionPoint.z);
+    
+        // [REF_005.2] Calculate the normal for the new vertex
+        const n1 = new Vector3(normals[indices[targetTriangle] * 3], normals[indices[targetTriangle] * 3 + 1], normals[indices[targetTriangle] * 3 + 2]);
+        const n2 = new Vector3(normals[indices[targetTriangle + 1] * 3], normals[indices[targetTriangle + 1] * 3 + 1], normals[indices[targetTriangle + 1] * 3 + 2]);
+        const n3 = new Vector3(normals[indices[targetTriangle + 2] * 3], normals[indices[targetTriangle + 2] * 3 + 1], normals[indices[targetTriangle + 2] * 3 + 2]);
+        const newNormal = n1.add(n2).add(n3).normalize();
+        normals.push(newNormal.x, newNormal.y, newNormal.z);
+    
+        // [REF_005.3] Create three new triangles
+        const newTriangles = [
+        indices[targetTriangle], indices[targetTriangle + 1], newVertexIndex,
+        indices[targetTriangle + 1], indices[targetTriangle + 2], newVertexIndex,
+        indices[targetTriangle + 2], indices[targetTriangle], newVertexIndex
+        ];
+    
+        // [REF_005.4] Replace the old triangle with the three new ones
+        indices.splice(targetTriangle, 3, ...newTriangles);
+    
+        // [REF_005.5] Update the mesh with new data
+        this.mesh.updateVerticesData(VertexBuffer.PositionKind, positions);
+        this.mesh.updateVerticesData(VertexBuffer.NormalKind, normals);
+        this.mesh.setIndices(indices);
+    
+        // [REF_005.6] Update the KD-tree
+        this.kdTree = this.buildKDTree();
+    
+        // [REF_005.7] Regenerate the grid and wireframe
+        this.generateGrid();
+        this.createWireframe();
+    }
+
+    // [REF_006] Get closest grid point using KD-tree
+    getClosestGridPoint(position) {
+        const nearest = this.kdTree.nearest({ x: position.x, y: position.y, z: position.z }, 1)[0];
+        return {
+        index: nearest[0].index,
+        position: new Vector3(nearest[0].x, nearest[0].y, nearest[0].z)
+        };
+    }
+
+    // [REF_007] createGridPoint method
+  createGridPoint(position, tangent, normal) {
+    const point = MeshBuilder.CreateSphere(`gridPoint`, { diameter: 0.05 }, this.scene);
+    point.position = position;
+    point.material = new StandardMaterial(`gridPointMat`, this.scene);
+    point.material.diffuseColor = new Color3(1, 0, 0);
+
+    this.gridPoints.push(point);
+
+    // Create tangent and normal lines
+    this.createVectorLine(position, tangent, Color3.Blue());
+    this.createVectorLine(position, normal, Color3.Green());
+
+    // Add hover effect
+    point.actionManager = new BABYLON.ActionManager(this.scene);
+    point.actionManager.registerAction(
+      new BABYLON.InterpolateValueAction(
+        BABYLON.ActionManager.OnPointerOverTrigger,
+        point.material,
+        'diffuseColor',
+        new Color3(0, 1, 0),
+        150
+      )
+    );
+    point.actionManager.registerAction(
+      new BABYLON.InterpolateValueAction(
+        BABYLON.ActionManager.OnPointerOutTrigger,
+        point.material,
+        'diffuseColor',
+        new Color3(1, 0, 0),
+        150
+      )
+    );
+  }
+
+  // [REF_008] Create wireframe
+  createWireframe() {
+    if (this.wireframe) {
+      this.wireframe.dispose();
+    }
+    this.wireframe = MeshBuilder.CreateLines("wireframe", {
+      points: this.mesh.getVerticesData(VertexBuffer.PositionKind),
+      indices: this.mesh.getIndices()
+    }, this.scene);
+    this.wireframe.color = new Color3(0.5, 0.5, 0.5);
+  }
+
+  // [REF_009] Set grid granularity
+  setGranularity(x, y) {
+    this.granularityX = x;
+    this.granularityY = y;
+    this.generateGrid();
+    this.createWireframe();
+  }
+
+  // [REF_010] Clear previous grid
+  clearPreviousGrid() {
+    this.gridPoints.forEach(point => point.dispose());
+    this.tangentLines.forEach(line => line.dispose());
+    this.normalLines.forEach(line => line.dispose());
+    this.gridPoints = [];
+    this.tangentLines = [];
+    this.normalLines = [];
+  }
+
+  // [REF_011] Set origin point
+  setOriginPoint(point) {
+    this.originPoint = point;
+    this.generateGrid();
+  }
+
+  // [REF_012] Calculate surface distance
+  calculateSurfaceDistance(positions, indices, direction) {
+    let totalDistance = 0;
+    for (let i = 0; i < indices.length; i += 3) {
+      const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+      const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+      const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+
+      totalDistance += Math.max(
+        Math.abs(v2[direction] - v1[direction]),
+        Math.abs(v3[direction] - v1[direction]),
+        Math.abs(v3[direction] - v2[direction])
+      );
+    }
+    return totalDistance;
+  }
+  
+  // [REF_013] interpolateNormal method
+  interpolateNormal(point, positions, indices, normals) {
+    // Find the triangle containing the point and interpolate the normal
+    // This is a simplified version and may need to be improved for accuracy
+    for (let i = 0; i < indices.length; i += 3) {
+      const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+      const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+      const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+
+      if (this.isPointInTriangle(point, v1, v2, v3)) {
+        const n1 = new Vector3(normals[indices[i] * 3], normals[indices[i] * 3 + 1], normals[indices[i] * 3 + 2]);
+        const n2 = new Vector3(normals[indices[i + 1] * 3], normals[indices[i + 1] * 3 + 1], normals[indices[i + 1] * 3 + 2]);
+        const n3 = new Vector3(normals[indices[i + 2] * 3], normals[indices[i + 2] * 3 + 1], normals[indices[i + 2] * 3 + 2]);
+
+        // Barycentric coordinates for interpolation
+        const [u, v, w] = this.calculateBarycentricCoordinates(point, v1, v2, v3);
+        return n1.scale(u).add(n2.scale(v)).add(n3.scale(w)).normalize();
+      }
+    }
+    return Vector3.Up(); // Default if not found
+  }
+
+   // [REF_014] calculateTangent method
+   calculateTangent(point, normal) {
+    // This is a simplified tangent calculation
+    const upVector = Vector3.Up();
+    let tangent = Vector3.Cross(normal, upVector);
+    if (tangent.lengthSquared() < 0.001) {
+      tangent = Vector3.Cross(normal, Vector3.Forward());
+    }
+    return tangent.normalize();
+  }
+
+  // [REF_015] isPointInTriangle method
+  isPointInTriangle(p, a, b, c) {
+    const [u, v, w] = this.calculateBarycentricCoordinates(p, a, b, c);
+    return u >= 0 && v >= 0 && w >= 0 && Math.abs(u + v + w - 1.0) < 0.00001;
+  }
+
+  // [REF_016] calculateBarycentricCoordinates method
+  calculateBarycentricCoordinates(p, a, b, c) {
+    const v0 = b.subtract(a);
+    const v1 = c.subtract(a);
+    const v2 = p.subtract(a);
+    const d00 = Vector3.Dot(v0, v0);
+    const d01 = Vector3.Dot(v0, v1);
+    const d11 = Vector3.Dot(v1, v1);
+    const d20 = Vector3.Dot(v2, v0);
+    const d21 = Vector3.Dot(v2, v1);
+    const denom = d00 * d11 - d01 * d01;
+    const v = (d11 * d20 - d01 * d21) / denom;
+    const w = (d00 * d21 - d01 * d20) / denom;
+    const u = 1.0 - v - w;
+    return [u, v, w];
+  }
+
+  // [REF_017] createVectorLine method
+  createVectorLine(start, direction, color) {
+    const end = start.add(direction.scale(0.1));
+    const line = MeshBuilder.CreateLines(`vectorLine`, { points: [start, end] }, this.scene);
+    line.color = color;
+    this.tangentLines.push(line);
+  }
+
+  // [REF_018] toggleGridVisibility method
+  toggleGridVisibility(visible) {
+    this.gridPoints.forEach(point => point.setEnabled(visible));
+    this.tangentLines.forEach(line => line.setEnabled(visible));
+    this.normalLines.forEach(line => line.setEnabled(visible));
+  }
+
+  // [REF_019] selectGridPoint method
+  selectGridPoint(index) {
+    if (index >= 0 && index < this.gridPoints.length) {
+      this.gridPoints.forEach(point => point.material.emissiveColor = Color3.Black());
+      this.gridPoints[index].material.emissiveColor = Color3.Yellow();
+      return this.gridPoints[index].position;
+    }
+    return null;
+  }
+
+  // [REF_020] getClosestGridPoint method
+  getClosestGridPoint(position) {
+    let closestPoint = null;
+    let minDistance = Infinity;
+    this.gridPoints.forEach((point, index) => {
+      const distance = Vector3.Distance(position, point.position);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestPoint = { index, position: point.position };
+      }
+    });
+    return closestPoint;
+  }
+
+  // [REF_021] exportGridData method
+  exportGridData() {
+    return this.gridPoints.map(point => ({
+      position: point.position,
+      normal: this.normalLines.find(line => line.position.equals(point.position)).getDirection(),
+      tangent: this.tangentLines.find(line => line.position.equals(point.position)).getDirection()
+    }));
+  }
+
+  // [REF_022] setVectorLineLength method
+  setVectorLineLength(length) {
+    this.vectorLineLength = length;
+    this.updateVectorLines();
+  }
+  
+  // [REF_023] updateVectorLines method
+  updateVectorLines() {
+    this.tangentLines.forEach((line, index) => {
+      const start = this.gridPoints[index].position;
+      const direction = line.getDirection().normalize();
+      const end = start.add(direction.scale(this.vectorLineLength));
+      line.dispose();
+      this.tangentLines[index] = MeshBuilder.CreateLines(`tangentLine`, { points: [start, end] }, this.scene);
+      this.tangentLines[index].color = Color3.Blue();
+    });
+  
+    this.normalLines.forEach((line, index) => {
+      const start = this.gridPoints[index].position;
+      const direction = line.getDirection().normalize();
+      const end = start.add(direction.scale(this.vectorLineLength));
+      line.dispose();
+      this.normalLines[index] = MeshBuilder.CreateLines(`normalLine`, { points: [start, end] }, this.scene);
+      this.normalLines[index].color = Color3.Green();
+    });
+  }
+
+  // [REF_024] calculateSurfaceArea method
+  calculateSurfaceArea() {
+    const positions = this.mesh.getVerticesData(VertexData.PositionKind);
+    const indices = this.mesh.getIndices();
+    let totalArea = 0;
+  
+    for (let i = 0; i < indices.length; i += 3) {
+      const v1 = new Vector3(positions[indices[i] * 3], positions[indices[i] * 3 + 1], positions[indices[i] * 3 + 2]);
+      const v2 = new Vector3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
+      const v3 = new Vector3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
+  
+      const triangleArea = Vector3.Cross(v2.subtract(v1), v3.subtract(v1)).length() / 2;
+      totalArea += triangleArea;
+    }
+  
+    return totalArea;
+  }
+
+  // [REF_025] generateUVCoordinates method
+  generateUVCoordinates() {
+    const uvs = this.gridPoints.map(point => {
+      const u = point.position.x / this.calculateSurfaceDistance(this.mesh.getVerticesData(VertexData.PositionKind), this.mesh.getIndices(), 0);
+      const v = point.position.y / this.calculateSurfaceDistance(this.mesh.getVerticesData(VertexData.PositionKind), this.mesh.getIndices(), 1);
+      return new Vector2(u, v);
+    });
+    return uvs;
+  }
+}
 /* ================================================================================ */
 // src/utils/ioUtils.js
 
@@ -881,6 +1615,241 @@ export const computeArrayDiff = (oldArray, newArray) => {
   return diff;
 };
 
+/* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+
+/**
+ * Utility class for extruding a wireframe outline to a single point in 3D space.
+ */
+export class PointExtrusionUtils {
+    /**
+     * Creates an instance of PointExtrusionUtils.
+     * @param {BABYLON.Scene} scene - The Babylon.js scene.
+     * @param {BABYLON.Mesh} baseMesh - The base mesh to extrude from.
+     * @param {BABYLON.Vector3} extrusionPoint - The point to which the base mesh will be extruded.
+     */
+    constructor(scene, baseMesh, extrusionPoint) {
+        this.scene = scene;
+        this.baseMesh = baseMesh;
+        this.extrusionPoint = extrusionPoint;
+
+        this.extrudedMesh = this.createExtrudedMesh();
+    }
+
+    /**
+     * Creates the extruded mesh by connecting the base mesh to the extrusion point.
+     * @returns {BABYLON.Mesh} The created extruded mesh.
+     */
+    createExtrudedMesh() {
+        const positions = this.baseMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+        const indices = this.baseMesh.getIndices();
+        const newPositions = [];
+        const newIndices = [];
+        const pointIndex = positions.length / 3;
+
+        // Add the extrusion point to new positions
+        newPositions.push(this.extrusionPoint.x, this.extrusionPoint.y, this.extrusionPoint.z);
+
+        // Copy the base mesh positions
+        for (let i = 0; i < positions.length; i++) {
+            newPositions.push(positions[i]);
+        }
+
+        // Create faces connecting the base mesh to the extrusion point
+        for (let i = 0; i < indices.length - 1; i++) {
+            const i0 = indices[i];
+            const i1 = indices[i + 1];
+
+            newIndices.push(pointIndex, i0, i1); // Triangle connecting the point to an edge of the base
+        }
+
+        // Handle open geometries: connect the last point to the first point if not closed
+        if (indices[0] !== indices[indices.length - 1]) {
+            newIndices.push(pointIndex, indices[indices.length - 1], indices[0]);
+        }
+
+        const extrudedMesh = new BABYLON.Mesh("extrudedMesh", this.scene);
+        const vertexData = new BABYLON.VertexData();
+        vertexData.positions = newPositions;
+        vertexData.indices = newIndices;
+        vertexData.applyToMesh(extrudedMesh);
+
+        return extrudedMesh;
+    }
+}
+/* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
+
+/**
+ * Utility class for projecting a wireframe sketch onto a custom curved mesh.
+ */
+export class ProjectionUtils {
+  /**
+   * Creates an instance of ProjectionUtils.
+   * @param {BABYLON.Scene} scene - The Babylon.js scene.
+   * @param {BABYLON.Mesh} sketch - The sketch mesh to project.
+   * @param {BABYLON.Mesh} customMesh - The custom curved mesh.
+   * @param {BABYLON.Vector3} rayDirection - The direction of the ray tracing.
+   */
+  constructor(scene, sketch, customMesh, rayDirection) {
+    this.scene = scene;
+    this.sketch = sketch;
+    this.customMesh = customMesh;
+    this.rayDirection = rayDirection;
+    this.isDragging = false;
+    this.lastPointerPosition = null;
+    this.rotationSpeed = 0.001; // Smaller value for more granular control
+
+    // Important points on the custom mesh
+    this.importantPoints = [
+      new BABYLON.Vector3(0, 0, 0), // Add more points as needed
+    ];
+
+    // GUI for displaying dimensions
+    this.gui = AdvancedDynamicTexture.CreateFullscreenUI("UI");
+    this.dimensionTexts = [];
+
+    this.initPointerEvents();
+  }
+
+  /**
+   * Initializes pointer event listeners.
+   */
+  initPointerEvents() {
+    this.scene.onPointerObservable.add((pointerInfo) => {
+      switch (pointerInfo.type) {
+        case BABYLON.PointerEventTypes.POINTERDOWN:
+          this.onPointerDown(pointerInfo);
+          break;
+        case BABYLON.PointerEventTypes.POINTERUP:
+          this.onPointerUp(pointerInfo);
+          break;
+        case BABYLON.PointerEventTypes.POINTERMOVE:
+          this.onPointerMove(pointerInfo);
+          break;
+      }
+    });
+  }
+
+  /**
+   * Handles the pointer down event.
+   * @param {BABYLON.PointerInfo} pointerInfo - The pointer info.
+   */
+  onPointerDown(pointerInfo) {
+    if (pointerInfo.event.button === 0) { // Left mouse button
+      this.isDragging = true;
+      this.lastPointerPosition = new BABYLON.Vector2(pointerInfo.event.clientX, pointerInfo.event.clientY);
+      this.scene.activeCamera.detachControl(this.scene.getEngine().getRenderingCanvas()); // Detach camera control
+    }
+  }
+
+  /**
+   * Handles the pointer up event.
+   * @param {BABYLON.PointerInfo} pointerInfo - The pointer info.
+   */
+  onPointerUp(pointerInfo) {
+    if (pointerInfo.event.button === 0) { // Left mouse button
+      this.isDragging = false;
+      this.lastPointerPosition = null;
+      this.scene.activeCamera.attachControl(this.scene.getEngine().getRenderingCanvas(), true); // Reattach camera control
+    }
+  }
+
+  /**
+   * Handles the pointer move event.
+   * @param {BABYLON.PointerInfo} pointerInfo - The pointer info.
+   */
+  onPointerMove(pointerInfo) {
+    if (!this.isDragging) return;
+
+    const currentPointerPosition = new BABYLON.Vector2(pointerInfo.event.clientX, pointerInfo.event.clientY);
+    const delta = currentPointerPosition.subtract(this.lastPointerPosition);
+
+    // Apply rotation to the sketch based on pointer movement
+    this.sketch.rotation.y += delta.x * this.rotationSpeed;
+    this.sketch.rotation.x += delta.y * this.rotationSpeed;
+
+    this.lastPointerPosition = currentPointerPosition;
+
+    // Update the wireframe projection
+    this.projectWireframe();
+  }
+
+  /**
+   * Projects the wireframe onto the custom mesh using ray tracing.
+   */
+  projectWireframe() {
+    const newVertices = [];
+
+    // Perform ray tracing for each vertex of the sketch
+    const positions = this.sketch.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+    for (let i = 0; i < positions.length; i += 3) {
+      const vertex = BABYLON.Vector3.TransformCoordinates(
+        new BABYLON.Vector3(positions[i], positions[i + 1], positions[i + 2]),
+        this.sketch.getWorldMatrix()
+      );
+      const ray = new BABYLON.Ray(vertex, this.rayDirection, 1000);
+
+      const pickInfo = this.customMesh.intersects(ray);
+      if (pickInfo.hit) {
+        newVertices.push(pickInfo.pickedPoint);
+      }
+    }
+
+    // Remove the old wireframe
+    if (this.wireframe) {
+      this.wireframe.dispose();
+    }
+
+    // Create new wireframe from the new vertices
+    this.createWireframe(newVertices);
+
+    // Update distance display
+    this.updateDistanceDisplay(newVertices);
+  }
+
+  /**
+   * Creates a wireframe from the projected vertices.
+   * @param {BABYLON.Vector3[]} vertices - The projected vertices.
+   */
+  createWireframe(vertices) {
+    const lines = [];
+    for (let i = 0; i < vertices.length; i++) {
+      lines.push([vertices[i], vertices[(i + 1) % vertices.length]]);
+    }
+
+    this.wireframe = BABYLON.MeshBuilder.CreateLineSystem("wireframe", { lines }, this.scene);
+    this.wireframe.color = new BABYLON.Color3(1, 0, 0); // Set the wireframe color to red
+  }
+
+  /**
+   * Updates the distance display between projected vertices and important points.
+   * @param {BABYLON.Vector3[]} vertices - The projected vertices.
+   */
+  updateDistanceDisplay(vertices) {
+    // Clear previous dimension texts
+    this.dimensionTexts.forEach(text => text.dispose());
+    this.dimensionTexts = [];
+
+    // Calculate and display distances
+    vertices.forEach((vertex, index) => {
+      this.importantPoints.forEach((point, pointIndex) => {
+        const distance = BABYLON.Vector3.Distance(vertex, point).toFixed(2);
+        const text = new TextBlock();
+        text.text = `Distance to Point ${pointIndex + 1}: ${distance}`;
+        text.color = "white";
+        text.fontSize = 14;
+        text.top = 50 + index * 20;
+        text.left = 10;
+        this.gui.addControl(text);
+        this.dimensionTexts.push(text);
+      });
+    });
+  }
+}
 /* ================================================================================ */
 // src/utils/sceneUtils.js
 
@@ -1448,6 +2417,150 @@ export function highlightMeshPart(mesh, selection) {
     return highlightMesh;
 }
 /* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+
+export class SliceUtils {
+        constructor(scene, mesh, curvedPlane) {
+            this.scene = scene;
+            this.mesh = mesh;
+            this.curvedPlane = curvedPlane;
+        }
+    
+        sliceMesh(keepSideA = true) {
+            const positions = this.mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+            const indices = this.mesh.getIndices();
+            const normals = this.mesh.getVerticesData(BABYLON.VertexBuffer.NormalKind);
+            const uvs = this.mesh.getVerticesData(BABYLON.VertexBuffer.UVKind);
+            const newPositions = [];
+            const newIndices = [];
+            const newNormals = [];
+            const newUVs = [];
+            const vertexMap = new Map();
+    
+            // Filter vertices and handle edge intersections
+            for (let i = 0; i < indices.length; i += 3) {
+                const i0 = indices[i] * 3;
+                const i1 = indices[i + 1] * 3;
+                const i2 = indices[i + 2] * 3;
+    
+                const v0 = new BABYLON.Vector3(positions[i0], positions[i0 + 1], positions[i0 + 2]);
+                const v1 = new BABYLON.Vector3(positions[i1], positions[i1 + 1], positions[i1 + 2]);
+                const v2 = new BABYLON.Vector3(positions[i2], positions[i2 + 1], positions[i2 + 2]);
+    
+                const d0 = this.curvedPlane.signedDistanceTo(v0);
+                const d1 = this.curvedPlane.signedDistanceTo(v1);
+                const d2 = this.curvedPlane.signedDistanceTo(v2);
+    
+                if ((d0 >= 0 && d1 < 0) || (d0 < 0 && d1 >= 0)) {
+                    const intersection = this.intersectEdge(v0, v1, d0, d1);
+                    const n0 = new BABYLON.Vector3(normals[i0], normals[i0 + 1], normals[i0 + 2]);
+                    const n1 = new BABYLON.Vector3(normals[i1], normals[i1 + 1], normals[i1 + 2]);
+                    const uv0 = new BABYLON.Vector2(uvs[i0 / 3 * 2], uvs[i0 / 3 * 2 + 1]);
+                    const uv1 = new BABYLON.Vector2(uvs[i1 / 3 * 2], uvs[i1 / 3 * 2 + 1]);
+                    const intersectionNormal = this.interpolateVector3(n0, n1, d0, d1);
+                    const intersectionUV = this.interpolateVector2(uv0, uv1, d0, d1);
+                    this.addVertex(intersection, intersectionNormal, intersectionUV, vertexMap, newPositions, newNormals, newUVs);
+                }
+                if ((d1 >= 0 && d2 < 0) || (d1 < 0 && d2 >= 0)) {
+                    const intersection = this.intersectEdge(v1, v2, d1, d2);
+                    const n1 = new BABYLON.Vector3(normals[i1], normals[i1 + 1], normals[i1 + 2]);
+                    const n2 = new BABYLON.Vector3(normals[i2], normals[i2 + 1], normals[i2 + 2]);
+                    const uv1 = new BABYLON.Vector2(uvs[i1 / 3 * 2], uvs[i1 / 3 * 2 + 1]);
+                    const uv2 = new BABYLON.Vector2(uvs[i2 / 3 * 2], uvs[i2 / 3 * 2 + 1]);
+                    const intersectionNormal = this.interpolateVector3(n1, n2, d1, d2);
+                    const intersectionUV = this.interpolateVector2(uv1, uv2, d1, d2);
+                    this.addVertex(intersection, intersectionNormal, intersectionUV, vertexMap, newPositions, newNormals, newUVs);
+                }
+                if ((d2 >= 0 && d0 < 0) || (d2 < 0 && d0 >= 0)) {
+                    const intersection = this.intersectEdge(v2, v0, d2, d0);
+                    const n2 = new BABYLON.Vector3(normals[i2], normals[i2 + 1], normals[i2 + 2]);
+                    const n0 = new BABYLON.Vector3(normals[i0], normals[i0 + 1], normals[i0 + 2]);
+                    const uv2 = new BABYLON.Vector2(uvs[i2 / 3 * 2], uvs[i2 / 3 * 2 + 1]);
+                    const uv0 = new BABYLON.Vector2(uvs[i0 / 3 * 2], uvs[i0 / 3 * 2 + 1]);
+                    const intersectionNormal = this.interpolateVector3(n2, n0, d2, d0);
+                    const intersectionUV = this.interpolateVector2(uv2, uv0, d2, d0);
+                    this.addVertex(intersection, intersectionNormal, intersectionUV, vertexMap, newPositions, newNormals, newUVs);
+                }
+    
+                // Add original vertices if they are on the correct side
+                if ((keepSideA && d0 >= 0) || (!keepSideA && d0 < 0)) {
+                    const n0 = new BABYLON.Vector3(normals[i0], normals[i0 + 1], normals[i0 + 2]);
+                    const uv0 = new BABYLON.Vector2(uvs[i0 / 3 * 2], uvs[i0 / 3 * 2 + 1]);
+                    this.addVertex(v0, n0, uv0, vertexMap, newPositions, newNormals, newUVs);
+                }
+                if ((keepSideA && d1 >= 0) || (!keepSideA && d1 < 0)) {
+                    const n1 = new BABYLON.Vector3(normals[i1], normals[i1 + 1], normals[i1 + 2]);
+                    const uv1 = new BABYLON.Vector2(uvs[i1 / 3 * 2], uvs[i1 / 3 * 2 + 1]);
+                    this.addVertex(v1, n1, uv1, vertexMap, newPositions, newNormals, newUVs);
+                }
+                if ((keepSideA && d2 >= 0) || (!keepSideA && d2 < 0)) {
+                    const n2 = new BABYLON.Vector3(normals[i2], normals[i2 + 1], normals[i2 + 2]);
+                    const uv2 = new BABYLON.Vector2(uvs[i2 / 3 * 2], uvs[i2 / 3 * 2 + 1]);
+                    this.addVertex(v2, n2, uv2, vertexMap, newPositions, newNormals, newUVs);
+                }
+            }
+    
+            // Create new indices based on the updated vertex map
+            for (let i = 0; i < indices.length; i += 3) {
+                const i0 = indices[i];
+                const i1 = indices[i + 1];
+                const i2 = indices[i + 2];
+    
+                if (vertexMap.has(i0) && vertexMap.has(i1) && vertexMap.has(i2)) {
+                    newIndices.push(
+                        vertexMap.get(i0),
+                        vertexMap.get(i1),
+                        vertexMap.get(i2)
+                    );
+                }
+            }
+    
+            const slicedMesh = new BABYLON.Mesh("slicedMesh", this.scene);
+            const vertexData = new BABYLON.VertexData();
+            vertexData.positions = newPositions;
+            vertexData.indices = newIndices;
+            vertexData.normals = newNormals;
+            vertexData.uvs = newUVs;
+            vertexData.applyToMesh(slicedMesh);
+    
+            return slicedMesh;
+        }
+    
+        // Helper function to calculate edge-plane intersection
+        intersectEdge(v1, v2, d1, d2) {
+            const t = d1 / (d1 - d2);
+            return v1.scale(1 - t).add(v2.scale(t));
+        }
+    
+        // Helper function to interpolate between two BABYLON.Vector3 values
+        interpolateVector3(v1, v2, d1, d2) {
+            const t = d1 / (d1 - d2);
+            return v1.scale(1 - t).add(v2.scale(t));
+        }
+    
+        // Helper function to interpolate between two BABYLON.Vector2 values
+        interpolateVector2(v1, v2, d1, d2) {
+            const t = d1 / (d1 - d2);
+            return new BABYLON.Vector2(
+                v1.x * (1 - t) + v2.x * t,
+                v1.y * (1 - t) + v2.y * t
+            );
+        }
+    
+        // Helper function to add a vertex to the map and positions array
+        addVertex(vertex, normal, uv, vertexMap, positions, normals, uvs) {
+            const key = vertex.x + "," + vertex.y + "," + vertex.z; // Create a unique key for the vertex
+            if (!vertexMap.has(key)) {
+                const index = positions.length / 3;
+                vertexMap.set(key, index);
+                positions.push(vertex.x, vertex.y, vertex.z);
+                normals.push(normal.x, normal.y, normal.z);
+                uvs.push(uv.x, uv.y);
+            }
+        }
+    }
+/* ================================================================================ */
 // src/utils/storageUtils.js
 
 const LOCAL_STORAGE_KEY = 'hypeStudioState';
@@ -1482,6 +2595,180 @@ export const clearStateFromLocalStorage = () => {
   }
 };
 
+/* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+import { AdvancedDynamicTexture, Slider, StackPanel, TextBlock } from '@babylonjs/gui';
+
+/**
+ * Utility class for sweeping a base mesh around a specified axis to create a new mesh.
+ */
+export class SweepUtils {
+    /**
+     * Creates an instance of SweepUtils.
+     * @param {BABYLON.Scene} scene - The Babylon.js scene.
+     * @param {BABYLON.Mesh} baseMesh - The base mesh to sweep.
+     * @param {BABYLON.Vector3} rotationAxis - The axis to rotate around (default: BABYLON.Axis.Y).
+     * @param {number} rotationAngle - The total rotation angle in radians (default: 2 * Math.PI).
+     * @param {number} steps - The number of rotation steps (default: 36).
+     * @param {BABYLON.Vector3} center - The center of rotation (default: BABYLON.Vector3.Zero()).
+     */
+    constructor(scene, baseMesh, rotationAxis = BABYLON.Axis.Y, rotationAngle = Math.PI * 2, steps = 36, center = BABYLON.Vector3.Zero()) {
+        this.scene = scene;
+        this.baseMesh = baseMesh;
+        this.rotationAxis = rotationAxis;
+        this.rotationAngle = rotationAngle;
+        this.steps = steps;
+        this.center = center;
+
+        this.sweptMesh = this.createSweptMesh();
+        this.createUIControls();
+    }
+
+    /**
+     * Creates the swept mesh by rotating the base mesh around the specified axis.
+     * @returns {BABYLON.Mesh} The created swept mesh.
+     */
+    createSweptMesh() {
+        const positions = this.baseMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+        const indices = this.baseMesh.getIndices();
+        const newPositions = [];
+        const newIndices = [];
+        const stepAngle = this.rotationAngle / this.steps;
+
+        for (let step = 0; step <= this.steps; step++) {
+            const angle = step * stepAngle;
+            const rotationMatrix = BABYLON.Matrix.RotationAxis(this.rotationAxis, angle);
+
+            for (let i = 0; i < positions.length; i += 3) {
+                const vertex = BABYLON.Vector3.TransformCoordinates(
+                    new BABYLON.Vector3(positions[i], positions[i + 1], positions[i + 2]).subtract(this.center),
+                    rotationMatrix
+                ).add(this.center);
+                newPositions.push(vertex.x, vertex.y, vertex.z);
+            }
+
+            if (step > 0) {
+                const baseIndex = step * (positions.length / 3);
+                const prevBaseIndex = (step - 1) * (positions.length / 3);
+
+                for (let i = 0; i < indices.length; i += 3) {
+                    const i0 = indices[i];
+                    const i1 = indices[i + 1];
+                    const i2 = indices[i + 2];
+
+                    newIndices.push(prevBaseIndex + i0, prevBaseIndex + i1, prevBaseIndex + i2);
+                    newIndices.push(baseIndex + i0, baseIndex + i1, baseIndex + i2);
+                    newIndices.push(prevBaseIndex + i0, baseIndex + i1, prevBaseIndex + i2);
+                    newIndices.push(prevBaseIndex + i1, baseIndex + i1, baseIndex + i0);
+                }
+            }
+        }
+
+        // Calculate normals
+        const normals = [];
+        BABYLON.VertexData.ComputeNormals(newPositions, newIndices, normals);
+
+        // Generate UV coordinates (simplified example)
+        const uvs = [];
+        for (let i = 0; i <= this.steps; i++) {
+            for (let j = 0; j < positions.length / 3; j++) {
+                uvs.push(j / (positions.length / 3 - 1), i / this.steps);
+            }
+        }
+
+        const sweptMesh = new BABYLON.Mesh("sweptMesh", this.scene);
+        const vertexData = new BABYLON.VertexData();
+        vertexData.positions = newPositions;
+        vertexData.indices = newIndices;
+        vertexData.normals = normals;
+        vertexData.uvs = uvs;
+        vertexData.applyToMesh(sweptMesh);
+
+        return sweptMesh;
+    }
+
+    /**
+     * Creates the UI controls for adjusting the rotation angle, steps, and axis.
+     */
+    createUIControls() {
+        const advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("UI");
+
+        const panel = new StackPanel();
+        panel.width = "220px";
+        panel.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        panel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        advancedTexture.addControl(panel);
+
+        const stepsSlider = new Slider();
+        stepsSlider.minimum = 3;
+        stepsSlider.maximum = 100;
+        stepsSlider.value = this.steps;
+        stepsSlider.height = "20px";
+        stepsSlider.width = "200px";
+        stepsSlider.onValueChangedObservable.add(value => {
+            this.steps = Math.floor(value);
+            this.sweptMesh.dispose();
+            this.sweptMesh = this.createSweptMesh();
+        });
+        panel.addControl(stepsSlider);
+
+        const stepsText = new TextBlock();
+        stepsText.text = "Rotation Steps";
+        stepsText.height = "30px";
+        stepsText.color = "white";
+        panel.addControl(stepsText);
+
+        const angleSlider = new Slider();
+        angleSlider.minimum = 0;
+        angleSlider.maximum = Math.PI * 4;
+        angleSlider.value = this.rotationAngle;
+        angleSlider.height = "20px";
+        angleSlider.width = "200px";
+        angleSlider.onValueChangedObservable.add(value => {
+            this.rotationAngle = value;
+            this.sweptMesh.dispose();
+            this.sweptMesh = this.createSweptMesh();
+        });
+        panel.addControl(angleSlider);
+
+        const angleText = new TextBlock();
+        angleText.text = "Rotation Angle";
+        angleText.height = "30px";
+        angleText.color = "white";
+        panel.addControl(angleText);
+
+        const createButton = (text, axis) => {
+            const button = new BABYLON.GUI.Button.CreateSimpleButton(text, text);
+            button.width = "100px";
+            button.height = "50px";
+            button.color = "white";
+            button.background = "gray";
+            button.onPointerUpObservable.add(() => {
+                this.rotationAxis = axis;
+                this.sweptMesh.dispose();
+                this.sweptMesh = this.createSweptMesh();
+            });
+            return button;
+        };
+
+        const buttonPanel = new StackPanel();
+        buttonPanel.width = "200px";
+        buttonPanel.isVertical = true;
+        buttonPanel.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        buttonPanel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+
+        const xButton = createButton("Twist X", BABYLON.Axis.X);
+        const yButton = createButton("Twist Y", BABYLON.Axis.Y);
+        const zButton = createButton("Twist Z", BABYLON.Axis.Z);
+
+        buttonPanel.addControl(xButton);
+        buttonPanel.addControl(yButton);
+        buttonPanel.addControl(zButton);
+
+        advancedTexture.addControl(buttonPanel);
+    }
+}
 /* ================================================================================ */
 import * as BABYLON from '@babylonjs/core';
 
@@ -1910,4 +3197,170 @@ export function applyPreciseTessellation(mesh, triangleDensityTarget, estimatedT
 
 export function calculateSurfaceArea(tessellatedMesh) {
   return new PreciseTessellation(tessellatedMesh, 0, 0).calculateSurfaceArea();
+}
+/* ================================================================================ */
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+import { AdvancedDynamicTexture, Slider, StackPanel, TextBlock } from '@babylonjs/gui';
+
+/**
+ * Utility class for twisting a long thin mesh (rectangle) to simulate twisting effects.
+ */
+export class TwistUtils {
+  /**
+   * Creates an instance of TwistUtils.
+   * @param {BABYLON.Scene} scene - The Babylon.js scene.
+   * @param {number} width - The width of the mesh.
+   * @param {number} height - The height of the mesh.
+   * @param {number} segments - The number of segments for twisting.
+   * @param {number} twistAmount - The initial twist amount (in radians).
+   * @param {BABYLON.Vector3} twistAxis - The axis to twist around (default: BABYLON.Axis.Y).
+   * @param {number} twistExponent - The exponent to control twist distribution (default: 1).
+   */
+  constructor(scene, width, height, segments, twistAmount = 0, twistAxis = BABYLON.Axis.Y, twistExponent = 1) {
+    this.scene = scene;
+    this.width = width;
+    this.height = height;
+    this.segments = segments;
+    this.twistAmount = twistAmount;
+    this.twistAxis = twistAxis;
+    this.twistExponent = twistExponent;
+
+    this.mesh = this.createMesh();
+    this.applyTwist();
+    this.createUIControls();
+  }
+
+  /**
+   * Creates the initial plane mesh.
+   * @returns {BABYLON.Mesh} The created plane mesh.
+   */
+  createMesh() {
+    return BABYLON.MeshBuilder.CreatePlane("twistablePlane", {
+      width: this.width,
+      height: this.height,
+      subdivisions: this.segments
+    }, this.scene);
+  }
+
+  /**
+   * Applies the twist deformation to the mesh.
+   */
+  applyTwist() {
+    const positions = this.mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+    const halfWidth = this.width / 2;
+    const halfHeight = this.height / 2;
+
+    for (let i = 0; i <= this.segments; i++) {
+      for (let j = 0; j <= this.segments; j++) {
+        const index = (i * (this.segments + 1) + j) * 3;
+        const x = positions[index] - halfWidth;
+        const y = positions[index + 1] - halfHeight;
+        const z = positions[index + 2];
+
+        const normalizedPosition = this.twistAxis === BABYLON.Axis.X ? (x + halfWidth) / this.width
+                                   : this.twistAxis === BABYLON.Axis.Z ? (z + halfWidth) / this.width
+                                   : (y + halfHeight) / this.height;
+        const twistAngle = Math.pow(normalizedPosition, this.twistExponent) * this.twistAmount;
+        const cosAngle = Math.cos(twistAngle);
+        const sinAngle = Math.sin(twistAngle);
+
+        if (this.twistAxis === BABYLON.Axis.X) {
+          // Twist around X-axis
+          positions[index + 1] = y * cosAngle - z * sinAngle + halfHeight;
+          positions[index + 2] = y * sinAngle + z * cosAngle;
+        } else if (this.twistAxis === BABYLON.Axis.Z) {
+          // Twist around Z-axis
+          positions[index] = x * cosAngle - y * sinAngle + halfWidth;
+          positions[index + 1] = x * sinAngle + y * cosAngle;
+        } else {
+          // Twist around Y-axis (default)
+          positions[index] = x * cosAngle - z * sinAngle + halfWidth;
+          positions[index + 2] = x * sinAngle + z * cosAngle;
+        }
+      }
+    }
+
+    this.mesh.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
+  }
+
+  /**
+   * Creates the UI controls for adjusting the twist amount and axis.
+   */
+  createUIControls() {
+    const advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("UI");
+
+    const panel = new StackPanel();
+    panel.width = "220px";
+    panel.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    panel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+    advancedTexture.addControl(panel);
+
+    const twistSlider = new Slider();
+    twistSlider.minimum = 0;
+    twistSlider.maximum = Math.PI * 4; // Maximum twist angle (4 full rotations)
+    twistSlider.value = this.twistAmount;
+    twistSlider.height = "20px";
+    twistSlider.width = "200px";
+    twistSlider.onValueChangedObservable.add(value => {
+      this.twistAmount = value;
+      this.applyTwist();
+    });
+    panel.addControl(twistSlider);
+
+    const twistText = new TextBlock();
+    twistText.text = "Twist Amount";
+    twistText.height = "30px";
+    twistText.color = "white";
+    panel.addControl(twistText);
+
+    // Twist Axis Buttons
+    const createButton = (text, axis) => {
+      const button = new BABYLON.GUI.Button.CreateSimpleButton(text, text);
+      button.width = "100px";
+      button.height = "50px";
+      button.color = "white";
+      button.background = "gray";
+      button.onPointerUpObservable.add(() => {
+        this.twistAxis = axis;
+        this.applyTwist();
+      });
+      return button;
+    };
+
+    const buttonPanel = new StackPanel();
+    buttonPanel.width = "200px";
+    buttonPanel.isVertical = true;
+    buttonPanel.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+    buttonPanel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+
+    const xButton = createButton("Twist X", BABYLON.Axis.X);
+    const yButton = createButton("Twist Y", BABYLON.Axis.Y);
+    const zButton = createButton("Twist Z", BABYLON.Axis.Z);
+
+    buttonPanel.addControl(xButton);
+    buttonPanel.addControl(yButton);
+    buttonPanel.addControl(zButton);
+
+    advancedTexture.addControl(buttonPanel);
+
+    // Twist Exponent Slider
+    const exponentSlider = new Slider();
+    exponentSlider.minimum = 0.1;
+    exponentSlider.maximum = 5;
+    exponentSlider.value = this.twistExponent;
+    exponentSlider.height = "20px";
+    exponentSlider.width = "200px";
+    exponentSlider.onValueChangedObservable.add(value => {
+      this.twistExponent = value;
+      this.applyTwist();
+    });
+    panel.addControl(exponentSlider);
+
+    const exponentText = new TextBlock();
+    exponentText.text = "Twist Exponent";
+    exponentText.height = "30px";
+    exponentText.color = "white";
+    panel.addControl(exponentText);
+  }
 }

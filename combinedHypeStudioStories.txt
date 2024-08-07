@@ -1855,6 +1855,294 @@ export const ShapeCreator = ({ onCreateShape }) => {
     );
   };
 /* ================================================================================ */
+import React, { useState } from 'react';
+
+export const AnalysisHistory = ({ analysisHistory, setAnalysisHistory, setCurrentResults }) => {
+  const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(null);
+
+  const handleViewHistory = (index) => {
+    setCurrentResults(analysisHistory[index]);
+    setSelectedHistoryIndex(index);
+  };
+
+  return (
+    <div className="analysis-history">
+      <h3>Analysis History</h3>
+      <ul>
+        {analysisHistory.map((result, index) => (
+          <li key={index}>
+            <button onClick={() => handleViewHistory(index)}>
+              Analysis {index + 1} - {result.analysisType}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {selectedHistoryIndex !== null && (
+        <div>
+          <h4>Selected Analysis: {selectedHistoryIndex + 1}</h4>
+          {/* Display details of the selected analysis result */}
+        </div>
+      )}
+    </div>
+  );
+};
+/* ================================================================================ */
+import React, { useState } from 'react';
+
+export const CustomMaterialForm = ({ material, onSave }) => {
+  const [customMaterial, setCustomMaterial] = useState(material);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setCustomMaterial({ ...customMaterial, [name]: value });
+  };
+
+  const handleSave = () => {
+    onSave(customMaterial);
+  };
+
+  return (
+    <div className="custom-material-form">
+      <h3>Customize Material</h3>
+      <label>
+        Name:
+        <input type="text" name="name" value={customMaterial.name} onChange={handleChange} />
+      </label>
+      <label>
+        Young's Modulus (Pa):
+        <input type="number" name="youngsModulus" value={customMaterial.youngsModulus} onChange={handleChange} />
+      </label>
+      <label>
+        Poisson's Ratio:
+        <input type="number" name="poissonRatio" value={customMaterial.poissonRatio} onChange={handleChange} />
+      </label>
+      <label>
+        Yield Strength (Pa):
+        <input type="number" name="yieldStrength" value={customMaterial.yieldStrength} onChange={handleChange} />
+      </label>
+      <label>
+        Fatigue Strength (Pa):
+        <input type="number" name="fatigueStrength" value={customMaterial.fatigueStrength} onChange={handleChange} />
+      </label>
+      <label>
+        Fatigue Exponent:
+        <input type="number" name="fatigueExponent" value={customMaterial.fatigueExponent} onChange={handleChange} />
+      </label>
+      <label>
+        Thermal Expansion Coefficient (1/K):
+        <input type="number" name="thermalExpansionCoeff" value={customMaterial.thermalExpansionCoeff} onChange={handleChange} />
+      </label>
+      <label>
+        Density (kg/m³):
+        <input type="number" name="density" value={customMaterial.density} onChange={handleChange} />
+      </label>
+      <label>
+        Thermal Conductivity (W/mK):
+        <input type="number" name="thermalConductivity" value={customMaterial.thermalConductivity} onChange={handleChange} />
+      </label>
+      <label>
+        Specific Heat (J/kgK):
+        <input type="number" name="specificHeat" value={customMaterial.specificHeat} onChange={handleChange} />
+      </label>
+      <button onClick={handleSave}>Save</button>
+    </div>
+  );
+};
+/* ================================================================================ */
+import React from 'react';
+
+const loadPresets = [
+  { name: 'Uniform Load', loads: [{ magnitude: 1000, direction: { x: 0, y: -1, z: 0 }, temperature: 100 }] },
+  { name: 'Point Load', loads: [{ magnitude: 5000, direction: { x: 0, y: -1, z: 0 }, temperature: 100 }] },
+  // Add more presets as needed
+];
+
+const constraintPresets = [
+  { name: 'Fixed Support', constraints: [{ type: 'fixed', temperature: 20 }] },
+  { name: 'Pinned Support', constraints: [{ type: 'pinned', temperature: 20 }] },
+  // Add more presets as needed
+];
+
+export const LoadConstraintPresets = ({ setLoads, setConstraints }) => {
+  return (
+    <div className="load-constraint-presets">
+      <label>Load Presets:</label>
+      <select onChange={(e) => {
+        const preset = loadPresets.find(preset => preset.name === e.target.value);
+        setLoads(preset.loads);
+      }}>
+        {loadPresets.map((preset) => (
+          <option key={preset.name} value={preset.name}>{preset.name}</option>
+        ))}
+      </select>
+
+      <label>Constraint Presets:</label>
+      <select onChange={(e) => {
+        const preset = constraintPresets.find(preset => preset.name === e.target.value);
+        setConstraints(preset.constraints);
+      }}>
+        {constraintPresets.map((preset) => (
+          <option key={preset.name} value={preset.name}>{preset.name}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
+/* ================================================================================ */
+import React from 'react';
+
+const materials = [
+  { 
+    name: 'Steel', 
+    youngsModulus: 200e9, 
+    poissonRatio: 0.3, 
+    yieldStrength: 250e6, 
+    fatigueStrength: 200e6, 
+    fatigueExponent: 10, 
+    thermalExpansionCoeff: 12e-6, 
+    density: 7850,
+    thermalConductivity: 45, // W/mK
+    specificHeat: 500, // J/kgK
+  },
+  { 
+    name: 'Aluminum', 
+    youngsModulus: 70e9, 
+    poissonRatio: 0.33, 
+    yieldStrength: 300e6, 
+    fatigueStrength: 120e6, 
+    fatigueExponent: 8, 
+    thermalExpansionCoeff: 23e-6, 
+    density: 2700,
+    thermalConductivity: 237, // W/mK
+    specificHeat: 897, // J/kgK
+  },
+  // Add more materials as needed
+];
+
+export const MaterialLibrary = ({ selectedMaterial, setSelectedMaterial }) => {
+  return (
+    <div className="material-library">
+      <label>Material:</label>
+      <select value={selectedMaterial.name} onChange={(e) => {
+        const material = materials.find(mat => mat.name === e.target.value);
+        setSelectedMaterial(material);
+      }}>
+        {materials.map((material) => (
+          <option key={material.name} value={material.name}>{material.name}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
+/* ================================================================================ */
+import React, { memo, useState } from 'react';
+import { useHypeStudioModel } from '../../contexts/HypeStudioContext';
+import { MaterialLibrary } from './MaterialLibrary';
+import { CustomMaterialForm } from './CustomMaterialForm';
+import { LoadConstraintPresets } from './LoadConstraintPresets';
+import { AnalysisHistory } from './AnalysisHistory';
+
+export const StructuralAnalysisPanel = memo(() => {
+    const model = useHypeStudioModel();
+    const [analysisType, setAnalysisType] = useState('static');
+    const [material, setMaterial] = useState({
+      name: 'Steel',
+      youngsModulus: 200e9,
+      poissonRatio: 0.3,
+      yieldStrength: 250e6,
+      fatigueStrength: 200e6,
+      fatigueExponent: 10,
+      thermalExpansionCoeff: 12e-6,
+      density: 7850,
+    });
+    const [geometry, setGeometry] = useState({
+      length: 1,
+      width: 0.1,
+      height: 0.1,
+      nodes: Array.from({length: 100}, (_, i) => ({ id: i })),
+    });
+    const [loads, setLoads] = useState([{ magnitude: 1000, direction: { x: 0, y: -1, z: 0 }, temperature: 100 }]);
+    const [constraints, setConstraints] = useState([{ type: 'fixed', temperature: 20 }]);
+    const [results, setResults] = useState(null);
+    const [analysisHistory, setAnalysisHistory] = useState([]);
+    const [customMaterials, setCustomMaterials] = useState([]);
+  
+    const runAnalysis = async () => {
+      try {
+        const response = await fetch('/api/structural-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysisType, material, geometry, loads, constraints }),
+        });
+        const data = await response.json();
+        setResults(data);
+        model.setAnalysisResults(data);
+      } catch (error) {
+        console.error('Analysis failed:', error);
+      }
+    };
+
+    const saveCustomMaterial = (customMaterial) => {
+        setCustomMaterials([...customMaterials, customMaterial]);
+        setMaterial(customMaterial);
+      };
+    
+  
+    return (
+      <div className="structural-analysis-panel">
+        <h2>Structural Analysis</h2>
+        
+        <select value={analysisType} onChange={(e) => setAnalysisType(e.target.value)}>
+          <option value="static">Static Analysis</option>
+          <option value="fatigue">Fatigue Analysis</option>
+          <option value="thermal">Thermal Analysis</option>
+          <option value="dynamic">Dynamic Analysis</option>
+        </select>
+  
+        <MaterialLibrary selectedMaterial={material} setSelectedMaterial={setMaterial} />
+        <LoadConstraintPresets setLoads={setLoads} setConstraints={setConstraints} />
+
+        <CustomMaterialForm material={material} onSave={saveCustomMaterial} />
+  
+        <button onClick={runAnalysis}>Run Analysis</button>
+  
+        {results && (
+          <div className="analysis-results">
+            <h3>Analysis Results</h3>
+            {analysisType === 'static' && (
+              <>
+                <p>Max Stress: {results.maxStress.toFixed(2)} Pa</p>
+                <p>Max Displacement: {results.maxDisplacement.toFixed(6)} m</p>
+                <p>Factor of Safety: {results.factorOfSafety.toFixed(2)}</p>
+              </>
+            )}
+            {analysisType === 'fatigue' && (
+              <>
+                <p>Cycles to Failure: {results.cyclestoFailure.toExponential(2)}</p>
+                <p>Damage per Cycle: {results.damagePerCycle.toExponential(2)}</p>
+              </>
+            )}
+            {analysisType === 'thermal' && (
+              <>
+                <p>Max Temperature: {results.maxTemperature.toFixed(2)} °C</p>
+                <p>Thermal Stress: {results.thermalStress.toFixed(2)} Pa</p>
+                <p>Thermal Displacement: {results.thermalDisplacement.toFixed(6)} m</p>
+              </>
+            )}
+            {analysisType === 'dynamic' && (
+              <>
+                <p>Natural Frequency: {results.naturalFrequency.toFixed(2)} Hz</p>
+                <p>Max Dynamic Displacement: {Math.max(...results.dynamicResults.map(r => Math.abs(r.displacement))).toFixed(6)} m</p>
+              </>
+            )}
+          </div>
+        )}
+
+        <AnalysisHistory analysisHistory={analysisHistory} setAnalysisHistory={setAnalysisHistory} setCurrentResults={setResults} />
+      </div>
+    );
+  });
+/* ================================================================================ */
 .icon-small {
     width: 50px;
     height: 50px;
