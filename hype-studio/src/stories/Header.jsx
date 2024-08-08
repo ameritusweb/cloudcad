@@ -1,10 +1,10 @@
 import React, { memo } from 'react';
-import { useHypeStudioState, useHistoryState } from '../hooks/useHypeStudioState';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import './Header.css'; // We'll create this file for the styles
 import sideImage from '../assets/side.png';
-import UndoIcon from '../assets/left-arrow.svg';
-import RedoIcon from '../assets/right-arrow.svg';
+import UndoIcon from '../assets/left-arrow.svg?react';
+import RedoIcon from '../assets/right-arrow.svg?react';
 import { useVersioning } from '../hooks/useVersioning';
 
 export const Header = memo(() => {
@@ -47,10 +47,10 @@ export const Header = memo(() => {
       <div className="white-banner">
         <div>{`${projectName} - ${dimensions}`}</div>
         <div className={`undo cursor-pointer ${canUndo ? 'text-black' : 'opacity-50'}`}>
-          <UndoIcon className="undo-icon w-6 h-6" onClick={handleUndo} />
+          <UndoIcon className="undo-icon" onClick={handleUndo} />
         </div>
         <div className={`redo cursor-pointer ${canRedo ? 'text-black' : 'opacity-50'}`}>
-          <RedoIcon className="redo-icon w-6 h-6" onClick={handleRedo} />
+          <RedoIcon className="redo-icon" onClick={handleRedo} />
         </div>
       </div>
       <div className="side">
