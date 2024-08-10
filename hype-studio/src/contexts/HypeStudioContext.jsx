@@ -138,11 +138,17 @@ model.getElementById = function(id) {
 
   model.getAdjacencyList = function(mesh) {
     const shape = this.getState(`elements.shapes.${mesh.id}`);
+    if (!shape) {
+      return null;
+    }
     return shape.adjacencyList;
   }
 
   model.getVertexClassifications = function(mesh) {
     const shape = this.getState(`elements.shapes.${mesh.id}`);
+    if (!shape) {
+      return null;
+    }
     return shape.vertexClassifications;
   }
 

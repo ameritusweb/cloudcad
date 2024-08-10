@@ -501,45 +501,45 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
         highlightLayerRef.current.addMesh(highlightedMeshRef.current, new Vector3(1, 1, 0));
       }
   
-      if (selection) {
-        modelRef.current.setState(state => ({
-          ...state,
-          selectedPart: {
-            meshId: mesh.id,
-            ...selection
+      if (!selection) {
+        // modelRef.current.setState(state => ({
+        //   ...state,
+        //   selectedPart: {
+        //     meshId: mesh.id,
+        //     ...selection
+        //   }
+        // }));
+  
+        // Handle mesh selection and interaction as before
+        const selectedNodeId = handleMeshSelection(pickResult, meshesRef.current, scene, modelRef.current, (nodeId) => {
+          // This is where you would call your onSelectionChange function if needed
+        });
+  
+        if (selectedNodeId) {
+          const elementType = selectedNodeId.split('_')[0];
+          let dragCallback;
+          switch (elementType) {
+            case 'sketch':
+              dragCallback = handleSketchInteraction(modelRef.current, selectedNodeId, pickResult);
+              break;
+            case 'extrusion':
+              dragCallback = handleExtrusionInteraction(modelRef.current, selectedNodeId, pickResult);
+              break;
+            // Add cases for other element types
           }
-        }));
-  
-        // // Handle mesh selection and interaction as before
-        // const selectedNodeId = handleMeshSelection(pickResult, meshesRef.current, scene, modelRef.current, (nodeId) => {
-        //   // This is where you would call your onSelectionChange function if needed
-        // });
-  
-        // if (selectedNodeId) {
-        //   const elementType = selectedNodeId.split('_')[0];
-        //   let dragCallback;
-        //   switch (elementType) {
-        //     case 'sketch':
-        //       dragCallback = handleSketchInteraction(modelRef.current, selectedNodeId, pickResult);
-        //       break;
-        //     case 'extrusion':
-        //       dragCallback = handleExtrusionInteraction(modelRef.current, selectedNodeId, pickResult);
-        //       break;
-        //     // Add cases for other element types
-        //   }
-        //   if (dragCallback) {
-        //     scene.onPointerMove = (moveEvt) => {
-        //       const dragResult = scene.pick(moveEvt.offsetX, moveEvt.offsetY);
-        //       if (dragResult.hit) {
-        //         dragCallback(dragResult.pickedPoint);
-        //       }
-        //     };
-        //     scene.onPointerUp = () => {
-        //       scene.onPointerMove = null;
-        //       scene.onPointerUp = null;
-        //     };
-        //   }
-        // }
+          // if (dragCallback) {
+          //   scene.onPointerMove = (moveEvt) => {
+          //     const dragResult = scene.pick(moveEvt.offsetX, moveEvt.offsetY);
+          //     if (dragResult.hit) {
+          //       dragCallback(dragResult.pickedPoint);
+          //     }
+          //   };
+          //   scene.onPointerUp = () => {
+          //     scene.onPointerMove = null;
+          //     scene.onPointerUp = null;
+          //   };
+          // }
+        }
       }
     }
   }, [activeView, selectedSketchType]);

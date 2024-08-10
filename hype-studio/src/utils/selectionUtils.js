@@ -251,6 +251,11 @@ export function precomputeAdjacencyList(mesh) {
  * @returns {Object|null} Selection data or null if no valid selection.
  */
 export function selectMeshPart(mesh, pickResult, adjacencyList) {
+
+    if (!adjacencyList) {
+      return null;
+    }
+
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
     const indices = mesh.getIndices();
 
