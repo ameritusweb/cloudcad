@@ -148,7 +148,7 @@ export const HierarchyItem = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`py-2 cursor-pointer ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+      className={`py-1 cursor-pointer ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
     >
       <div className="flex items-center">
         {(hasChildren || hasSubgroups) && (
