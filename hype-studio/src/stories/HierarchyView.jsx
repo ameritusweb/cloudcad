@@ -12,26 +12,26 @@ export const HierarchyView = ({
   onAddGroup,
   onAddSubgroup,
   onRenameGroup,
+  onDeleteGroup,
 }) => {
-  const [draggedItem, setDraggedItem] = useState(null);
 
   return (
-    <div>
+    <div className="w-[18rem]">
       <button onClick={onAddGroup} className="inline-flex items-center text-sm text-blue-500 hover:text-blue-700 mb-2">
         <FaPlus /> <span className="pl-1">Add Group</span>
       </button>
       <ul>
         {groups.map((group) => (
           <HierarchyItem
+            isGroup={true}
             key={group.id}
             item={group}
             onSelect={onSelect}
             selectedId={selectedId}
             onDrop={onDrop}
-            draggedItem={draggedItem}
-            setDraggedItem={setDraggedItem}
             onAddSubgroup={onAddSubgroup}
             onRenameGroup={onRenameGroup}
+            onDeleteGroup={onDeleteGroup}
           />
         ))}
         <li>
@@ -39,13 +39,12 @@ export const HierarchyView = ({
           <ul className="pl-4">
             {ungroupedItems.map((item) => (
               <HierarchyItem
+                isGroup={false}
                 key={item.id}
                 item={item}
                 onSelect={onSelect}
                 selectedId={selectedId}
                 onDrop={onDrop}
-                draggedItem={draggedItem}
-                setDraggedItem={setDraggedItem}
                 isUngrouped
               />
             ))}

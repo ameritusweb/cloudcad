@@ -27,6 +27,7 @@ const initialHypeStudioState = {
   selectedElementId: null,
   selectedElement: null,
   selectedPart: null,
+  draggedItem: null,
   activeView: 'List View',
   leftPanelContent: [],
   currentModelView: '',
@@ -114,6 +115,10 @@ const createHypeStudioModel = () => {
     const shape = this.getState(`elements.shapes.${mesh.id}`);
     return shape.vertexClassifications;
   }
+
+  model.setDraggedItem = function(item) {
+    this.setState(state => ({ ...state, draggedItem: item }));
+  };
 
   model.setProjectName = function(name) {
     this.setState(state => ({ ...state, projectName: name }));

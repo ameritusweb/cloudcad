@@ -19,64 +19,100 @@ export const LeftPanel = memo(() => {
   const elements = useHypeStudioState('elements', {});
   const content = useHypeStudioState('leftPanelContent', []);
 
-  const version = useVersioning(['activeView', 'selectedSketchType', 'selectedElementId', 'leftPanelContent', 'groups']);
+  const version = useVersioning(['activeView', 'selectedSketchType', 'selectedElementId', 'leftPanelContent', 'groups', 'elements']);
 
   const groups = useHypeStudioState('groups', []);
   const ungroupedItems = model.getUngroupedItems();
 
-  const findGroupById = (groups, id) => {
-    for (let group of groups) {
-      if (group.id === id) return group;
-      for (let subgroup of group.subgroups) {
-        const found = findGroupById([subgroup], id);
-        if (found) return found;
-      }
+  // Helper to find a group or subgroup by ID
+const findGroupById = (groups, id) => {
+  for (let group of groups) {
+    if (group.id === id) return group;
+    for (let subgroup of group.subgroups) {
+      const found = findGroupById([subgroup], id);
+      if (found) return found;
     }
-    return null;
-  };
+  }
+  return null;
+};
 
-  const handleDrop = useCallback(
-    (above, below, draggedItem, targetGroup, within) => {
-      model.setState((state) => {
-        let updatedGroups = [...state.groups];
-  
-        // Remove the dragged item from its current position
-        const removeItem = (item) => {
-          updatedGroups = updatedGroups.map(group => ({
-            ...group,
-            items: group.items.filter(i => i.id !== item.id),
-            subgroups: group.subgroups.map(subgroup => ({
-              ...subgroup,
-              items: subgroup.items.filter(i => i.id !== item.id)
-            }))
-          }));
-        };
-  
-        removeItem(draggedItem);
-  
-        // Add the dragged item to the new location
-        if (within) {
-          const targetGroupOrSubgroup = findGroupById(updatedGroups, within.id);
-          if (targetGroupOrSubgroup) {
-            targetGroupOrSubgroup.items.push(draggedItem);
+// Helper to find the parent group of a given item
+const findParentGroupOrSubgroup = (groups, item) => {
+  for (let group of groups) {
+    if (group.items.some(i => i.id === item.id)) return group;
+    for (let subgroup of group.subgroups) {
+      if (subgroup.items.some(i => i.id === item.id)) return subgroup;
+    }
+  }
+  return null;
+};
+
+const handleDrop = useCallback(
+  (above, below, draggedItem, targetGroup, within) => {
+    const ungrouped = model.getUngroupedItems();
+    model.setState((state) => {
+      let updatedGroups = [...state.groups];
+
+      // Function to remove an item from its current location
+      const removeItem = (itemId) => {
+        let removedItem = null;
+      
+        // Helper function to find and remove an item from a list
+        const removeFromList = (list) => {
+          const index = list.findIndex(item => item.id === itemId);
+          if (index !== -1) {
+            removedItem = list[index];
+            return list.slice(0, index).concat(list.slice(index + 1));
           }
-        } else if (above || below) {
-          const parent = findParent(updatedGroups, above || below);
-          const targetItems = parent ? parent.items : ungroupedItems;
+          return list;
+        };
+      
+        // Remove from groups and subgroups
+        updatedGroups = updatedGroups.map(group => ({
+          ...group,
+          items: removeFromList(group.items),
+          subgroups: group.subgroups.map(subgroup => ({
+            ...subgroup,
+            items: removeFromList(subgroup.items)
+          }))
+        }));
+      
+        return removedItem;
+      };      
+
+      // First, remove the dragged item from its original location
+      const removedItem = removeItem(draggedItem.id) || ungrouped.find(item => item.id === draggedItem.id);
+
+      // Next, add the dragged item to the new location
+      if (within) {
+        // Add within a target group or subgroup
+        const targetGroupOrSubgroup = findGroupById(updatedGroups, within.id);
+        if (targetGroupOrSubgroup) {
+          targetGroupOrSubgroup.items.push(removedItem);
+        }
+      } else if (above || below) {
+        // Reorder within a group/subgroup
+        const parent = findParentGroupOrSubgroup(updatedGroups, above || below);
+        const targetItems = parent ? parent.items : null;
+
+        if (targetItems) {
           const index = targetItems.findIndex(i => i.id === (above ? above.id : below.id));
           const insertAt = above ? index : index + 1;
-          targetItems.splice(insertAt, 0, draggedItem);
+          targetItems.splice(insertAt, 0, removedItem);
         }
-  
-        return {
-          ...state,
-          groups: updatedGroups
-        };
-      });
-    },
-    [model]
-  );
+      } else {
+        // If there's no specific target, the item is implicitly ungrouped
+        // Do nothing here since ungroupedItems are calculated dynamically
+      }
 
+      return {
+        ...state,
+        groups: updatedGroups
+      };
+    });
+  },
+  [model]
+);
 
   const handleSelect = useCallback(
     (id) => {
@@ -145,6 +181,37 @@ export const LeftPanel = memo(() => {
     });
   }, [model]);
 
+  const handleDeleteGroup = useCallback((path) => {
+    model.setState((state) => {
+      const updatedGroups = [...state.groups];
+      let currentLevel = updatedGroups;
+  
+      // Traverse the path to find the parent array of the item to be deleted
+      for (let i = 0; i < path.length - 1; i++) {
+        const id = path[i];
+        const foundGroup = currentLevel.find((group) => group.id === id);
+        if (foundGroup) {
+          currentLevel = foundGroup.subgroups;
+        } else {
+          return state; // If the group isn't found, return the current state
+        }
+      }
+  
+      // Find the index of the item to be deleted
+      const idToDelete = path[path.length - 1];
+      const indexToDelete = currentLevel.findIndex((group) => group.id === idToDelete);
+  
+      if (indexToDelete !== -1) {
+        currentLevel.splice(indexToDelete, 1); // Remove the item at the found index
+      }
+  
+      return {
+        ...state,
+        groups: updatedGroups,
+      };
+    });
+  }, [model]);  
+
   const handleSketchTypeSelect = useCallback((type) => {
     model.setState(state => ({ ...state, selectedSketchType: type }));
   }, [model]);
@@ -212,6 +279,7 @@ export const LeftPanel = memo(() => {
           onAddGroup={handleAddGroup}
           onAddSubgroup={handleAddSubgroup}
           onRenameGroup={handleRenameGroup}
+          onDeleteGroup={handleDeleteGroup}
         />
       )}
   </div>
