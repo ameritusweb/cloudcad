@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FaPlus } from 'react-icons/fa';
 import { HierarchyItem } from './HierarchyItem';
+import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 
 export const HierarchyView = ({
   items,
@@ -14,6 +15,8 @@ export const HierarchyView = ({
   onRenameGroup,
   onDeleteGroup,
 }) => {
+
+    const model = useHypeStudioModel();
 
   return (
     <div className="w-[18rem]">
@@ -36,18 +39,29 @@ export const HierarchyView = ({
         ))}
         <li>
           <strong>Ungrouped Items</strong>
-          <ul className="pl-4">
-            {ungroupedItems.map((item) => (
-              <HierarchyItem
-                isGroup={false}
-                key={item.id}
-                item={item}
-                onSelect={onSelect}
-                selectedId={selectedId}
-                onDrop={onDrop}
-                isUngrouped
-              />
-            ))}
+          <ul
+            className="pl-4"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              onDrop(null, null, model.getState('draggedItem'), null, { id: 'ungrouped' });
+            }}
+          >
+            {ungroupedItems.length === 0 ? (
+              <li className="py-2 text-gray-500 italic">Drop items here to ungroup</li>
+            ) : (
+              ungroupedItems.map((item) => (
+                <HierarchyItem
+                  isGroup={false}
+                  key={item.id}
+                  item={item}
+                  onSelect={onSelect}
+                  selectedId={selectedId}
+                  onDrop={onDrop}
+                  isUngrouped
+                />
+              ))
+            )}
           </ul>
         </li>
       </ul>

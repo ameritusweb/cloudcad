@@ -84,7 +84,11 @@ const handleDrop = useCallback(
       const removedItem = removeItem(draggedItem.id) || ungrouped.find(item => item.id === draggedItem.id);
 
       // Next, add the dragged item to the new location
-      if (within) {
+      if (within && within.id === 'ungrouped') {
+        // Drop into ungrouped items
+        // The removedItem is already out of the groups, so it will be ungrouped now
+      } 
+      else if (within) {
         // Add within a target group or subgroup
         const targetGroupOrSubgroup = findGroupById(updatedGroups, within.id);
         if (targetGroupOrSubgroup) {
