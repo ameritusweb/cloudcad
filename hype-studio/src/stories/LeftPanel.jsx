@@ -244,7 +244,7 @@ const handleDrop = useCallback(
     );
   };
 
-  return (<div id={`left-panel-${version}`} className="w-48 bg-white p-2 overflow-y-auto">
+  return (<div id={`left-panel-${version}`} className="w-[15rem] bg-white p-2 overflow-y-auto">
     <h2 className="font-bold mb-2">{activeView}</h2>
     {activeView === 'Custom Planes View' && <CustomPlanesView />}
     {activeView === 'Settings View' && <SettingsView />}

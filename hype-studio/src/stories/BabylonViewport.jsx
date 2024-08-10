@@ -25,6 +25,7 @@ import {
   updateCameraPosition
 } from '../utils/cameraUtils';
 import { usePointerEvents } from '../hooks/usePointerEvents';
+import { useScrollWheelEvents } from '../hooks/useScrollWheelEvents';
 import {
   selectEdge,
   selectFace,
@@ -36,7 +37,7 @@ import {
   highlightMeshPart
 } from '../utils/selectionUtils';
 
-export const BabylonViewport = memo(({ engine, canvas }) => {
+export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
   const modelRef = useRef(useHypeStudioModel());
   const activeView = useHypeStudioState('activeView', 'List View');
   const selectedSketchType = useHypeStudioState('selectedSketchType', null);
@@ -580,6 +581,42 @@ export const BabylonViewport = memo(({ engine, canvas }) => {
   }, [selectedSketchType]);
 
   usePointerEvents(sceneRef, handlePointerDown, handlePointerMove, handlePointerUp);
+
+  const handleWheel = useCallback(() => {
+    // Function to calculate the appropriate interval between markings based on zoom level
+    const calculateMarkInterval = (realWorldHeightInMm) => {
+      if (realWorldHeightInMm < 100) {
+        return { markInterval: 1, unit: 'mm' }; // millimeter markings
+      } else if (realWorldHeightInMm < 1000) {
+        return { markInterval: 10, unit: 'cm' }; // centimeter markings
+      } else {
+        return { markInterval: 100, unit: 'm' }; // meter markings
+      }
+    };
+
+    // Update the ruler markings whenever the camera zoom changes
+    const updateMarkings = () => {
+      const zoomFactor = cameraRef.current.radius;
+      const markings = [];
+      
+      const realWorldHeightInMm = zoomFactor;
+      const { markInterval, unit } = calculateMarkInterval(realWorldHeightInMm);
+
+      for (let i = 0; i <= realWorldHeightInMm; i += markInterval) {
+        markings.push({ value: i, unit });
+      }
+
+      modelRef.current.setState((state) => ({
+        ...state,
+        rulerMarkings: markings,
+      }), false);
+    };
+
+
+      updateMarkings();
+  }, []);
+
+  useScrollWheelEvents(sceneRef, handleWheel);
 
   return null;
 });

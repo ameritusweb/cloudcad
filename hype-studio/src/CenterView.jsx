@@ -5,7 +5,7 @@ const CenterView = ({ zoom }) => {
   return (
     <div
       className="w-[80%] h-[80%] flex p-4"
-      style={{ transform: `scale(${zoom})` }}
+      style={{ transform: `scale(${zoom})`, minWidth: '1300px' }}
     >
       <HypeStudio />
     </div>

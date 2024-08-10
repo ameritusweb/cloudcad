@@ -30,6 +30,7 @@ const initialHypeStudioState = {
   draggedItem: null,
   activeView: 'List View',
   leftPanelContent: [],
+  rulerMarkings: [],
   currentModelView: '',
   controlMode: 'rotate',
   customPlanes: [],
@@ -100,6 +101,35 @@ const createHypeStudioModel = () => {
   ];
 
     return ungroupedItems;
+};
+
+model.getElementById = function(id) {
+  const elements = this.getState('elements');
+
+  // Helper function to search within a specific type of elements
+  const searchInType = (type) => {
+    if (elements[type] && elements[type][id]) {
+      return elements[type][id];
+    }
+    return null;
+  };
+
+  // Search in each element type
+  const foundInSketches = searchInType('sketches');
+  if (foundInSketches) return foundInSketches;
+
+  const foundInExtrusions = searchInType('extrusions');
+  if (foundInExtrusions) return foundInExtrusions;
+
+  const foundInShapes = searchInType('shapes');
+  if (foundInShapes) return foundInShapes;
+
+  // Add additional types if needed
+  // Example: const foundInAnotherType = searchInType('anotherType');
+  // if (foundInAnotherType) return foundInAnotherType;
+
+  // If not found, return null
+  return null;
 };
 
   model.updateSketch = function(id, updates) {

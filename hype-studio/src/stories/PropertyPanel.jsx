@@ -18,7 +18,7 @@ export const PropertyPanel = memo(() => {
   // Use versioning hook
   const version = useVersioning(['selectedElementId', 'selectedPart', 'elements', 'customProperties']);
 
-  const selectedElement = selectedElementId ? model.getState(`elements.${selectedElementId.split('_')[0]}.${selectedElementId}`) : null;
+  const selectedElement = selectedElementId ? model.getElementById(selectedElementId) : null;
 
   const handlePropertyChange = useCallback((propertyName, value) => {
     setModifiedProperties(prev => ({

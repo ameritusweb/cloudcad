@@ -7,6 +7,7 @@ import { BabylonViewport } from './stories/BabylonViewport';
 import { PropertyPanel } from './stories/PropertyPanel';
 import { BabylonControls } from './stories/BabylonControls';
 import { useHypeStudioModel } from './contexts/HypeStudioContext';
+import { VerticalRuler } from './stories/VerticalRuler';
 
 const HypeStudio = React.memo(() => {
   const model = useHypeStudioModel();
@@ -46,6 +47,7 @@ const HypeStudio = React.memo(() => {
         <div className="flex-1 relative pb-[48px]">
           <canvas className="border-2 border-gray-300 outline-none" ref={canvasRef} style={{ width: '100%', height: '100%' }} />
           {engine && (<BabylonViewport engine={engine} canvas={canvasRef.current} />)}
+          {engine && (<VerticalRuler />)}
           <BabylonControls />
         </div>
         <PropertyPanel />

@@ -16,7 +16,12 @@ export const computeDiff = (oldObj, newObj) => {
       diff[key] = { type: 'replace', value: newValue };
     } else if (typeof newValue === 'object') {
       if (Array.isArray(newValue)) {
-        diff[key] = { type: 'array', value: computeArrayDiff(oldValue, newValue) };
+        // const arrayDiff = computeArrayDiff(oldValue, newValue);
+        // if (newValue.length === 0 || typeof newValue[0] !== 'object') {
+          diff[key] = { type: 'replace', value: newValue };
+        // } else {
+        //   diff[key] = { type: 'array', value: arrayDiff };
+        // }
       } else {
         const nestedDiff = computeDiff(oldValue, newValue);
         if (Object.keys(nestedDiff).length > 0) {

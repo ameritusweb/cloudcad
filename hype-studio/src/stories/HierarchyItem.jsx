@@ -141,6 +141,13 @@ export const HierarchyItem = ({
     </>
   }
 
+  const handleClick = (e) => {
+    if (!isGroup) {
+      onSelect(item.id);
+    }
+    e.stopPropagation();
+  };
+
   return (
     <li
       draggable
@@ -148,6 +155,7 @@ export const HierarchyItem = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onClick={handleClick}
       className={`py-1 cursor-pointer ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
     >
       <div className="flex items-center">

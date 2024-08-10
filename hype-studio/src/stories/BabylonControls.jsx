@@ -93,7 +93,7 @@ export const BabylonControls = memo(() => {
       <div id={`babylon-controls-${version}`} className="absolute top-2 right-2 text-white bg-black hover:bg-opacity-100 bg-opacity-50 p-2 rounded">
         Current View: {currentModelView}
       </div>
-      <div className="absolute bottom-[3.5rem] right-2 flex space-x-2">
+      <div className="absolute bottom-[0.8rem] right-2 flex space-x-2 z-[60]">
       <button 
           title={'Pointer Mode'}
           onClick={() => handleControlModeChange('pointer')}
