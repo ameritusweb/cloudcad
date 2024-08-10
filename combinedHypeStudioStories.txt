@@ -1170,12 +1170,12 @@ header {
 }
 /* ================================================================================ */
 import React, { memo } from 'react';
-import { useHypeStudioState, useHistoryState } from '../hooks/useHypeStudioState';
+import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import './Header.css'; // We'll create this file for the styles
 import sideImage from '../assets/side.png';
-import UndoIcon from '../assets/left-arrow.svg';
-import RedoIcon from '../assets/right-arrow.svg';
+import UndoIcon from '../assets/left-arrow.svg?react';
+import RedoIcon from '../assets/right-arrow.svg?react';
 import { useVersioning } from '../hooks/useVersioning';
 
 export const Header = memo(() => {
@@ -1218,10 +1218,10 @@ export const Header = memo(() => {
       <div className="white-banner">
         <div>{`${projectName} - ${dimensions}`}</div>
         <div className={`undo cursor-pointer ${canUndo ? 'text-black' : 'opacity-50'}`}>
-          <UndoIcon className="undo-icon w-6 h-6" onClick={handleUndo} />
+          <UndoIcon className="undo-icon" onClick={handleUndo} />
         </div>
         <div className={`redo cursor-pointer ${canRedo ? 'text-black' : 'opacity-50'}`}>
-          <RedoIcon className="redo-icon w-6 h-6" onClick={handleRedo} />
+          <RedoIcon className="redo-icon" onClick={handleRedo} />
         </div>
       </div>
       <div className="side">
@@ -2149,26 +2149,26 @@ export const StructuralAnalysisPanel = memo(() => {
 }
 /* ================================================================================ */
 import React, { memo, useCallback, useState } from 'react';
-import MyListIcon from '../assets/list.svg';
-import MySketchIcon from '../assets/sketch.svg';
-import MyImportExportIcon from '../assets/import-export.svg';
-import MyExtrudeIcon from '../assets/extrude.svg';
-import MySettingsIcon from '../assets/settings.svg';
-import MyMirroringIcon from '../assets/mirror.svg';
-import MyPatternIcon from '../assets/pattern.svg';
-import MyFormulaIcon from '../assets/formula.svg';
-import MyShapeIcon from '../assets/shape.svg';
-import MyPlanesIcon from '../assets/planes.svg';
-import MyStructuralAnalysisIcon from '../assets/analysis.svg';
-import MyBackIcon from '../assets/back.svg';
-import MyShatterIcon from '../assets/shatter.svg';
-import MyTwistIcon from '../assets/twist.svg';
-import MySliceIcon from '../assets/slice.svg';
-import MySweepIcon from '../assets/sweep.svg';
-import MyRayIcon from '../assets/ray.svg';
-import MyPointIcon from '../assets/point.svg';
-import MyCrushIcon from '../assets/crush.svg';
-import MyBendIcon from '../assets/bend.svg';
+import MyListIcon from '../assets/list.svg?react';
+import MySketchIcon from '../assets/sketch.svg?react';
+import MyImportExportIcon from '../assets/import-export.svg?react';
+import MyExtrudeIcon from '../assets/extrude.svg?react';
+import MySettingsIcon from '../assets/settings.svg?react';
+import MyMirroringIcon from '../assets/mirror.svg?react';
+import MyPatternIcon from '../assets/pattern.svg?react';
+import MyFormulaIcon from '../assets/formula.svg?react';
+import MyShapeIcon from '../assets/shape.svg?react';
+import MyPlanesIcon from '../assets/planes.svg?react';
+import MyStructuralAnalysisIcon from '../assets/analysis.svg?react';
+import MyBackIcon from '../assets/back.svg?react';
+import MyShatterIcon from '../assets/shatter.svg?react';
+import MyTwistIcon from '../assets/twist.svg?react';
+import MySliceIcon from '../assets/slice.svg?react';
+import MySweepIcon from '../assets/sweep.svg?react';
+import MyRayIcon from '../assets/ray.svg?react';
+import MyPointIcon from '../assets/point.svg?react';
+import MyCrushIcon from '../assets/crush.svg?react';
+import MyBendIcon from '../assets/bend.svg?react';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';

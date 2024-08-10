@@ -6,6 +6,7 @@ import { useVersioning } from '../hooks/useVersioning';
 import { SettingsView } from './SettingsView';
 import { ShapeCreator } from './ShapeCreator';
 import { CustomPlanesView } from './CustomPlanesView';
+import { HierarchyView } from './HierarchyView';
 
 export const LeftPanel = memo(() => {
 
@@ -18,7 +19,131 @@ export const LeftPanel = memo(() => {
   const elements = useHypeStudioState('elements', {});
   const content = useHypeStudioState('leftPanelContent', []);
 
-  const version = useVersioning(['activeView', 'selectedSketchType', 'selectedElementId', 'leftPanelContent']);
+  const version = useVersioning(['activeView', 'selectedSketchType', 'selectedElementId', 'leftPanelContent', 'groups']);
+
+  const groups = useHypeStudioState('groups', []);
+  const ungroupedItems = model.getUngroupedItems();
+
+  const findGroupById = (groups, id) => {
+    for (let group of groups) {
+      if (group.id === id) return group;
+      for (let subgroup of group.subgroups) {
+        const found = findGroupById([subgroup], id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const handleDrop = useCallback(
+    (above, below, draggedItem, targetGroup, within) => {
+      model.setState((state) => {
+        let updatedGroups = [...state.groups];
+  
+        // Remove the dragged item from its current position
+        const removeItem = (item) => {
+          updatedGroups = updatedGroups.map(group => ({
+            ...group,
+            items: group.items.filter(i => i.id !== item.id),
+            subgroups: group.subgroups.map(subgroup => ({
+              ...subgroup,
+              items: subgroup.items.filter(i => i.id !== item.id)
+            }))
+          }));
+        };
+  
+        removeItem(draggedItem);
+  
+        // Add the dragged item to the new location
+        if (within) {
+          const targetGroupOrSubgroup = findGroupById(updatedGroups, within.id);
+          if (targetGroupOrSubgroup) {
+            targetGroupOrSubgroup.items.push(draggedItem);
+          }
+        } else if (above || below) {
+          const parent = findParent(updatedGroups, above || below);
+          const targetItems = parent ? parent.items : ungroupedItems;
+          const index = targetItems.findIndex(i => i.id === (above ? above.id : below.id));
+          const insertAt = above ? index : index + 1;
+          targetItems.splice(insertAt, 0, draggedItem);
+        }
+  
+        return {
+          ...state,
+          groups: updatedGroups
+        };
+      });
+    },
+    [model]
+  );
+
+
+  const handleSelect = useCallback(
+    (id) => {
+      model.selectElement(id);
+    },
+    [model]
+  );
+
+  const handleAddGroup = useCallback(() => {
+    model.setState((state) => {
+      const newGroupId = `group_${Date.now()}`;
+      return {
+        ...state,
+        groups: [
+          ...state.groups,
+          {
+            id: newGroupId,
+            name: `New Group`,
+            items: [],
+            subgroups: [],
+          },
+        ],
+      };
+    });
+  }, [model]);
+
+  const handleAddSubgroup = useCallback((parentGroupId) => {
+    model.setState((state) => {
+      const newSubgroupId = `subgroup_${Date.now()}`;
+      const updatedGroups = state.groups.map((group) => {
+        if (group.id === parentGroupId) {
+          return {
+            ...group,
+            subgroups: [
+              ...group.subgroups,
+              {
+                id: newSubgroupId,
+                name: `New Subgroup`,
+                items: [],
+                subgroups: [],
+              },
+            ],
+          };
+        }
+        return group;
+      });
+      return {
+        ...state,
+        groups: updatedGroups,
+      };
+    });
+  }, [model]);
+
+  const handleRenameGroup = useCallback((groupId, newName) => {
+    model.setState((state) => {
+      const updatedGroups = state.groups.map((group) => {
+        if (group.id === groupId) {
+          return { ...group, name: newName };
+        }
+        return group;
+      });
+      return {
+        ...state,
+        groups: updatedGroups,
+      };
+    });
+  }, [model]);
 
   const handleSketchTypeSelect = useCallback((type) => {
     model.setState(state => ({ ...state, selectedSketchType: type }));
@@ -76,20 +201,19 @@ export const LeftPanel = memo(() => {
         </li>
       </ul>
     )}
-    { activeView === 'List View' && (
-      <ul>
-        {content.map((item) => (
-          <li 
-            key={item.id}
-            onClick={() => handleListItemSelect(item.id)}
-            className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedElementId === item.id ? 'bg-blue-100' : ''}`}
-          >
-            {item.type === 'circle' ? <FaCircle className="mr-2" /> : <FaSquare className="mr-2" />}
-            {item.name}
-          </li>
-        ))}
-      </ul>
-    )}
+    {activeView === 'List View' && (
+        <HierarchyView
+          items={elements}
+          groups={groups}
+          ungroupedItems={ungroupedItems}
+          selectedId={selectedElementId}
+          onSelect={handleSelect}
+          onDrop={handleDrop}
+          onAddGroup={handleAddGroup}
+          onAddSubgroup={handleAddSubgroup}
+          onRenameGroup={handleRenameGroup}
+        />
+      )}
   </div>
   );
 });

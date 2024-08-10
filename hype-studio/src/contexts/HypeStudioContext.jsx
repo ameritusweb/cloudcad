@@ -18,6 +18,7 @@ const initialHypeStudioState = {
     shapes: {}
     // Add other element types as needed
   },
+  groups: [],
   camera: {
     position: null,
     target: null
@@ -58,6 +59,47 @@ const createHypeStudioModel = () => {
   model.getSketchById = function(id) {
     return this.getState(`elements.sketches.${id}`);
   };
+
+  model.getDefaultShapeName = function(shapeId) {
+    const shape = this.getState(`elements.shapes.${shapeId}`);
+    if (!shape) return null;
+  
+    return `${shape.type.charAt(0).toUpperCase() + shape.type.slice(1)}_${shapeId.slice(6)}`;
+  };
+
+  model.getUngroupedItems = function() {
+    const state = this.getState();
+    const { elements, groups } = state;
+    
+    // Collect all grouped item IDs
+    const groupedItemIds = new Set();
+
+    const collectGroupedItemIds = (group) => {
+        group.items.forEach(item => groupedItemIds.add(item.id));
+        group.subgroups.forEach(subgroup => collectGroupedItemIds(subgroup));
+    };
+
+    groups.forEach(group => collectGroupedItemIds(group));
+
+    // Function to filter ungrouped items from elements
+    const filterUngrouped = (type) => {
+        return Object.values(elements[type]).filter(item => !groupedItemIds.has(item.id));
+    };
+
+    // Get ungrouped sketches, extrusions, and shapes
+    const ungroupedSketches = filterUngrouped('sketches');
+    const ungroupedExtrusions = filterUngrouped('extrusions');
+    const ungroupedShapes = filterUngrouped('shapes');
+
+    // Combine all ungrouped items into a single array
+    const ungroupedItems = [
+      ...ungroupedSketches,
+      ...ungroupedExtrusions,
+      ...ungroupedShapes
+  ];
+
+    return ungroupedItems;
+};
 
   model.updateSketch = function(id, updates) {
     this.updateElement('sketches', id, updates);

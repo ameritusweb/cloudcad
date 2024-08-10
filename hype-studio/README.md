@@ -1,4 +1,4 @@
-CloudCAD's HypeStudio: React/Babylon.JS CAD Software Feature Requirements (Ordered by View/Tool, then by Rating)
+# CloudCAD's HypeStudio: React/Babylon.JS CAD Software Feature Requirements (Ordered by View/Tool, then by Rating)
 
 List View:
 Hierarchical Display of All Objects (Rating: 10)
@@ -232,3 +232,94 @@ Cloud-Based Version Control Integration (Rating: 7)
 Automatic Unit Conversion in Clipboard Operations (Rating: 6)
 Shortcut Suggestions Based on Usage Patterns (Rating: 5)
 User-Created and Shareable UI Themes (Rating: 5)
+
+# Dev Phases
+
+Phase 1: Core Functionality Implementation
+This phase focuses on building the essential features necessary for the basic operation of the CAD software.
+
+List View
+Hierarchical Display of All Objects (Rating: 10)
+Select, Rename, Hide/Show, and Delete Objects (Rating: 9)
+Search/Filter Functionality (Rating: 8)
+Visual Indicators for Object Type (Rating: 8)
+Sketch View
+Tools for Basic Shapes (Rating: 10)
+Dimensioning Tools (Rating: 9)
+Constraint Tools (Rating: 9)
+Snapping Functionality (Rating: 9)
+Extrude View
+Extrude Sketches with Depth and Direction (Rating: 10)
+Extrude Selected Faces of Existing 3D Objects (Rating: 9)
+Boolean Operations (Rating: 9)
+Preview of Extrusion (Rating: 8)
+Import/Export View
+Support for Common 3D File Formats (Rating: 10)
+Import Settings (Rating: 9)
+Export Settings (Rating: 9)
+Batch Export Functionality (Rating: 8)
+Phase 2: Enhanced Functionality and Interaction
+This phase will focus on enhancing the interaction and providing additional tools that allow users to perform more complex operations.
+
+List View
+Context Menu for Quick Actions (Rating: 7)
+Bulk Operations on Multiple Selected Objects (Rating: 7)
+Customizable Columns for Object Properties (Rating: 6)
+Sketch View
+Sketch Validation (Rating: 8)
+Automatic Constraint Inference (Rating: 8)
+Import and Trace Reference Images (Rating: 7)
+Layer Management (Rating: 7)
+Text to Sketch Tool
+Convert Text to Editable Sketch Geometry (Rating: 9)
+Support for Various Font Styles and Families (Rating: 9)
+Convert Text to Outlines for Further Editing (Rating: 9)
+Adjust Text Parameters (Size, Spacing, Line Height) (Rating: 8)
+Extrude View
+Thin-Wall Extrusion Option (Rating: 8)
+Path-Based Extrusion along a 3D Curve (Rating: 7)
+Real-Time Update of Preview as Parameters Change (Rating: 7)
+Phase 3: Advanced Tools and Customization
+This phase introduces advanced modeling tools and additional customization options, enhancing user control and productivity.
+
+Shape Tool View
+Bend Tool: Specify Bend Angle, Radius, and Axis (Rating: 9)
+Twist Tool: Control for Twist Angle and Axis (Rating: 9)
+Slice Tool: Planar and Non-Planar Slicing Options (Rating: 9)
+Sweep Tool: Define 2D Profile and 3D Path (Rating: 9)
+Text to Sketch Tool
+Option to Create Filled or Outline Text Sketches (Rating: 8)
+Ability to Place Text on a Path or Curve (Rating: 8)
+Undo/Redo Support for Text Operations (Rating: 8)
+Ray Tool
+Create 3D Sketches by Projecting 2D Sketches onto 3D Meshes (Rating: 10)
+Customizable Ray Direction for Projection (Rating: 9)
+Ability to Select Source Sketch and Target 3D Mesh (Rating: 9)
+Custom Planes View
+Creation of Planes by Various Methods (Rating: 9)
+Ability to Name and Manage Planes (Rating: 8)
+Visualization of Plane Boundaries/Normal (Rating: 8)
+Phase 4: Optimization and Final Touches
+This phase will address performance enhancements, fine-tuning the user experience, and adding optional features.
+
+Settings View
+Unit System Selection and Creation (Rating: 9)
+Autosave and Backup Settings (Rating: 9)
+Grid and Snap Settings (Rating: 8)
+Performance Settings (Rating: 8)
+Pattern View
+Linear, Circular, Sketch-Driven Patterns (Rating: 9)
+Control Over Instances and Spacing (Rating: 9)
+Edit Source and Update All Instances (Rating: 9)
+Structural Analysis View
+Material Property Settings (Rating: 10)
+Load and Constraint Application Tools (Rating: 10)
+Visualization of Results (Rating: 10)
+Shatter Tool
+Control Over Fracture Patterns and Size (Rating: 9)
+Physics-Based and Artistic Modes (Rating: 8)
+Option to Maintain Connections (Rating: 8)
+Considerations Throughout Development:
+Undo/Redo Functionality: This should be integrated into every feature, with a focus on maintaining a robust history of actions.
+Performance: Use efficient data structures, optimize Babylon.js operations, and implement lazy loading where possible.
+Accessibility: Ensure the UI is fully accessible, including keyboard navigation and screen reader support.

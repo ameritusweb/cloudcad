@@ -53,7 +53,37 @@ module.exports = override(
   })
 );
 /* ================================================================================ */
-module.exports = {
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
+
+export default tseslint.config({
+  extends: [js.configs.recommended, ...tseslint.configs.recommended],
+  files: ['**/*.{ts,tsx}'],
+  ignores: ['dist'],
+  languageOptions: {
+    ecmaVersion: 2020,
+    globals: globals.browser,
+  },
+  plugins: {
+    'react-hooks': reactHooks,
+    'react-refresh': reactRefresh,
+  },
+  rules: {
+    ...reactHooks.configs.recommended.rules,
+    'react-refresh/only-export-components': [
+      'warn',
+      { allowConstantExport: true },
+    ],
+  },
+})
+
+/* ================================================================================ */
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="/cloudcad.svg"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HypeStudio</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+/* ================================================================================ */
+export default {
   plugins: {
     tailwindcss: {},
     autoprefixer: {},
@@ -1096,6 +1126,31 @@ prepareApp().then(() => {
 
 reportWebVitals();
 /* ================================================================================ */
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css'
+ 
+async function enableMocking() {
+  if (process.env.NODE_ENV !== 'development') {
+    return;
+  }
+ 
+  const { worker } = await import('./mocks/browser');
+ 
+  // `worker.start()` returns a Promise that resolves
+  // once the Service Worker is up and ready to intercept requests.
+  return worker.start();
+}
+ 
+enableMocking().then(() => {
+  createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  )
+});
+/* ================================================================================ */
 // src/mocks/browser.js
 import { setupWorker } from 'msw/browser';
 import { handlers } from './handlers';
@@ -1637,11 +1692,9 @@ const reportWebVitals = onPerfEntry => {
 export default reportWebVitals;
 
 /* ================================================================================ */
-// jest-dom adds custom jest matchers for asserting on DOM nodes.
-// allows you to do things like:
-// expect(element).toHaveTextContent(/react/i)
-// learn more: https://github.com/testing-library/jest-dom
-import '@testing-library/jest-dom';
+
+/* ================================================================================ */
+/// <reference types="vite/client" />
 
 /* ================================================================================ */
 /** @type {import('tailwindcss').Config} */
@@ -1654,3 +1707,27 @@ module.exports = {
   },
   plugins: [],
 }
+
+/* ================================================================================ */
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react-swc'
+import svgr from "vite-plugin-svgr";
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [react(), svgr()]
+})
+
+/* ================================================================================ */
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/setupTests.js',
+    coverage: {
+      reporter: ['text', 'json', 'html'],
+    },
+  },
+})
