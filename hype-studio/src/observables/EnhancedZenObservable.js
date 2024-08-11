@@ -2,19 +2,20 @@ import ZenObservable from 'zen-observable';
 import { computeDiff as computeDiffUtil, computeArrayDiff as computeArrayDiffUtil } from '../utils/observableUtils';
 
 class EnhancedSubscription {
-  constructor(subscribe) {
+  constructor(model, subscribe) {
     this._zenObservable = new ZenObservable(subscribe);
     this._subscriptions = new Map();
     this._parentObservable = null;
+    this._model = model;
   }
 
   subscribe(observerOrNext, error, complete) {
     let observer;
     if (typeof observerOrNext === 'function') {
       observer = {
-        next: observerOrNext,
-        error: error || (() => {}),
-        complete: complete || (() => {})
+        next: this._model.traceCallback(observerOrNext, 'next'),
+        error: this._model.traceCallback(error || (() => {}), 'error'),
+        complete: this._model.traceCallback(complete || (() => {}), 'complete')
       };
     } else {
       observer = observerOrNext;
@@ -199,7 +200,7 @@ class EnhancedZenObservable {
   subscribe(key, callback, useDiff = false) {
     if (typeof key !== 'string') {
       console.error('Invalid key for subscribe method');
-      return new EnhancedSubscription(() => {}).subscribe(() => {});
+      return new EnhancedSubscription(this, () => {}).subscribe(() => {});
     }
 
     const observables = useDiff ? this.diffObservables : this.observables;
@@ -210,12 +211,12 @@ class EnhancedZenObservable {
     for (const part of parts) {
       currentKey = currentKey ? `${currentKey}.${part}` : part;
       if (!observables.has(currentKey)) {
-        observables.set(currentKey, new EnhancedSubscription(() => {}));
+        observables.set(currentKey, new EnhancedSubscription(this, () => {}));
       }
     }
 
     const subscription = observables.get(key);
-    return subscription.subscribe(callback);
+    return subscription.subscribe(this.traceCallback(callback, `Subscription to ${key}`));
   }
 
   setState(updater, recordHistory = true) {

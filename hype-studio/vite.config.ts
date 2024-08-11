@@ -4,6 +4,8 @@ import svgr from "vite-plugin-svgr";
 import { vitePluginTrace } from './src/tracing';
 import { transformSync } from '@babel/core';
 import { babelPluginRemoveTracing } from './src/tracing';
+import viteTracePlugin from './src/tracing/server/viteTracePlugin';
+import path from 'path';
 
 function createRemoveTracingPlugin(): Plugin {
   return {
@@ -25,7 +27,25 @@ export default defineConfig(({ mode }) => ({
     react(),
     svgr(),
     ...(mode === 'development' 
-      ? [vitePluginTrace({ effectName: 'MyComponentEffect' })] 
+      ? [vitePluginTrace({ effectName: 'MyComponentEffect' }),
+        viteTracePlugin({
+          include: ['src/utils'],
+          exclude: ['node_modules', 'test']
+        })
+      ] 
       : [createRemoveTracingPlugin()]),
   ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(mode)
+  },
+  server: {
+    proxy: {
+      '/trace': 'http://localhost:3000'
+    }
+  }
 }));

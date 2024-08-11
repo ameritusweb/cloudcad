@@ -5,16 +5,17 @@ export default function vitePluginTrace(options = {}) {
     name: 'vite-plugin-trace',
     transform(code, id) {
       if (id.endsWith('.js') || id.endsWith('.jsx') || id.endsWith('.ts') || id.endsWith('.tsx')) {
-        return applyTracingDecorators(code, options);
+        return applyTracingDecorators(code, options, id);
       }
       return null;
     },
   };
 }
 
-function applyTracingDecorators(code, options) {
+function applyTracingDecorators(code, options, filename) {
   const result = transformSync(code, {
     plugins: [[babelPluginTraceDecorators, options]],
+    filename,
     parserOpts: {
       plugins: ['jsx', 'typescript'],
     },
@@ -23,11 +24,23 @@ function applyTracingDecorators(code, options) {
   return result ? result.code : code;
 }
 
-function babelPluginTraceDecorators({ types: t }) {
+function babelPluginTraceDecorators({ types: t, template }) {
   return {
     visitor: {
+      Program: {
+        enter(path, state) {
+          state.traceEffectImported = false;
+        },
+        exit(path, state) {
+          if (state.traceEffectUsed && !state.traceEffectImported) {
+            const importDeclaration = template.statement`import { traceEffect } from '@/tracing';`();
+            path.unshiftContainer('body', importDeclaration);
+          }
+        },
+      },
       CallExpression(path, state) {
         if (path.node.callee.name === 'useEffect') {
+          state.traceEffectUsed = true;
           const [effectCallback, dependencies] = path.node.arguments;
           path.node.arguments[0] = createEffectDecorator(t, effectCallback, dependencies, state.opts);
         }
@@ -37,7 +50,6 @@ function babelPluginTraceDecorators({ types: t }) {
 }
 
 function createEffectDecorator(t, effectCallback, dependencies, opts) {
-  // Ensure effectCallback is a function expression
   const wrappedCallback = t.isFunction(effectCallback) 
     ? effectCallback 
     : t.arrowFunctionExpression([], effectCallback);

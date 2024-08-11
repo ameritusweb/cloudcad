@@ -1,9 +1,12 @@
 import { captureStackTrace } from '../utils/captureStackTrace';
 import { measurePerformance } from '../utils/performance';
+import { useInstrumentation } from '../../contexts/InstrumentationContext';
 
 export function traceEffect(callback, dependencies, effectName) {
+  const { isInstrumentationEnabled } = useInstrumentation();
+
   return () => {
-    if (process.env.NODE_ENV !== 'development') return callback();
+    if (!import.meta.env.DEV || !isInstrumentationEnabled) return callback();
 
     const stackTrace = captureStackTrace();
 

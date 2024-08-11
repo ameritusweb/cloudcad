@@ -7,6 +7,7 @@ import { saveStateToLocalStorage, loadStateFromLocalStorage, clearStateFromLocal
 import { precomputeAdjacencyList, precomputeVertexClassifications } from '../utils/selectionUtils';
 import { Notification } from '../stories/Notification';
 import { useNotification } from '../hooks/useNotification';
+import { createTraceCallback } from '../tracing';
 
 const initialHypeStudioState = {
   projectName: 'My Project',
@@ -48,6 +49,8 @@ const HypeStudioContext = createContext(null);
 
 const createHypeStudioModel = () => {
   const model = new EnhancedZenObservable(initialHypeStudioState);
+
+  model.isInstrumentationEnabled = false;
 
   model.getStateVersion = function() {
     return this.getState().stateVersion;
@@ -443,6 +446,8 @@ model.getElementById = function(id) {
       customProperties: data.customProperties
     }));
   };
+
+  model.traceCallback = createTraceCallback(model);
 
   return model;
 };
