@@ -28,7 +28,8 @@ export default function viteTracePlugin(options = {}) {
             path.unshiftContainer('body', t.importDeclaration(
               [
                 t.importSpecifier(t.identifier('traceFunction'), t.identifier('traceFunction')),
-                t.importSpecifier(t.identifier('createProxy'), t.identifier('createProxy'))
+                t.importSpecifier(t.identifier('createProxy'), t.identifier('createProxy')),
+                t.importSpecifier(t.identifier('traceClass'), t.identifier('traceClass'))
               ],
               t.stringLiteral('@/tracing/server/autoTracer')
             ));
@@ -38,7 +39,7 @@ export default function viteTracePlugin(options = {}) {
           const functionName = path.node.key.name;
 
           if (functionName === 'constructor') {
-            // Handle constructors using Version B approach
+            // Handle constructors
             path.get('body').unshiftContainer('body',
               t.expressionStatement(t.callExpression(
                 t.identifier('traceFunction'),
@@ -46,7 +47,6 @@ export default function viteTracePlugin(options = {}) {
               ))
             );
           } else {
-            // Handle other methods with decorators and local variable tracing
             const decorator = path.node.decorators?.find(d =>
               t.isCallExpression(d.expression) &&
               d.expression.callee.name === 'traceFunction'
@@ -54,17 +54,16 @@ export default function viteTracePlugin(options = {}) {
 
             if (decorator) {
               const localVars = decorator.expression.arguments.slice(1).map(arg => arg.value);
-              wrapFunctionBody(path, functionName, localVars); // Reuse wrapFunctionBody from Version A
+              wrapFunctionBody(path, functionName, localVars);
               path.node.decorators = path.node.decorators.filter(d => d !== decorator);
             } else {
-              wrapFunctionBody(path, functionName, []); // No local variables to trace
+              wrapFunctionBody(path, functionName, []);
             }
           }
 
           hasTracedFunctions = true;
         },
         FunctionDeclaration(path) {
-          // Handle function declarations using Version B approach
           const functionName = path.node.id.name;
           const functionExpression = t.functionExpression(
             null,
@@ -84,7 +83,6 @@ export default function viteTracePlugin(options = {}) {
           hasTracedFunctions = true;
         },
         ArrowFunctionExpression(path) {
-          // Handle arrow functions using Version B approach
           if (path.parent.type === 'VariableDeclarator') {
             const functionName = path.parent.id.name;
             const tracedFunction = t.callExpression(
@@ -92,6 +90,35 @@ export default function viteTracePlugin(options = {}) {
               [path.node, t.stringLiteral(functionName)]
             );
             path.replaceWith(tracedFunction);
+            hasTracedFunctions = true;
+          }
+        },
+        ClassDeclaration(path) {
+          const className = path.node.id.name;
+          const decorator = path.node.decorators?.find(d =>
+            t.isCallExpression(d.expression) &&
+            d.expression.callee.name === 'traceClass'
+          );
+
+          if (decorator) {
+            const classExpression = t.classExpression(
+              path.node.id,
+              path.node.superClass,
+              path.node.body,
+              path.node.decorators
+            );
+
+            const tracedClass = t.variableDeclaration('const', [
+              t.variableDeclarator(
+                t.identifier(className),
+                t.callExpression(
+                  t.identifier('traceClass'),
+                  [classExpression]
+                )
+              )
+            ]);
+
+            path.replaceWith(tracedClass);
             hasTracedFunctions = true;
           }
         }

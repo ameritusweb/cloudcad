@@ -6,12 +6,24 @@ const traceServer = 'http://localhost:3000/trace';
 // Global execution stack
 const executionStack = [];
 
+// Utility to safely stringify objects with circular references
+function safeStringify(obj) {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (key, value) => {
+    if (typeof value === "object" && value !== null) {
+      if (seen.has(value)) return;
+      seen.add(value);
+    }
+    return value;
+  });
+}
+
 export function createProxy(target, name) {
   return new Proxy(target, {
     apply(target, thisArg, argumentsList) {
       const traceId = uuidv4();
       const parentTraceId = executionStack.length > 0 ? executionStack[executionStack.length - 1] : null;
-      
+
       executionStack.push(traceId);
 
       let locationInfo;
@@ -44,6 +56,10 @@ export function createProxy(target, name) {
         result = target.apply(thisArg, argumentsList);
 
         if (result instanceof Promise) {
+          result = result.catch(error => {
+            finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, undefined, localVars, children, error);
+            throw error; // rethrow to preserve the original promise rejection
+          });
           return result.finally(() => {
             finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, result, localVars, children);
           });
@@ -71,9 +87,9 @@ function finishTrace(traceId, parentTraceId, name, locationInfo, target, args, r
     lineNumber: locationInfo.lineNumber,
     columnNumber: locationInfo.columnNumber,
     code: target.toString(),
-    args,
-    returnValue,
-    localVars,
+    args: safeStringify(args),
+    returnValue: safeStringify(returnValue),
+    localVars: safeStringify(localVars),
     children,
     error: error ? error.toString() : null
   }).catch(err => console.error('Failed to send trace data:', err));
@@ -91,7 +107,7 @@ export function traceFunction(fn, functionName, ...localVarNames) {
   return function(...args) {
     const traceId = uuidv4();
     const start = performance.now();
-    
+
     let result;
     try {
       result = fn.apply(this, args);
@@ -109,8 +125,8 @@ export function traceFunction(fn, functionName, ...localVarNames) {
       axios.post(traceServer, {
         traceId,
         functionName,
-        args,
-        result,
+        args: safeStringify(args),
+        result: safeStringify(result),
         duration,
         localVars
       }).catch(error => console.error('Failed to send trace:', error));
@@ -130,7 +146,7 @@ export function traceClass(constructor) {
     axios.post(traceServer, {
       traceId,
       className: constructor.name,
-      args
+      args: safeStringify(args)
     }).catch(err => console.error('Failed to send trace data:', err));
     return instance;
   };
