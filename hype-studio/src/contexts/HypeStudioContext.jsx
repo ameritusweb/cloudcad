@@ -50,8 +50,6 @@ const HypeStudioContext = createContext(null);
 const createHypeStudioModel = () => {
   const model = new EnhancedZenObservable(initialHypeStudioState);
 
-  model.isInstrumentationEnabled = false;
-
   model.getStateVersion = function() {
     return this.getState().stateVersion;
   };
@@ -448,6 +446,10 @@ model.getElementById = function(id) {
   };
 
   model.traceCallback = createTraceCallback(model);
+
+  if (typeof createObjectTrace === 'function') {
+    createObjectTrace(model);
+  }
 
   return model;
 };

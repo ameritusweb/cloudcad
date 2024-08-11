@@ -27,9 +27,9 @@ export default function viteTracePlugin(options = {}) {
           enter(path) {
             path.unshiftContainer('body', t.importDeclaration(
               [
-                t.importSpecifier(t.identifier('traceFunction'), t.identifier('traceFunction')),
                 t.importSpecifier(t.identifier('createProxy'), t.identifier('createProxy')),
-                t.importSpecifier(t.identifier('traceClass'), t.identifier('traceClass'))
+                t.importSpecifier(t.identifier('traceClass'), t.identifier('traceClass')),
+                t.importSpecifier(t.identifier('createObjectTrace'), t.identifier('createObjectTrace'))
               ],
               t.stringLiteral('@/tracing/server/autoTracer')
             ));

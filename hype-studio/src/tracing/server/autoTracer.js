@@ -1,15 +1,18 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import { safeStringify, finishTrace } from './tracingUtils';
+import { safeStringify, finishTrace, captureLocationInfo } from './tracingUtils';
 
 const traceServer = 'http://localhost:3000/trace';
 
 // Global execution stack
 const executionStack = [];
 
-export function createProxy(target, name) {
+export function createProxy(target, name, model) {
   return new Proxy(target, {
     apply(target, thisArg, argumentsList) {
+      if (document.documentElement.dataset.instrumentationEnabled !== 'true') {
+        return target.apply(thisArg, argumentsList);
+      }
       const traceId = uuidv4();
       const parentTraceId = executionStack.length > 0 ? executionStack[executionStack.length - 1] : null;
 
@@ -21,16 +24,7 @@ export function createProxy(target, name) {
 
       const captureLocation = () => {
         const stack = new Error().stack;
-        const callerLine = stack.split('\n')[3]; // [0] is Error, [1] is captureLocation, [2] is Proxy, [3] is the actual function
-        const match = callerLine.match(/at (?:.*\.)?(?:(.+?)\s+\()?(?:(.+?):(\d+)(?::(\d+))?|([^)]+))\)?/);
-        const match2 = callerLine.match(/at\s+(.*):(\d+):(\d+)/);
-        const parts = match2[1].trim().split('/'); // Split by '/'
-        const fileName = parts[parts.length - 1];
-        locationInfo = {
-          fileName,
-          lineNumber: match[3],
-          columnNumber: match[4]
-        };
+        locationInfo = captureLocationInfo(stack);
       };
 
       captureLocation();
@@ -50,19 +44,19 @@ export function createProxy(target, name) {
         if (result instanceof Promise) {
           return result.then(
             (value) => {
-              finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, value, localVars, children);
+              finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, value, localVars, children, executionStack);
               return value;
             },
             (error) => {
-              finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, undefined, localVars, children, error);
+              finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, undefined, localVars, children, executionStack, error);
               throw error;
             }
           );
         } else {
-          finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, result, localVars, children);
+          finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, result, localVars, children, executionStack);
         }
       } catch (error) {
-        finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, undefined, localVars, children, error);
+        finishTrace(traceId, parentTraceId, name, locationInfo, target, argumentsList, undefined, localVars, children, executionStack, error);
         throw error;
       } finally {
         const index = executionStack.indexOf(traceId);
@@ -76,40 +70,12 @@ export function createProxy(target, name) {
   });
 }
 
-export function traceFunction(fn, functionName, ...localVarNames) {
-  return function(...args) {
-    const traceId = uuidv4();
-    const start = performance.now();
-
-    let result;
-    try {
-      result = fn.apply(this, args);
-    } finally {
-      const end = performance.now();
-      const duration = end - start;
-
-      const localVars = {};
-      localVarNames.forEach(varName => {
-        if (typeof this[varName] !== 'undefined') {
-          localVars[varName] = this[varName];
-        }
-      });
-
-      axios.post(traceServer, {
-        traceId,
-        functionName,
-        args: safeStringify(args),
-        result: safeStringify(result),
-        duration,
-        localVars
-      }).catch(error => console.error('Failed to send trace:', error));
-    }
-
-    return result;
-  };
-}
-
 export function traceClass(target) {
+
+  if (document.documentElement.dataset.instrumentationEnabled !== 'true') {
+    return target;
+  }
+
   // If target is not a function or is an import/require, return it unchanged
   if (typeof target !== 'function' || target.toString().startsWith('function require(')) {
       console.warn('traceClass was called with an invalid target:', target);
@@ -158,4 +124,23 @@ export function traceClass(target) {
 
   // If it's a regular function, just return a proxied version
   return createProxy(target, target.name || 'anonymous');
+}
+
+export function createObjectTrace(objectToTrace) {
+  function traceMethod(method, methodName) {
+    return createProxy(method, methodName);
+  }
+
+  function traceMethods(obj) {
+    Object.getOwnPropertyNames(obj).forEach(key => {
+      if (typeof obj[key] === 'function' && key !== 'constructor') {
+        obj[key] = traceMethod(obj[key], key);
+      }
+    });
+  }
+
+  traceMethods(objectToTrace);
+  traceMethods(Object.getPrototypeOf(objectToTrace));
+
+  return objectToTrace;
 }

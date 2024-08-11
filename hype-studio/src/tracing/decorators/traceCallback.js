@@ -4,7 +4,7 @@ import { measurePerformance } from '../utils/performance';
 export function createTraceCallback(model) {
   return function traceCallback(callback, type) {
     return (...args) => {
-      if (!import.meta.env.DEV || !model.isInstrumentationEnabled) {
+      if (!import.meta.env.DEV || document.documentElement.dataset.instrumentationEnabled !== 'true') {
         return callback(...args);
       }
 

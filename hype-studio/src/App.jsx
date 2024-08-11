@@ -6,15 +6,20 @@ import CenterView from './CenterView';
 import ProjectsPanel from './ProjectsPanel';
 import ImportPanel from './ImportPanel';
 import { HypeStudioProvider, useHypeStudioModel } from './contexts/HypeStudioContext';
-import { InstrumentationProvider, useInstrumentation } from './contexts/InstrumentationContext';
 
 const ToggleSwitch = () => {
-  const { isInstrumentationEnabled, toggleInstrumentation } = useInstrumentation();
+  const [ isInstrumentationEnabled, setIsInstrumentationEnabled ] = useState(false);
   const model = useHypeStudioModel();
 
   const handleChange = (e) => {
-    toggleInstrumentation();
-    model.isInstrumentationEnabled = e.target.checked;
+    const isEnabled = e.target.checked;
+    if (isEnabled) {
+      document.documentElement.dataset.instrumentationEnabled = 'true';
+      setIsInstrumentationEnabled(true);
+    } else {
+      document.documentElement.dataset.instrumentationEnabled = 'false';
+      setIsInstrumentationEnabled(false);
+    }
   }
 
   return (
@@ -59,53 +64,51 @@ const App = () => {
   };
 
   return (
-    <InstrumentationProvider>
-      <HypeStudioProvider>
-        <div className="flex h-screen">
+    <HypeStudioProvider>
+      <div className="flex h-screen">
+        {!expanded && (
+          <div className="bg-black w-16 flex flex-col items-center">
+            <button onClick={toggleImport} className="text-gray-200 hover:text-white mt-4 flex flex-col items-center">
+              <AiOutlineImport size={24} />
+              <span className="text-xs mt-1">Import</span>
+            </button>
+          </div>
+        )}
+        {importOpen && !expanded && (
+          <ImportPanel />
+        )}
+        {projectsOpen && !expanded && (
+          <ProjectsPanel />
+        )}
+        <div className="flex flex-col flex-grow">
           {!expanded && (
-            <div className="bg-black w-16 flex flex-col items-center">
-              <button onClick={toggleImport} className="text-gray-200 hover:text-white mt-4 flex flex-col items-center">
-                <AiOutlineImport size={24} />
-                <span className="text-xs mt-1">Import</span>
+            <div className="bg-white h-8 p-1 pl-4 border-b border-gray-300">
+              <button onClick={toggleProjects} className="font-bold">
+                Projects
               </button>
             </div>
           )}
-          {importOpen && !expanded && (
-            <ImportPanel />
-          )}
-          {projectsOpen && !expanded && (
-            <ProjectsPanel />
-          )}
-          <div className="flex flex-col flex-grow">
-            {!expanded && (
-              <div className="bg-white h-8 p-1 pl-4 border-b border-gray-300">
-                <button onClick={toggleProjects} className="font-bold">
-                  Projects
-                </button>
-              </div>
-            )}
-            <div className="flex flex-grow overflow-auto items-top p-4 justify-center overflow-hidden" style={{ minWidth: '90%' }}>
-              <CenterView zoom={zoom} />
-            </div>
-            <div className="bg-white h-8 border-t border-gray-300 flex items-center justify-end">
-              <ToggleSwitch />
-              <input
-                type="range"
-                min="1"
-                max="3"
-                step="0.1"
-                value={zoom}
-                onChange={handleSliderChange}
-                className="mr-4"
-              />
-              <button onClick={toggleExpand} className="mr-4">
-                <AiOutlineExpand size={24} />
-              </button>
-            </div>
+          <div className="flex flex-grow overflow-auto items-top p-4 justify-center overflow-hidden" style={{ minWidth: '90%' }}>
+            <CenterView zoom={zoom} />
+          </div>
+          <div className="bg-white h-8 border-t border-gray-300 flex items-center justify-end">
+            <ToggleSwitch />
+            <input
+              type="range"
+              min="1"
+              max="3"
+              step="0.1"
+              value={zoom}
+              onChange={handleSliderChange}
+              className="mr-4"
+            />
+            <button onClick={toggleExpand} className="mr-4">
+              <AiOutlineExpand size={24} />
+            </button>
           </div>
         </div>
-      </HypeStudioProvider>
-    </InstrumentationProvider>
+      </div>
+    </HypeStudioProvider>
   );
 };
 

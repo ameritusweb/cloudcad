@@ -48,7 +48,7 @@ export default defineConfig(({ mode }) => ({
     ...(mode === 'development' 
       ? [vitePluginTrace({ effectName: 'MyComponentEffect' }),
         viteTracePlugin({
-          include: ['src/utils'],
+          include: ['src/utils', 'src/contexts/HypeStudioContext.jsx'],
           exclude: ['node_modules', 'test']
         })
       ] 
