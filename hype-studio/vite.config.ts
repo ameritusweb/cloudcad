@@ -62,7 +62,10 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     proxy: {
-      '/trace': 'http://localhost:3000'
+      '/trace': {
+        target: 'http://localhost:3000',
+        changeOrigin: true 
+      }
     }
   }
 }));

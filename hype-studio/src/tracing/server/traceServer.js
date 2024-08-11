@@ -2,9 +2,11 @@ import express from 'express';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import cors from 'cors';
 
 const app = express();
-app.use(express.json());
+app.use(cors()); // Enable CORS for all routes
+app.use(express.json({ limit: '50mb' }));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
