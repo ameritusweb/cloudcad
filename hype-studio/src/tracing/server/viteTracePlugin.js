@@ -35,26 +35,36 @@ export default function viteTracePlugin(options = {}) {
           }
         },
         ClassMethod(path) {
-          const decorator = path.node.decorators?.find(d => 
-            t.isCallExpression(d.expression) && 
-            d.expression.callee.name === 'traceFunction'
-          );
-
-          if (decorator) {
-            hasTracedFunctions = true;
-          } else {
-            const functionName = path.node.key.name;
-            path.node.decorators = path.node.decorators || [];
-            path.node.decorators.push(
-              t.decorator(
-                t.callExpression(
-                  t.identifier('traceFunction'),
-                  [t.stringLiteral(functionName)]
-                )
-              )
+          const functionName = path.node.key.name;
+          
+          if (functionName === 'constructor') {
+            // For constructors, add tracing logic at the beginning of the function body
+            path.get('body').unshiftContainer('body', 
+              t.expressionStatement(t.callExpression(
+                t.identifier('traceFunction'),
+                [t.stringLiteral('constructor')]
+              ))
             );
-            hasTracedFunctions = true;
+          } else {
+            // For other methods, use decorator
+            const decorator = path.node.decorators?.find(d => 
+              t.isCallExpression(d.expression) && 
+              d.expression.callee.name === 'traceFunction'
+            );
+
+            if (!decorator) {
+              path.node.decorators = path.node.decorators || [];
+              path.node.decorators.push(
+                t.decorator(
+                  t.callExpression(
+                    t.identifier('traceFunction'),
+                    [t.stringLiteral(functionName)]
+                  )
+                )
+              );
+            }
           }
+          hasTracedFunctions = true;
         },
         FunctionDeclaration(path) {
           const functionName = path.node.id.name;

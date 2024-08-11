@@ -87,10 +87,43 @@ function finishTrace(traceId, parentTraceId, name, locationInfo, target, args, r
   }
 }
 
-export function traceFunction(...localVarNames) {
+export function traceFunction(name) {
   return function(target, propertyKey, descriptor) {
     const originalMethod = descriptor.value;
-    descriptor.value = createProxy(originalMethod, propertyKey);
+    descriptor.value = function(...args) {
+      const traceId = uuidv4();
+      console.log(`Entering function: ${name}`);
+      console.time(name);
+      const result = originalMethod.apply(this, args);
+      console.timeEnd(name);
+      console.log(`Exiting function: ${name}`);
+      // Send trace data to server
+      axios.post(traceServer, {
+        traceId,
+        functionName: name,
+        args,
+        result
+      }).catch(err => console.error('Failed to send trace data:', err));
+      return result;
+    };
     return descriptor;
   };
+}
+
+export function traceClass(constructor) {
+  const originalConstructor = constructor;
+  const newConstructor = function(...args) {
+    const instance = new originalConstructor(...args);
+    const traceId = uuidv4();
+    console.log(`Creating instance of: ${constructor.name}`);
+    // Send trace data to server
+    axios.post(traceServer, {
+      traceId,
+      className: constructor.name,
+      args
+    }).catch(err => console.error('Failed to send trace data:', err));
+    return instance;
+  };
+  newConstructor.prototype = originalConstructor.prototype;
+  return newConstructor;
 }
