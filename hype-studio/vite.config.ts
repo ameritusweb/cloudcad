@@ -1,11 +1,12 @@
 import { defineConfig, Plugin } from 'vite'
-import react from '@vitejs/plugin-react-swc'
+import react from '@vitejs/plugin-react'
 import svgr from "vite-plugin-svgr";
 import { vitePluginTrace } from './src/tracing';
 import { transformSync } from '@babel/core';
 import { babelPluginRemoveTracing } from './src/tracing';
 import viteTracePlugin from './src/tracing/server/viteTracePlugin';
-import path from 'path';
+import path, { extname } from 'path';
+import babel from '@rollup/plugin-babel';
 
 function createRemoveTracingPlugin(): Plugin {
   return {
@@ -24,7 +25,23 @@ function createRemoveTracingPlugin(): Plugin {
 
 export default defineConfig(({ mode }) => ({
   plugins: [
-    react(),
+    react({
+      babel: {
+        plugins: [
+          ["@babel/plugin-proposal-decorators", { legacy: true }],
+          ["@babel/plugin-proposal-class-properties", { loose: true }]
+        ]
+      }
+    }),
+    babel({
+      babelHelpers: 'bundled',
+      extensions: ['.js', '.jsx', '.ts', '.tsx'],
+      presets: ["@babel/preset-react"],
+      plugins: [
+        ["@babel/plugin-proposal-decorators", { legacy: true }],
+        ["@babel/plugin-proposal-class-properties", { loose: true }]
+      ]
+    }),
     svgr(),
     ...(mode === 'development' 
       ? [vitePluginTrace({ effectName: 'MyComponentEffect' }),

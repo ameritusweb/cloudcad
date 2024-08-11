@@ -8,21 +8,21 @@ export default function viteTracePlugin(options = {}) {
 
   return {
     name: 'vite-trace-plugin',
-    enforce: 'pre', // This ensures our plugin runs before other plugins
+    enforce: 'pre',
 
-    transform(code, id) {
+    async transform(code, id) {
       if (!include.some(pattern => id.includes(pattern)) || exclude.some(pattern => id.includes(pattern))) {
         return null;
       }
 
       const ast = parse(code, {
         sourceType: 'module',
-        plugins: ['jsx', 'typescript']
+        plugins: ['jsx', 'typescript', 'decorators-legacy', 'classProperties']
       });
 
       let hasTracedFunctions = false;
 
-      traverse(ast, {
+      traverse.default(ast, {
         Program: {
           enter(path) {
             path.unshiftContainer('body', t.importDeclaration(
@@ -42,9 +42,7 @@ export default function viteTracePlugin(options = {}) {
 
           if (decorator) {
             hasTracedFunctions = true;
-            // The decorator is already present, no need to modify
           } else {
-            // Automatically add traceFunction decorator
             const functionName = path.node.key.name;
             path.node.decorators = path.node.decorators || [];
             path.node.decorators.push(
@@ -60,12 +58,17 @@ export default function viteTracePlugin(options = {}) {
         },
         FunctionDeclaration(path) {
           const functionName = path.node.id.name;
+          const functionExpression = t.functionExpression(
+            null,
+            path.node.params,
+            path.node.body
+          );
           const tracedFunction = t.variableDeclaration('const', [
             t.variableDeclarator(
               t.identifier(functionName),
               t.callExpression(
                 t.identifier('createProxy'),
-                [path.node, t.stringLiteral(functionName)]
+                [functionExpression, t.stringLiteral(functionName)]
               )
             )
           ]);
@@ -89,7 +92,7 @@ export default function viteTracePlugin(options = {}) {
         return null;
       }
 
-      const output = generate(ast, { sourceMaps: true, sourceFileName: id }, code);
+      const output = generate.default(ast, { sourceMaps: true, sourceFileName: id }, code);
 
       return {
         code: output.code,

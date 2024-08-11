@@ -21,7 +21,9 @@
       "baseUrl": ".",
       "paths": {
         "@/*": ["src/*"]
-      }
+      },
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true
     },
     "include": ["vite.config.ts"]
   }
