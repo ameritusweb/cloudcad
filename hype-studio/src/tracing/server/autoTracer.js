@@ -60,8 +60,11 @@ export function createProxy(target, name) {
         const stack = new Error().stack;
         const callerLine = stack.split('\n')[3]; // [0] is Error, [1] is captureLocation, [2] is Proxy, [3] is the actual function
         const match = callerLine.match(/at (?:.*\.)?(?:(.+?)\s+\()?(?:(.+?):(\d+)(?::(\d+))?|([^)]+))\)?/);
+        const match2 = callerLine.match(/at\s+(.*):(\d+):(\d+)/);
+        const parts = match2[1].trim().split('/'); // Split by '/'
+        const fileName = parts[parts.length - 1];
         locationInfo = {
-          fileName: match[2],
+          fileName,
           lineNumber: match[3],
           columnNumber: match[4]
         };

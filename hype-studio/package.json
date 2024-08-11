@@ -73,6 +73,7 @@
     "express": "^4.19.2",
     "globals": "^15.9.0",
     "jsdom": "^24.1.1",
+    "moment": "^2.30.1",
     "msw": "^2.3.5",
     "msw-storybook-addon": "^2.0.3",
     "postcss": "^8.4.41",

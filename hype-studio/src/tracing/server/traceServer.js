@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import cors from 'cors';
+import moment from 'moment'; // To format the date
 
 const app = express();
 app.use(cors()); // Enable CORS for all routes
@@ -11,7 +12,14 @@ app.use(express.json({ limit: '50mb' }));
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const traceFilePath = join(__dirname, 'functionTrace.json');
+// Ensure the results directory exists
+const resultsDir = join(__dirname, 'results');
+await fs.mkdir(resultsDir, { recursive: true });
+
+// Create the trace file path with the date appended to the filename
+const currentDate = moment().format('M-D-YYYY');
+const traceFileName = `functionTrace-${currentDate}.json`;
+const traceFilePath = join(resultsDir, traceFileName);
 
 let traceData = {};
 
