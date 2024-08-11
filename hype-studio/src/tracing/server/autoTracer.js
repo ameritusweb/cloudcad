@@ -87,26 +87,36 @@ function finishTrace(traceId, parentTraceId, name, locationInfo, target, args, r
   }
 }
 
-export function traceFunction(name) {
-  return function(target, propertyKey, descriptor) {
-    const originalMethod = descriptor.value;
-    descriptor.value = function(...args) {
-      const traceId = uuidv4();
-      console.log(`Entering function: ${name}`);
-      console.time(name);
-      const result = originalMethod.apply(this, args);
-      console.timeEnd(name);
-      console.log(`Exiting function: ${name}`);
-      // Send trace data to server
+export function traceFunction(fn, functionName, ...localVarNames) {
+  return function(...args) {
+    const traceId = uuidv4();
+    const start = performance.now();
+    
+    let result;
+    try {
+      result = fn.apply(this, args);
+    } finally {
+      const end = performance.now();
+      const duration = end - start;
+
+      const localVars = {};
+      localVarNames.forEach(varName => {
+        if (typeof this[varName] !== 'undefined') {
+          localVars[varName] = this[varName];
+        }
+      });
+
       axios.post(traceServer, {
         traceId,
-        functionName: name,
+        functionName,
         args,
-        result
-      }).catch(err => console.error('Failed to send trace data:', err));
-      return result;
-    };
-    return descriptor;
+        result,
+        duration,
+        localVars
+      }).catch(error => console.error('Failed to send trace:', error));
+    }
+
+    return result;
   };
 }
 

@@ -36,37 +36,35 @@ export default function viteTracePlugin(options = {}) {
         },
         ClassMethod(path) {
           const functionName = path.node.key.name;
-          
+
           if (functionName === 'constructor') {
-            // For constructors, add tracing logic at the beginning of the function body
-            path.get('body').unshiftContainer('body', 
+            // Handle constructors using Version B approach
+            path.get('body').unshiftContainer('body',
               t.expressionStatement(t.callExpression(
                 t.identifier('traceFunction'),
                 [t.stringLiteral('constructor')]
               ))
             );
           } else {
-            // For other methods, use decorator
-            const decorator = path.node.decorators?.find(d => 
-              t.isCallExpression(d.expression) && 
+            // Handle other methods with decorators and local variable tracing
+            const decorator = path.node.decorators?.find(d =>
+              t.isCallExpression(d.expression) &&
               d.expression.callee.name === 'traceFunction'
             );
 
-            if (!decorator) {
-              path.node.decorators = path.node.decorators || [];
-              path.node.decorators.push(
-                t.decorator(
-                  t.callExpression(
-                    t.identifier('traceFunction'),
-                    [t.stringLiteral(functionName)]
-                  )
-                )
-              );
+            if (decorator) {
+              const localVars = decorator.expression.arguments.slice(1).map(arg => arg.value);
+              wrapFunctionBody(path, functionName, localVars); // Reuse wrapFunctionBody from Version A
+              path.node.decorators = path.node.decorators.filter(d => d !== decorator);
+            } else {
+              wrapFunctionBody(path, functionName, []); // No local variables to trace
             }
           }
+
           hasTracedFunctions = true;
         },
         FunctionDeclaration(path) {
+          // Handle function declarations using Version B approach
           const functionName = path.node.id.name;
           const functionExpression = t.functionExpression(
             null,
@@ -86,6 +84,7 @@ export default function viteTracePlugin(options = {}) {
           hasTracedFunctions = true;
         },
         ArrowFunctionExpression(path) {
+          // Handle arrow functions using Version B approach
           if (path.parent.type === 'VariableDeclarator') {
             const functionName = path.parent.id.name;
             const tracedFunction = t.callExpression(
@@ -110,4 +109,27 @@ export default function viteTracePlugin(options = {}) {
       };
     }
   };
+}
+
+// wrapFunctionBody from Version A
+function wrapFunctionBody(path, functionName, localVars) {
+  const originalBody = path.node.body;
+  const wrappedBody = t.blockStatement([
+    t.variableDeclaration('const', [
+      t.variableDeclarator(
+        t.identifier('__traceResult'),
+        t.callExpression(
+          t.identifier('traceFunction'),
+          [
+            t.functionExpression(null, path.node.params, originalBody),
+            t.stringLiteral(functionName),
+            ...localVars.map(varName => t.stringLiteral(varName))
+          ]
+        )
+      )
+    ]),
+    t.returnStatement(t.identifier('__traceResult'))
+  ]);
+
+  path.get('body').replaceWith(wrappedBody);
 }
