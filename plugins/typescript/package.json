@@ -1,0 +1,24 @@
+{
+    "name": "typescript-trace-decorator-plugin",
+    "version": "0.0.1",
+    "description": "A TypeScript Plugin providing @decorator support for functions",
+    "main": "dist/src/index.js",
+    "scripts": {
+        "build": "tsc -p ./",
+        "watch": "tsc -w -p ./",
+        "test": "echo 'NOOP'",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "cloudcad",
+        "typescript",
+        "javascript",
+        "plugin"
+    ],
+    "author": "ameritusweb",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^16.0.0",
+        "typescript": "^5.5.2"
+    }
+}

@@ -23,7 +23,13 @@
         "@/*": ["src/*"]
       },
       "experimentalDecorators": true,
-      "emitDecoratorMetadata": true
+      "emitDecoratorMetadata": true,
+      "plugins": [
+        {
+          "name": "typescript-trace-decorator-plugin",
+          "trace": true
+        }
+      ]
     },
     "include": ["vite.config.ts"]
   }
