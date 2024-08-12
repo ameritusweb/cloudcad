@@ -1,4 +1,4 @@
-import React, { useEffect, useState, memo } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';
@@ -37,11 +37,11 @@ export const BabylonControls = memo(() => {
 
   const version = useVersioning(['currentModelView', 'controlMode', 'planeStates']);
 
-  const handleControlModeChange = (mode) => {
+  const handleControlModeChange = useCallback((mode) => {
     model.setState(state => ({ ...state, controlMode: mode }));
-  };
+  }, [model]);
 
-  const onCyclePlaneState = (plane) => {
+  const onCyclePlaneState = useCallback((plane) => {
     model.setState(state => {
       const currentState = state.planeStates[plane];
       let newState;
@@ -67,7 +67,7 @@ export const BabylonControls = memo(() => {
         } 
       };
     });
-  };
+  }, [model]);
 
   const getButtonStyle = (plane) => {
     const state = planeStates[plane];

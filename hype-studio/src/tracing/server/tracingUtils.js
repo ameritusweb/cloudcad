@@ -7,6 +7,15 @@ export function captureLocationInfo(stack) {
   const callerLine = stack.split('\n')[3]; // [0] is Error, [1] is captureLocation, [2] is Proxy, [3] is the actual function
   const match = callerLine.match(/at (?:.*\.)?(?:(.+?)\s+\()?(?:(.+?):(\d+)(?::(\d+))?|([^)]+))\)?/);
   const match2 = callerLine.match(/at\s+(.*):(\d+):(\d+)/);
+  
+  if (!match2) {
+    return {
+      fileName: '',
+      lineNumber: '',
+      columnNumber: ''
+    };
+  }
+  
   const parts = match2[1].trim().split('/'); // Split by '/'
   const fileName = parts[parts.length - 1];
   return {

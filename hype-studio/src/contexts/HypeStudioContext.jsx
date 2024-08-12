@@ -7,7 +7,6 @@ import { saveStateToLocalStorage, loadStateFromLocalStorage, clearStateFromLocal
 import { precomputeAdjacencyList, precomputeVertexClassifications } from '../utils/selectionUtils';
 import { Notification } from '../stories/Notification';
 import { useNotification } from '../hooks/useNotification';
-import { createTraceCallback } from '../tracing';
 
 const initialHypeStudioState = {
   projectName: 'My Project',
@@ -444,8 +443,6 @@ model.getElementById = function(id) {
       customProperties: data.customProperties
     }));
   };
-
-  model.traceCallback = createTraceCallback(model);
 
   if (typeof createObjectTrace === 'function') {
     createObjectTrace(model);

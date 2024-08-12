@@ -13,9 +13,9 @@ class EnhancedSubscription {
     let observer;
     if (typeof observerOrNext === 'function') {
       observer = {
-        next: this._model.traceCallback(observerOrNext, 'next'),
-        error: this._model.traceCallback(error || (() => {}), 'error'),
-        complete: this._model.traceCallback(complete || (() => {}), 'complete')
+        next: observerOrNext,
+        error: error || (() => {}),
+        complete: complete || (() => {})
       };
     } else {
       observer = observerOrNext;
@@ -197,7 +197,7 @@ class EnhancedZenObservable {
     return computeArrayDiffUtil(oldArray, newArray);
   }
 
-  subscribe(key, callback, useDiff = false) {
+  subscribe(key, callback, useDiff = false, callerLocation = 'Unknown') {
     if (typeof key !== 'string') {
       console.error('Invalid key for subscribe method');
       return new EnhancedSubscription(this, () => {}).subscribe(() => {});
@@ -216,7 +216,7 @@ class EnhancedZenObservable {
     }
 
     const subscription = observables.get(key);
-    return subscription.subscribe(this.traceCallback(callback, `Subscription to ${key}`));
+    return subscription.subscribe(traceCallback(callback, `Subscription to ${key}`, callerLocation));
   }
 
   setState(updater, recordHistory = true) {

@@ -15,7 +15,10 @@ const options: RollupBabelInputPluginOptions = {
   presets: ["@babel/preset-react"],
   plugins: [
     ["@babel/plugin-proposal-decorators", { legacy: true }],
-    ["@babel/plugin-proposal-class-properties", { loose: true }]
+    ["@babel/plugin-proposal-class-properties", { loose: true }],
+    ["babel-plugin-inject-filename", {
+      "include": ["src/**"]
+    }]
   ]
 };
 
@@ -40,14 +43,20 @@ export default defineConfig(({ mode }) => ({
       babel: {
         plugins: [
           ["@babel/plugin-proposal-decorators", { legacy: true }],
-          ["@babel/plugin-proposal-class-properties", { loose: true }]
+          ["@babel/plugin-proposal-class-properties", { loose: true }],
+          ["babel-plugin-inject-filename", {
+            "include": ["src/**"]
+          }]
         ]
       }
     }),
     babel(options) as PluginOption,
     svgr(),
     ...(mode === 'development' 
-      ? [vitePluginTrace({ effectName: 'MyComponentEffect' }),
+      ? [vitePluginTrace({ 
+        effectName: 'MyComponentEffect',
+        include: ['src/observables', 'src/stories'], 
+      }),
         viteTracePlugin({
           include: ['src/utils', 'src/contexts/HypeStudioContext.jsx'],
           exclude: ['node_modules', 'test']
