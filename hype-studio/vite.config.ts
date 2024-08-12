@@ -7,6 +7,7 @@ import { babelPluginRemoveTracing } from './src/tracing';
 import viteTracePlugin from './src/tracing/server/viteTracePlugin';
 import path, { extname } from 'path';
 import babel, { RollupBabelInputPluginOptions } from '@rollup/plugin-babel';
+import Buffer from 'buffer';
 
 const options: RollupBabelInputPluginOptions = {
   babelHelpers: 'bundled',
@@ -60,7 +61,8 @@ export default defineConfig(({ mode }) => ({
     },
   },
   define: {
-    'process.env.NODE_ENV': JSON.stringify(mode)
+    'process.env.NODE_ENV': JSON.stringify(mode),
+    Buffer: Buffer,
   },
   server: {
     proxy: {

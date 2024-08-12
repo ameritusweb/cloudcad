@@ -30,10 +30,15 @@ function babelPluginTraceDecorators({ types: t, template }) {
       Program: {
         enter(path, state) {
           state.traceEffectImported = false;
+          state.createTraceCallbackImported = false;
         },
         exit(path, state) {
           if (state.traceEffectUsed && !state.traceEffectImported) {
-            const importDeclaration = template.statement`import { traceEffect } from '@/tracing';`();
+            const importDeclaration = template.statement`import { traceEffect } from '@/tracing/decorators/traceEffect';`();
+            path.unshiftContainer('body', importDeclaration);
+          }
+          if (state.createTraceCallbackUsed && !state.createTraceCallbackImported) {
+            const importDeclaration = template.statement`import { createTraceCallback } from '@/tracing/decorators/traceCallback';`();
             path.unshiftContainer('body', importDeclaration);
           }
         },
@@ -45,6 +50,7 @@ function babelPluginTraceDecorators({ types: t, template }) {
           path.node.arguments[0] = createEffectDecorator(t, effectCallback, dependencies, state.opts);
         }
       },
+      // Add more visitors here if you need to transform other parts of the code
     },
   };
 }
