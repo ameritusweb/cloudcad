@@ -134,12 +134,35 @@ function init(modules) {
                             typescript.isCallExpression(node.parent) && node.parent.expression === node)) {
                         const symbol = typeChecker.getSymbolAtLocation(node);
                         if (symbol && !localDeclarations.has(node.text)) {
+                            const flags = symbol.flags;
+                            const typeflags = typeChecker.getTypeOfSymbol(symbol).flags;
+                            logger.info(`Candidate Dependency: ${node.text} (kind: ${typescript.SyntaxKind[node.kind]}, flags: ${typescript.SymbolFlags[flags]}, typeflags: ${typescript.SymbolFlags[typeflags]})`);
+                            function hasTypeFlag(flag) {
+                                if (!typeflags) {
+                                    return false;
+                                }
+                                return typeflags & flag;
+                            }
+                            let exclude = hasTypeFlag(typescript.SymbolFlags.Enum)
+                                ||
+                                    hasTypeFlag(typescript.SymbolFlags.ConstEnum)
+                                ||
+                                    hasTypeFlag(typescript.SymbolFlags.TypeAlias)
+                                ||
+                                    hasTypeFlag(typescript.SymbolFlags.FunctionScopedVariable);
+                            if (hasTypeFlag(typescript.SymbolFlags.Signature)) {
+                                exclude = false;
+                            }
+                            if (exclude) {
+                                return;
+                            }
                             // Check if the symbol is declared outside of this function
                             const declarations = symbol.declarations;
                             if (declarations && declarations.length > 0) {
                                 const declaration = declarations[0];
                                 if (!node.getSourceFile().fileName.includes(declaration.getSourceFile().fileName) ||
                                     declaration.pos < node.getStart() || declaration.end > node.getEnd()) {
+                                    logger.info(`Dependency: ${node.text} (kind: ${typescript.SyntaxKind[node.kind]}, flags: ${typescript.SymbolFlags[flags]}, typeflags: ${typescript.SymbolFlags[typeflags]})`);
                                     dependencies.add(node.text);
                                 }
                             }
@@ -156,7 +179,7 @@ function init(modules) {
             visit(node);
             // Filter out common React-specific identifiers and methods
             const reactSpecificIdentifiers = new Set(['useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'setState']);
-            return Array.from(dependencies).filter(dep => !reactSpecificIdentifiers.has(dep));
+            return Array.from(dependencies).filter(dep => !reactSpecificIdentifiers.has(dep) || dep.startsWith('use'));
         }
         return proxy;
     }
