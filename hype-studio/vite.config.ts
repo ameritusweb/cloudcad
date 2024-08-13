@@ -8,6 +8,7 @@ import viteTracePlugin from './src/tracing/server/viteTracePlugin';
 import path, { extname } from 'path';
 import babel, { RollupBabelInputPluginOptions } from '@rollup/plugin-babel';
 import Buffer from 'buffer';
+import customTransformerPlugin from './src/transformers/vite-plugin';
 
 const options: RollupBabelInputPluginOptions = {
   babelHelpers: 'bundled',
@@ -39,6 +40,7 @@ function createRemoveTracingPlugin(): Plugin {
 
 export default defineConfig(({ mode }) => ({
   plugins: [
+    customTransformerPlugin(),
     react({
       babel: {
         plugins: [

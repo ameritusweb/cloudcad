@@ -4,7 +4,7 @@ import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { useVersioning } from '../hooks/useVersioning';
 import { FaSearchPlus, FaHandPaper, FaSyncAlt, FaSquare, FaEye, FaCamera, FaMousePointer, FaPencilAlt, FaRuler } from 'react-icons/fa';
 import { CameraIcon, CursorArrowRaysIcon } from '@heroicons/react/24/solid';
-import { TraceEffect, TraceCallback } from '@/tracing';
+import { TraceEffect, TraceCallback } from '../tracing';
 
 const PlaneState = {
   HIDDEN: 'hidden',

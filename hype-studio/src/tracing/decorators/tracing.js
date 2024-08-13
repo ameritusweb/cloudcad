@@ -1,6 +1,7 @@
 // tracing-decorators.js
 import React from 'react';
-import { traceEffect, traceUseCallback } from '@/tracing';
+import { traceEffect } from './traceEffect';
+import { traceUseCallback } from './traceUseCallback';
 
 export function TraceEffect(effectNameOrOptions) {
     return function(target, key, descriptor) {
