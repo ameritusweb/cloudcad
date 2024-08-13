@@ -1,3 +1,5 @@
 {
-    "typescript.tsserver.pluginPaths": ["./node_modules/typescript-trace-decorator-plugin"]
+  "typescript.tsserver.log": "verbose",
+    "typescript.tsserver.pluginPaths": ["./node_modules/typescript-trace-decorator-plugin"],
+    "typescript.tsdk": "./node_modules/typescript/lib"
   }

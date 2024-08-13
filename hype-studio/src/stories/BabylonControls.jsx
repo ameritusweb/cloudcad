@@ -38,10 +38,10 @@ export const BabylonControls = memo(() => {
 
   const version = useVersioning(['currentModelView', 'controlMode', 'planeStates']);
 
-  @TraceCallback([model])
-  const handleControlModeChange = useCallback((mode) => {
+  !!!TraceCallback([model])
+  const handleControlModeChange = (mode) => {
     model.setState(state => ({ ...state, controlMode: mode }));
-  }, [model]);
+  }
 
   const onCyclePlaneState = useCallback((plane) => {
     model.setState(state => {

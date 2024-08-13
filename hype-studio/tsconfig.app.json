@@ -28,8 +28,7 @@
       "emitDecoratorMetadata": true,
       "plugins": [
         {
-          "name": "typescript-trace-decorator-plugin",
-          "trace": true
+          "name": "typescript-trace-decorator-plugin"
         }
       ]
     },
