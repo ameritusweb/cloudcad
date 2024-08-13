@@ -7,18 +7,21 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.Transform
     }
     console.log(`Processing file: ${sourceFile.fileName}`);
     
-    let lastExpressionStatement: ts.ExpressionStatement | null = null;
+    let lastTraceDecorator: ts.ExpressionStatement | null = null;
 
     const visitor = (node: ts.Node): ts.Node => {
       console.log(`Visiting node of kind: ${ts.SyntaxKind[node.kind]}`);
 
       if (ts.isExpressionStatement(node)) {
-        lastExpressionStatement = node;
+        if (isTraceExpression(node.expression)) {
+          lastTraceDecorator = node;
+          return undefined as unknown as ts.Node;  // Remove the decorator
+        }
         return node;
       }
 
-      if (ts.isVariableStatement(node) && lastExpressionStatement) {
-        console.log('Found VariableStatement preceded by ExpressionStatement');
+      if (ts.isVariableStatement(node) && lastTraceDecorator) {
+        console.log('Found VariableStatement following a trace decorator');
         const declaration = node.declarationList.declarations[0];
         
         if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
@@ -27,23 +30,22 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.Transform
           if (ts.isArrowFunction(declaration.initializer)) {
             console.log('Initializer is ArrowFunction');
             
-            // Check if the preceding ExpressionStatement matches our !!!TraceCallback pattern
-            const traceCallExpression = getInnermostCallExpression(lastExpressionStatement.expression);
-            if (traceCallExpression && isTraceExpression(lastExpressionStatement.expression)) {
+            const traceCallExpression = getInnermostCallExpression(lastTraceDecorator.expression);
+            if (traceCallExpression) {
               console.log('Found matching trace expression');
               const traceName = getTraceName(traceCallExpression);
               console.log(`Trace name: ${traceName}`);
 
               // Transform the node
-              const newNode = transformTraceExpression(node, traceCallExpression, traceName);
-              lastExpressionStatement = null; // Reset for the next iteration
+              const newNode = transformTraceExpression(node, traceCallExpression, declaration.initializer);
+              lastTraceDecorator = null; // Reset for the next iteration
               return newNode;
             }
           }
         }
       }
 
-      lastExpressionStatement = null; // Reset if not immediately followed by a relevant VariableStatement
+      lastTraceDecorator = null; // Reset if not immediately followed by a relevant VariableStatement
       return ts.visitEachChild(node, visitor, context);
     };
 
@@ -52,8 +54,7 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.Transform
 };
 
 function isTraceExpression(expression: ts.Expression): boolean {
-  const callExpression = getInnermostCallExpression(expression);
-  return !!callExpression;
+  return getInnermostCallExpression(expression) !== null;
 }
 
 function getInnermostCallExpression(expression: ts.Expression): ts.CallExpression | null {
@@ -80,54 +81,53 @@ function getTraceName(callExpression: ts.CallExpression): string {
 function transformTraceExpression(
   variableStatement: ts.VariableStatement, 
   traceCallExpression: ts.CallExpression,
-  traceName: string
+  originalFunction: ts.ArrowFunction
 ): ts.VariableStatement {
   const declaration = variableStatement.declarationList.declarations[0] as ts.VariableDeclaration;
-  const initializer = declaration.initializer as ts.ArrowFunction;
-  
-  let newInitializer: ts.Expression;
-  if (traceName === "TraceCallback") {
-    newInitializer = createTraceCallbackExpression(initializer, traceCallExpression.arguments);
-  } else if (traceName === "TraceEffect") {
-    newInitializer = createTraceEffectExpression(initializer, traceCallExpression.arguments);
-  } else {
-    return variableStatement;
-  }
+
+  const traceArgs = traceCallExpression.arguments;
+
+  // Create the traceUseCallback call
+  const traceUseCallbackCall = ts.factory.createCallExpression(
+    ts.factory.createIdentifier('traceUseCallback'),
+    undefined,
+    [originalFunction, ...traceArgs]
+  );
+
+  // Create the useCallback wrapper
+  const useCallbackWrapper = ts.factory.createArrowFunction(
+    undefined,
+    undefined,
+    [ts.factory.createParameterDeclaration(
+      undefined,
+      ts.factory.createToken(ts.SyntaxKind.DotDotDotToken),  // Correctly create the rest token
+      ts.factory.createIdentifier('args')
+    )],
+    undefined,
+    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+    traceUseCallbackCall
+  );
+
+  const depsArray = traceArgs[0];  // Assuming the first argument is the dependency array
+
+  const useCallbackCall = ts.factory.createCallExpression(
+    ts.factory.createIdentifier('useCallback'),
+    undefined,
+    [useCallbackWrapper, depsArray]
+  );
 
   const newDeclaration = ts.factory.updateVariableDeclaration(
     declaration,
     declaration.name,
     declaration.exclamationToken,
     declaration.type,
-    newInitializer
+    useCallbackCall
   );
 
   return ts.factory.updateVariableStatement(
     variableStatement,
     variableStatement.modifiers,
     ts.factory.updateVariableDeclarationList(variableStatement.declarationList, [newDeclaration])
-  );
-}
-
-function createTraceCallbackExpression(
-  func: ts.ArrowFunction,
-  args: ts.NodeArray<ts.Expression>
-): ts.CallExpression {
-  return ts.factory.createCallExpression(
-    ts.factory.createIdentifier('traceUseCallback'),
-    undefined,
-    [func, ...args]
-  );
-}
-
-function createTraceEffectExpression(
-  func: ts.ArrowFunction,
-  args: ts.NodeArray<ts.Expression>
-): ts.CallExpression {
-  return ts.factory.createCallExpression(
-    ts.factory.createIdentifier('traceEffect'),
-    undefined,
-    [func, ...args]
   );
 }
 
