@@ -1,76 +1,5 @@
 import ts from "typescript";
 
-function createTraceCallbackExpression(
-  func: ts.FunctionExpression | ts.ArrowFunction,
-  args: ts.Expression[]
-): ts.CallExpression {
-  const traceCall = ts.factory.createCallExpression(
-    ts.factory.createIdentifier('traceUseCallback'),
-    undefined,
-    [func, ...args]
-  );
-
-  const wrappedFunction = ts.factory.createArrowFunction(
-    undefined,
-    undefined,
-    [
-      ts.factory.createParameterDeclaration(
-        undefined,
-        ts.factory.createToken(ts.SyntaxKind.DotDotDotToken),  // The spread operator
-        ts.factory.createIdentifier('args'),  // The parameter name
-        undefined,  // Optional token (not needed here)
-        undefined,  // Type annotation (if any)
-        undefined   // Initializer (if any)
-      )
-    ],
-    undefined,
-    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-    traceCall
-  );
-
-  const depsArray = args[0];
-  if (!ts.isArrayLiteralExpression(depsArray)) {
-    throw new Error("Expected the first argument to TraceCallback to be an array literal.");
-  }
-
-  return ts.factory.createCallExpression(
-    ts.factory.createIdentifier('useCallback'),
-    undefined,
-    [wrappedFunction, depsArray]
-  );
-}
-
-function createTraceEffectExpression(
-  func: ts.FunctionExpression | ts.ArrowFunction,
-  args: ts.Expression[]
-): ts.CallExpression {
-  const traceCall = ts.factory.createCallExpression(
-    ts.factory.createIdentifier('traceEffect'),
-    undefined,
-    [func, ...args.slice(1)]
-  );
-
-  const wrappedFunction = ts.factory.createArrowFunction(
-    undefined,
-    undefined,
-    [],
-    undefined,
-    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-    traceCall
-  );
-
-  const depsArray = args[0];
-  if (!ts.isArrayLiteralExpression(depsArray)) {
-    throw new Error("Expected the first argument to TraceEffect to be an array literal.");
-  }
-
-  return ts.factory.createCallExpression(
-    ts.factory.createIdentifier('useEffect'),
-    undefined,
-    [wrappedFunction, depsArray]
-  );
-}
-
 const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.TransformationContext) => {
   return (sourceFile: ts.SourceFile): ts.SourceFile => {
     if (!sourceFile.fileName.includes('Controls')) {
@@ -78,77 +7,43 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.Transform
     }
     console.log(`Processing file: ${sourceFile.fileName}`);
     
+    let lastExpressionStatement: ts.ExpressionStatement | null = null;
+
     const visitor = (node: ts.Node): ts.Node => {
       console.log(`Visiting node of kind: ${ts.SyntaxKind[node.kind]}`);
 
-      if (ts.isVariableStatement(node)) {
-        console.log('Found VariableStatement');
-        if (node.declarationList.declarations.length === 1) {
-          console.log('VariableStatement has exactly one declaration');
-          const declaration = node.declarationList.declarations[0];
+      if (ts.isExpressionStatement(node)) {
+        lastExpressionStatement = node;
+        return node;
+      }
+
+      if (ts.isVariableStatement(node) && lastExpressionStatement) {
+        console.log('Found VariableStatement preceded by ExpressionStatement');
+        const declaration = node.declarationList.declarations[0];
+        
+        if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+          console.log('Found VariableDeclaration with initializer');
           
-          if (ts.isVariableDeclaration(declaration)) {
-            console.log('Found VariableDeclaration');
-            if (declaration.initializer) {
-              console.log(`VariableDeclaration has initializer: ${ts.SyntaxKind[declaration.initializer.kind]}`);
-              if (ts.isPrefixUnaryExpression(declaration.initializer)) {
-                console.log('Initializer is PrefixUnaryExpression');
-                if (declaration.initializer.operator === ts.SyntaxKind.ExclamationToken) {
-                  console.log('Found first exclamation token');
-                  const initializer = declaration.initializer;
-                  
-                  if (ts.isPrefixUnaryExpression(initializer.operand)) {
-                    console.log('Found second PrefixUnaryExpression');
-                    if (initializer.operand.operator === ts.SyntaxKind.ExclamationToken) {
-                      console.log('Found second exclamation token');
-                      if (ts.isPrefixUnaryExpression(initializer.operand.operand)) {
-                        console.log('Found third PrefixUnaryExpression');
-                        if (initializer.operand.operand.operator === ts.SyntaxKind.ExclamationToken) {
-                          console.log('Found third exclamation token');
-                          const traceCall = initializer.operand.operand.operand;
-                          
-                          if (ts.isCallExpression(traceCall)) {
-                            console.log('Found CallExpression');
-                            if (ts.isIdentifier(traceCall.expression)) {
-                              const traceName = traceCall.expression.text;
-                              console.log(`Found trace call: ${traceName}`);
-                              
-                              // Your existing transformation logic here
-                            } else {
-                              console.log('CallExpression does not have an Identifier as expression');
-                            }
-                          } else {
-                            console.log('Third operand is not a CallExpression');
-                          }
-                        } else {
-                          console.log('Third operator is not ExclamationToken');
-                        }
-                      } else {
-                        console.log('Second operand is not a PrefixUnaryExpression');
-                      }
-                    } else {
-                      console.log('Second operator is not ExclamationToken');
-                    }
-                  } else {
-                    console.log('First operand is not a PrefixUnaryExpression');
-                  }
-                } else {
-                  console.log('First operator is not ExclamationToken');
-                }
-              } else {
-                console.log('Initializer is not a PrefixUnaryExpression');
-              }
-            } else {
-              console.log('VariableDeclaration has no initializer');
+          if (ts.isArrowFunction(declaration.initializer)) {
+            console.log('Initializer is ArrowFunction');
+            
+            // Check if the preceding ExpressionStatement matches our !!!TraceCallback pattern
+            const traceCallExpression = getInnermostCallExpression(lastExpressionStatement.expression);
+            if (traceCallExpression && isTraceExpression(lastExpressionStatement.expression)) {
+              console.log('Found matching trace expression');
+              const traceName = getTraceName(traceCallExpression);
+              console.log(`Trace name: ${traceName}`);
+
+              // Transform the node
+              const newNode = transformTraceExpression(node, traceCallExpression, traceName);
+              lastExpressionStatement = null; // Reset for the next iteration
+              return newNode;
             }
-          } else {
-            console.log('Declaration is not a VariableDeclaration');
           }
-        } else {
-          console.log('VariableStatement has multiple or zero declarations');
         }
       }
 
+      lastExpressionStatement = null; // Reset if not immediately followed by a relevant VariableStatement
       return ts.visitEachChild(node, visitor, context);
     };
 
@@ -156,5 +51,84 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.Transform
   };
 };
 
+function isTraceExpression(expression: ts.Expression): boolean {
+  const callExpression = getInnermostCallExpression(expression);
+  return !!callExpression;
+}
+
+function getInnermostCallExpression(expression: ts.Expression): ts.CallExpression | null {
+  let currentNode: ts.Expression | undefined = expression;
+
+  while (ts.isPrefixUnaryExpression(currentNode) && currentNode.operator === ts.SyntaxKind.ExclamationToken) {
+    currentNode = currentNode.operand;
+  }
+
+  if (currentNode && ts.isCallExpression(currentNode)) {
+    return currentNode;
+  }
+
+  return null;
+}
+
+function getTraceName(callExpression: ts.CallExpression): string {
+  if (ts.isIdentifier(callExpression.expression)) {
+    return callExpression.expression.text;
+  }
+  return "";
+}
+
+function transformTraceExpression(
+  variableStatement: ts.VariableStatement, 
+  traceCallExpression: ts.CallExpression,
+  traceName: string
+): ts.VariableStatement {
+  const declaration = variableStatement.declarationList.declarations[0] as ts.VariableDeclaration;
+  const initializer = declaration.initializer as ts.ArrowFunction;
   
-  export default transformer;
+  let newInitializer: ts.Expression;
+  if (traceName === "TraceCallback") {
+    newInitializer = createTraceCallbackExpression(initializer, traceCallExpression.arguments);
+  } else if (traceName === "TraceEffect") {
+    newInitializer = createTraceEffectExpression(initializer, traceCallExpression.arguments);
+  } else {
+    return variableStatement;
+  }
+
+  const newDeclaration = ts.factory.updateVariableDeclaration(
+    declaration,
+    declaration.name,
+    declaration.exclamationToken,
+    declaration.type,
+    newInitializer
+  );
+
+  return ts.factory.updateVariableStatement(
+    variableStatement,
+    variableStatement.modifiers,
+    ts.factory.updateVariableDeclarationList(variableStatement.declarationList, [newDeclaration])
+  );
+}
+
+function createTraceCallbackExpression(
+  func: ts.ArrowFunction,
+  args: ts.NodeArray<ts.Expression>
+): ts.CallExpression {
+  return ts.factory.createCallExpression(
+    ts.factory.createIdentifier('traceUseCallback'),
+    undefined,
+    [func, ...args]
+  );
+}
+
+function createTraceEffectExpression(
+  func: ts.ArrowFunction,
+  args: ts.NodeArray<ts.Expression>
+): ts.CallExpression {
+  return ts.factory.createCallExpression(
+    ts.factory.createIdentifier('traceEffect'),
+    undefined,
+    [func, ...args]
+  );
+}
+
+export default transformer;
