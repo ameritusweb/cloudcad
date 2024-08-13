@@ -45,33 +45,65 @@ function init(modules) {
                     if (typescript.isPrefixUnaryExpression(operand) && operand.operator === typescript.SyntaxKind.ExclamationToken) {
                         const innerOperand = operand.operand;
                         if (typescript.isPrefixUnaryExpression(innerOperand) && innerOperand.operator === typescript.SyntaxKind.ExclamationToken) {
-                            const decoratorText = innerOperand.operand.getText(sourceFile);
-                            logger.info(`Custom decorator found: ${decoratorText}`);
-                            // Extract the decorator name (without arguments)
-                            const decoratorName = decoratorText.split('(')[0];
-                            if (decoratorName === "TraceCallback" || decoratorName === "TraceEffect") {
-                                // Find the associated function
-                                const functionNode = findAssociatedFunction(token, logger);
-                                const calculatedDeps = functionNode ? calculateDependencies(functionNode, sourceFile, typeChecker, logger) : [];
-                                logger.info(`Calculated dependencies: ${calculatedDeps.join(', ')}`);
-                                return {
-                                    kind: typescript.ScriptElementKind.unknown,
-                                    kindModifiers: typescript.ScriptElementKindModifier.none,
-                                    textSpan: {
-                                        start: token.getStart(sourceFile),
-                                        length: token.getWidth(sourceFile)
-                                    },
-                                    displayParts: [
-                                        { text: "Custom Tracing", kind: "text" },
-                                        { text: " ", kind: "space" },
-                                        { text: decoratorName, kind: "functionName" },
-                                        { text: "\n", kind: "lineBreak" },
-                                        { text: `Adds tracing to ${decoratorName === "TraceCallback" ? "callbacks" : "effects"}`, kind: "text" },
-                                        { text: "\n", kind: "lineBreak" },
-                                        { text: "Calculated Dependencies: ", kind: "text" },
-                                        { text: calculatedDeps.join(", "), kind: "keyword" }
-                                    ]
-                                };
+                            const decoratorCall = innerOperand.operand;
+                            if (typescript.isCallExpression(decoratorCall) && typescript.isIdentifier(decoratorCall.expression)) {
+                                const decoratorText = innerOperand.operand.getText(sourceFile);
+                                logger.info(`Custom decorator found: ${decoratorText}`);
+                                // Extract the decorator name (without arguments)
+                                const decoratorName = decoratorText.split('(')[0];
+                                if (decoratorName === "TraceCallback" || decoratorName === "TraceEffect") {
+                                    // Find the associated function
+                                    const functionNode = findAssociatedFunction(token, logger);
+                                    const calculatedDeps = functionNode ? calculateDependencies(functionNode, sourceFile, typeChecker, logger) : [];
+                                    logger.info(`Calculated dependencies: ${calculatedDeps.join(', ')}`);
+                                    // Extract deps from decorator arguments
+                                    let listedDeps = [];
+                                    if (decoratorCall.arguments.length > 0 && typescript.isObjectLiteralExpression(decoratorCall.arguments[0])) {
+                                        const depsProperty = decoratorCall.arguments[0].properties.find(prop => typescript.isPropertyAssignment(prop) && prop.name.getText() === 'deps');
+                                        if (depsProperty && typescript.isPropertyAssignment(depsProperty) &&
+                                            typescript.isArrayLiteralExpression(depsProperty.initializer)) {
+                                            listedDeps = depsProperty.initializer.elements
+                                                .filter(typescript.isIdentifier)
+                                                .map(id => id.text);
+                                        }
+                                    }
+                                    // Compare calculated and listed deps
+                                    const missingDeps = calculatedDeps.filter(dep => !listedDeps.includes(dep));
+                                    const extraDeps = listedDeps.filter(dep => !calculatedDeps.includes(dep));
+                                    const warningPrefix = "⚠️ ";
+                                    const errorPrefix = "🚫 ";
+                                    return {
+                                        kind: typescript.ScriptElementKind.unknown,
+                                        kindModifiers: typescript.ScriptElementKindModifier.none,
+                                        textSpan: {
+                                            start: token.getStart(sourceFile),
+                                            length: token.getWidth(sourceFile)
+                                        },
+                                        displayParts: [
+                                            { text: "Custom Tracing", kind: "text" },
+                                            { text: " ", kind: "space" },
+                                            { text: decoratorName, kind: "functionName" },
+                                            { text: "\n", kind: "lineBreak" },
+                                            { text: `Adds tracing to ${decoratorName === "TraceCallback" ? "callbacks" : "effects"}`, kind: "text" },
+                                            { text: "\n", kind: "lineBreak" },
+                                            { text: "Calculated Dependencies: ", kind: "text" },
+                                            { text: calculatedDeps.join(", "), kind: "keyword" },
+                                            { text: "\n", kind: "lineBreak" },
+                                            ...(missingDeps.length > 0 ? [
+                                                { text: "\n", kind: "lineBreak" },
+                                                { text: errorPrefix, kind: "text" },
+                                                { text: "Missing Dependencies: ", kind: "text" },
+                                                { text: missingDeps.join(", "), kind: "keyword" }
+                                            ] : []),
+                                            ...(extraDeps.length > 0 ? [
+                                                { text: "\n", kind: "lineBreak" },
+                                                { text: warningPrefix, kind: "text" },
+                                                { text: "Extra Dependencies: ", kind: "text" },
+                                                { text: extraDeps.join(", "), kind: "keyword" }
+                                            ] : [])
+                                        ]
+                                    };
+                                }
                             }
                         }
                     }

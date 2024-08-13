@@ -26,13 +26,14 @@ export const BabylonControls = memo(() => {
 
   const [cameraInfo, setCameraInfo] = useState(model.getState('camera'));
 
-  useEffect(() => {
+  !!!TraceEffect({ deps: [model] })
+  const cameraInfoEffect = () => {
     const subscription = model.subscribe('camera', (newCameraInfo) => {
       setCameraInfo(newCameraInfo);
     });
 
     return () => subscription.unsubscribe();
-  }, [model]);
+  }
 
   const { position, target } = cameraInfo;
 
