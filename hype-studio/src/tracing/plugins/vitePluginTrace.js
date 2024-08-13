@@ -58,12 +58,12 @@ function babelPluginTraceDecorators({ types: t, template }) {
       CallExpression(path, state) {
         if (path.node.callee.name === 'useEffect') {
           state.traceEffectUsed = true;
-          const [effectCallback, dependencies] = path.node.arguments;
-          path.node.arguments[0] = createEffectDecorator(t, effectCallback, dependencies, state.opts);
+          // const [effectCallback, dependencies] = path.node.arguments;
+          // path.node.arguments[0] = createEffectDecorator(t, effectCallback, dependencies, state.opts);
         } else if (path.node.callee.name === 'useCallback') {
           state.traceUseCallbackUsed = true;
-          const [callback, dependencies] = path.node.arguments;
-          path.node.arguments[0] = createUseCallbackDecorator(t, callback, dependencies, state.opts);
+          // const [callback, dependencies] = path.node.arguments;
+          // path.node.arguments[0] = createUseCallbackDecorator(t, callback, dependencies, state.opts);
         }
         
         state.traceCallbackUsed = true;

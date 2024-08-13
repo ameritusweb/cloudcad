@@ -38,8 +38,19 @@ export const BabylonControls = memo(() => {
 
   const version = useVersioning(['currentModelView', 'controlMode', 'planeStates']);
 
-  !!!TraceCallback([model])
+  !!!TraceEffect({
+    deps: [model],
+    condition: () => true
+  })
   const handleControlModeChange = (mode) => {
+    model.setState(state => ({ ...state, controlMode: mode }));
+  }
+
+  !!!TraceCallback({
+    deps: [model],
+    condition: () => true
+  })
+  const handleControlModeChange2 = (mode) => {
     model.setState(state => ({ ...state, controlMode: mode }));
   }
 

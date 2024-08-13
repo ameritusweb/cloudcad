@@ -2,7 +2,7 @@ import ts from "typescript";
 
 const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.TransformationContext) => {
   return (sourceFile: ts.SourceFile): ts.SourceFile => {
-    if (!sourceFile.fileName.includes('Controls')) {
+    if (!sourceFile.fileName.includes("stories")) {
       return sourceFile;
     }
     console.log(`Processing file: ${sourceFile.fileName}`);
@@ -87,41 +87,95 @@ function transformTraceExpression(
 
   const traceArgs = traceCallExpression.arguments;
 
-  // Create the traceUseCallback call
-  const traceUseCallbackCall = ts.factory.createCallExpression(
-    ts.factory.createIdentifier('traceUseCallback'),
-    undefined,
-    [originalFunction, ...traceArgs]
-  );
+  const traceName = getTraceName(traceCallExpression);
+  let newInitializer: ts.Expression;
 
-  // Create the useCallback wrapper
-  const useCallbackWrapper = ts.factory.createArrowFunction(
-    undefined,
-    undefined,
-    [ts.factory.createParameterDeclaration(
+  if (traceName === "TraceEffect") {
+    const configArg = traceArgs[0];
+
+    const traceEffectCall = ts.factory.createCallExpression(
+      ts.factory.createIdentifier('traceEffect'),
       undefined,
-      ts.factory.createToken(ts.SyntaxKind.DotDotDotToken),  // Correctly create the rest token
-      ts.factory.createIdentifier('args')
-    )],
-    undefined,
-    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-    traceUseCallbackCall
-  );
+      [originalFunction, configArg]
+    );
 
-  const depsArray = traceArgs[0];  // Assuming the first argument is the dependency array
+    const useEffectCallback = ts.factory.createArrowFunction(
+      undefined,
+      undefined,
+      [],
+      undefined,
+      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+      traceEffectCall
+    );
 
-  const useCallbackCall = ts.factory.createCallExpression(
-    ts.factory.createIdentifier('useCallback'),
-    undefined,
-    [useCallbackWrapper, depsArray]
-  );
+    let depsArray: ts.Expression | undefined = undefined;
+    if (ts.isObjectLiteralExpression(configArg)) {
+      const depsProperty = configArg.properties.find(prop => 
+        ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === "deps"
+      );
+
+      if (depsProperty && ts.isPropertyAssignment(depsProperty) && ts.isArrayLiteralExpression(depsProperty.initializer)) {
+        depsArray = depsProperty.initializer;
+      }
+    }
+
+    if (!depsArray) {
+      throw new Error("Expected the configuration object to have a 'deps' array.");
+    }
+
+    newInitializer = ts.factory.createCallExpression(
+      ts.factory.createIdentifier('useEffect'),
+      undefined,
+      [useEffectCallback, depsArray]
+    );
+  } else if (traceName === "TraceCallback") {
+    const configArg = traceArgs[0];
+
+    const traceCallbackCall = ts.factory.createCallExpression(
+      ts.factory.createIdentifier('traceCallback'),
+      undefined,
+      [originalFunction, configArg]
+    );
+
+    const useCallbackArrowFunction = ts.factory.createArrowFunction(
+      undefined,
+      undefined,
+      [],
+      undefined,
+      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+      traceCallbackCall
+    );
+
+    let depsArray: ts.Expression | undefined = undefined;
+    if (ts.isObjectLiteralExpression(configArg)) {
+      const depsProperty = configArg.properties.find(prop => 
+        ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === "deps"
+      );
+
+      if (depsProperty && ts.isPropertyAssignment(depsProperty) && ts.isArrayLiteralExpression(depsProperty.initializer)) {
+        depsArray = depsProperty.initializer;
+      }
+    }
+
+    if (!depsArray) {
+      throw new Error("Expected the configuration object to have a 'deps' array.");
+    }
+
+    newInitializer = ts.factory.createCallExpression(
+      ts.factory.createIdentifier('useCallback'),
+      undefined,
+      [useCallbackArrowFunction, depsArray]
+    );
+  } else {
+    return variableStatement;
+  }
 
   const newDeclaration = ts.factory.updateVariableDeclaration(
     declaration,
     declaration.name,
     declaration.exclamationToken,
     declaration.type,
-    useCallbackCall
+    newInitializer
   );
 
   return ts.factory.updateVariableStatement(
