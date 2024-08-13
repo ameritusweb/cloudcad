@@ -8,9 +8,7 @@ export default function customTransformerPlugin(): Plugin {
     name: 'vite-plugin-custom-transformer',
     enforce: 'pre',
     transform(code, id) {
-      if (!/\.(js|jsx)$/.test(id)) return;
-
-      console.log('TRANSFORMING', id);
+      if (!/\.(js|jsx|ts|tsx)$/.test(id)) return;
 
       const { outputText, sourceMapText } = ts.transpileModule(code, {
         fileName: id,
@@ -23,10 +21,6 @@ export default function customTransformerPlugin(): Plugin {
           before: [traceTransformer]
         }
       });
-
-      if (id.includes('Controls')) {
-        console.log(outputText);
-      }
 
       return {
         code: outputText,

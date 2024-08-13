@@ -5,18 +5,17 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.Transform
     if (!sourceFile.fileName.includes("stories")) {
       return sourceFile;
     }
-    console.log(`Processing file: ${sourceFile.fileName}`);
     
-    let lastTraceDecorator: ts.ExpressionStatement | null = null;
+    let lastTraceDecorator: { type: 'TraceEffect' | 'TraceCallback', config: ts.Expression } | null = null;
 
-    const visitor = (node: ts.Node): ts.Node => {
-      console.log(`Visiting node of kind: ${ts.SyntaxKind[node.kind]}`);
-
+    const visitor = (node: ts.Node): ts.Node | undefined => {
       if (ts.isExpressionStatement(node)) {
-        if (isTraceExpression(node.expression)) {
-          lastTraceDecorator = node;
-          return undefined as unknown as ts.Node;  // Remove the decorator
+        const traceInfo = getTraceInfo(node.expression);
+        if (traceInfo) {
+          lastTraceDecorator = traceInfo;
+          return undefined; // Remove the decorator
         }
+        lastTraceDecorator = null;
         return node;
       }
 
@@ -25,22 +24,13 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.Transform
         const declaration = node.declarationList.declarations[0];
         
         if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
-          console.log('Found VariableDeclaration with initializer');
           
           if (ts.isArrowFunction(declaration.initializer)) {
-            console.log('Initializer is ArrowFunction');
             
-            const traceCallExpression = getInnermostCallExpression(lastTraceDecorator.expression);
-            if (traceCallExpression) {
-              console.log('Found matching trace expression');
-              const traceName = getTraceName(traceCallExpression);
-              console.log(`Trace name: ${traceName}`);
-
-              // Transform the node
-              const newNode = transformTraceExpression(node, traceCallExpression, declaration.initializer);
-              lastTraceDecorator = null; // Reset for the next iteration
-              return newNode;
-            }
+            // Transform the node
+            const newNode = transformTraceExpression(node, lastTraceDecorator.type, lastTraceDecorator.config, declaration.initializer);
+            lastTraceDecorator = null; // Reset for the next iteration
+            return newNode;
           }
         }
       }
@@ -53,122 +43,73 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = (context: ts.Transform
   };
 };
 
-function isTraceExpression(expression: ts.Expression): boolean {
-  return getInnermostCallExpression(expression) !== null;
-}
-
-function getInnermostCallExpression(expression: ts.Expression): ts.CallExpression | null {
-  let currentNode: ts.Expression | undefined = expression;
-
-  while (ts.isPrefixUnaryExpression(currentNode) && currentNode.operator === ts.SyntaxKind.ExclamationToken) {
-    currentNode = currentNode.operand;
+function getTraceInfo(expression: ts.Expression): { type: 'TraceEffect' | 'TraceCallback', config: ts.Expression } | null {
+  if (ts.isPrefixUnaryExpression(expression) &&
+      expression.operator === ts.SyntaxKind.ExclamationToken &&
+      ts.isPrefixUnaryExpression(expression.operand) &&
+      expression.operand.operator === ts.SyntaxKind.ExclamationToken &&
+      ts.isPrefixUnaryExpression(expression.operand.operand) &&
+      expression.operand.operand.operator === ts.SyntaxKind.ExclamationToken) {
+    
+    const callExpression = expression.operand.operand.operand;
+    if (ts.isCallExpression(callExpression) && ts.isIdentifier(callExpression.expression)) {
+      const traceName = callExpression.expression.text;
+      if (traceName === 'TraceEffect' || traceName === 'TraceCallback') {
+        return {
+          type: traceName,
+          config: callExpression.arguments[0]
+        };
+      }
+    }
   }
-
-  if (currentNode && ts.isCallExpression(currentNode)) {
-    return currentNode;
-  }
-
   return null;
-}
-
-function getTraceName(callExpression: ts.CallExpression): string {
-  if (ts.isIdentifier(callExpression.expression)) {
-    return callExpression.expression.text;
-  }
-  return "";
 }
 
 function transformTraceExpression(
   variableStatement: ts.VariableStatement, 
-  traceCallExpression: ts.CallExpression,
+  traceType: 'TraceEffect' | 'TraceCallback',
+  configArg: ts.Expression,
   originalFunction: ts.ArrowFunction
 ): ts.VariableStatement {
   const declaration = variableStatement.declarationList.declarations[0] as ts.VariableDeclaration;
 
-  const traceArgs = traceCallExpression.arguments;
-
-  const traceName = getTraceName(traceCallExpression);
   let newInitializer: ts.Expression;
+  let depsArray: ts.Expression | undefined;
 
-  if (traceName === "TraceEffect") {
-    const configArg = traceArgs[0];
-
-    const traceEffectCall = ts.factory.createCallExpression(
-      ts.factory.createIdentifier('traceEffect'),
-      undefined,
-      [originalFunction, configArg]
+  if (ts.isObjectLiteralExpression(configArg)) {
+    const depsProperty = configArg.properties.find(prop => 
+      ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === "deps"
     );
 
-    const useEffectCallback = ts.factory.createArrowFunction(
-      undefined,
-      undefined,
-      [],
-      undefined,
-      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-      traceEffectCall
-    );
-
-    let depsArray: ts.Expression | undefined = undefined;
-    if (ts.isObjectLiteralExpression(configArg)) {
-      const depsProperty = configArg.properties.find(prop => 
-        ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === "deps"
-      );
-
-      if (depsProperty && ts.isPropertyAssignment(depsProperty) && ts.isArrayLiteralExpression(depsProperty.initializer)) {
-        depsArray = depsProperty.initializer;
-      }
+    if (depsProperty && ts.isPropertyAssignment(depsProperty) && ts.isArrayLiteralExpression(depsProperty.initializer)) {
+      depsArray = depsProperty.initializer;
     }
-
-    if (!depsArray) {
-      throw new Error("Expected the configuration object to have a 'deps' array.");
-    }
-
-    newInitializer = ts.factory.createCallExpression(
-      ts.factory.createIdentifier('useEffect'),
-      undefined,
-      [useEffectCallback, depsArray]
-    );
-  } else if (traceName === "TraceCallback") {
-    const configArg = traceArgs[0];
-
-    const traceCallbackCall = ts.factory.createCallExpression(
-      ts.factory.createIdentifier('traceCallback'),
-      undefined,
-      [originalFunction, configArg]
-    );
-
-    const useCallbackArrowFunction = ts.factory.createArrowFunction(
-      undefined,
-      undefined,
-      [],
-      undefined,
-      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-      traceCallbackCall
-    );
-
-    let depsArray: ts.Expression | undefined = undefined;
-    if (ts.isObjectLiteralExpression(configArg)) {
-      const depsProperty = configArg.properties.find(prop => 
-        ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === "deps"
-      );
-
-      if (depsProperty && ts.isPropertyAssignment(depsProperty) && ts.isArrayLiteralExpression(depsProperty.initializer)) {
-        depsArray = depsProperty.initializer;
-      }
-    }
-
-    if (!depsArray) {
-      throw new Error("Expected the configuration object to have a 'deps' array.");
-    }
-
-    newInitializer = ts.factory.createCallExpression(
-      ts.factory.createIdentifier('useCallback'),
-      undefined,
-      [useCallbackArrowFunction, depsArray]
-    );
-  } else {
-    return variableStatement;
   }
+
+  if (!depsArray) {
+    throw new Error("Expected the configuration object to have a 'deps' array.");
+  }
+
+  const traceCall = ts.factory.createCallExpression(
+    ts.factory.createIdentifier(traceType === 'TraceEffect' ? 'traceEffect' : 'traceCallback'),
+    undefined,
+    [originalFunction, configArg]
+  );
+
+  const wrappedFunction = ts.factory.createArrowFunction(
+    undefined,
+    undefined,
+    [],
+    undefined,
+    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+    traceCall
+  );
+
+  newInitializer = ts.factory.createCallExpression(
+    ts.factory.createIdentifier(traceType === 'TraceEffect' ? 'useEffect' : 'useCallback'),
+    undefined,
+    [wrappedFunction, depsArray]
+  );
 
   const newDeclaration = ts.factory.updateVariableDeclaration(
     declaration,
