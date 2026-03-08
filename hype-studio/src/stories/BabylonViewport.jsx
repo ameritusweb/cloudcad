@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, memo } from 'react';
 import { HighlightLayer, Vector3, VertexBuffer, MeshBuilder, Color3, ShaderMaterial } from '@babylonjs/core';
+import { TextBlock, Control } from '@babylonjs/gui';
 import { manageExtrusionMesh } from '../utils/meshUtils';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
@@ -29,7 +30,8 @@ import { usePointerEvents } from '../hooks/usePointerEvents';
 import { useScrollWheelEvents } from '../hooks/useScrollWheelEvents';
 import { applySnap, computeInferenceLines, getPlaneInfo } from '../utils/sketchSnapUtils';
 import { inferConstraints } from '../utils/sketchConstraintSolver';
-import { createDimensionUI, showDimensionInput } from '../utils/sketchDimensionUtils';
+import { createDimensionUI, showDimensionInput, worldToScreen } from '../utils/sketchDimensionUtils';
+import { CONSTRAINT_LABELS } from '../utils/sketchConstraintSolver';
 import {
   selectEdge,
   selectFace,
@@ -64,6 +66,7 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
   const highlightLayerRef = useRef(null);
   const highlightedMeshRef = useRef(null);
   const inferenceLinesMeshRef = useRef(null);
+  const constraintOverlaysRef = useRef(new Map()); // sketchId → { ctrl, sketch }
   const gridsRef = useRef({});         // keyed by planeId — one grid per visible plane
   const activeDrawingPlaneRef = useRef(getPlaneInfo('Z')); // planeInfo for current drawing
   const dimensionUIRef = useRef(null);
@@ -93,6 +96,56 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
 
     // Dimension UI
     dimensionUIRef.current = createDimensionUI(scene);
+
+    // Constraint symbol overlays
+    const rebuildConstraintOverlays = () => {
+      constraintOverlaysRef.current.forEach(({ ctrl }) => {
+        dimensionUIRef.current?.removeControl(ctrl);
+        ctrl.dispose();
+      });
+      constraintOverlaysRef.current.clear();
+
+      const constraints = modelRef.current.state.constraints ?? {};
+      const sketches = modelRef.current.state.elements?.sketches ?? {};
+
+      Object.entries(constraints).forEach(([sketchId, sketchConstraints]) => {
+        if (!sketchConstraints?.length) return;
+        const sketch = sketches[sketchId];
+        if (!sketch) return;
+
+        const symbols = sketchConstraints
+          .map(c => CONSTRAINT_LABELS[c.type]?.symbol ?? '?')
+          .join(' ');
+
+        const ctrl = new TextBlock(`cLabel_${sketchId}`, symbols);
+        ctrl.color = '#1e40af';
+        ctrl.fontSize = 11;
+        ctrl.fontWeight = 'bold';
+        ctrl.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+        ctrl.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+        ctrl.isPickable = false;
+        dimensionUIRef.current.addControl(ctrl);
+        constraintOverlaysRef.current.set(sketchId, { ctrl, sketch });
+      });
+    };
+
+    // Update overlay screen positions each frame
+    scene.registerAfterRender(() => {
+      if (!scene.activeCamera || !dimensionUIRef.current) return;
+      const w = engine.getRenderWidth();
+      const h = engine.getRenderHeight();
+      constraintOverlaysRef.current.forEach(({ ctrl, sketch }) => {
+        const cx = sketch.center?.x ?? 0;
+        const cy = sketch.center?.y ?? 0;
+        const cz = sketch.center?.z ?? 0;
+        const screen = worldToScreen(new Vector3(cx, cy, cz), scene);
+        ctrl.left = `${Math.round(screen.x * w) + 8}px`;
+        ctrl.top = `${Math.round(screen.y * h) - 18}px`;
+      });
+    });
+
+    const constraintOverlaySubscription = modelRef.current.subscribe('constraints', () => rebuildConstraintOverlays());
+    const constraintSketchSubscription = modelRef.current.subscribe('elements.sketches', () => rebuildConstraintOverlays());
 
     // Grid helpers — one grid mesh per visible plane
     const buildGridForPlane = (planeId, planeInfo, gridSize) => {
@@ -503,6 +556,10 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
         renderSubscription.unsubscribe();
         constraintsSubscription.unsubscribe();
         currentModelViewSubscription.unsubscribe();
+        constraintOverlaySubscription.unsubscribe();
+        constraintSketchSubscription.unsubscribe();
+        constraintOverlaysRef.current.forEach(({ ctrl }) => ctrl.dispose());
+        constraintOverlaysRef.current.clear();
         activeViewSubscription.unsubscribe();
         planeStatesGridSubscription.unsubscribe();
         Object.values(gridsRef.current).forEach(m => m.dispose());
@@ -546,7 +603,8 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
     modelRef.current.setState(state => ({
       ...state,
       selectedPart: null,
-      selectedElementId: null
+      selectedElementId: null,
+      secondarySketchId: null,
     }));
     return;
   }
@@ -622,8 +680,16 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
       previewMeshRef.current = createPreviewMesh(scene, selectedSketchType, snappedPoint);
     } else if (pickResult.hit) {
       const mesh = pickResult.pickedMesh;
+
+      // Shift-click a sketch mesh → secondary selection for two-entity constraints
+      if (evt.shiftKey && mesh.name?.startsWith('sketch_')) {
+        const clickedSketchId = mesh.name.replace('sketch_', '');
+        modelRef.current.setState(state => ({ ...state, secondarySketchId: clickedSketchId }));
+        return;
+      }
+
       let selection;
-  
+
       // Clear previous highlight
       if (highlightedMeshRef.current) {
         highlightLayerRef.current.removeMesh(highlightedMeshRef.current);

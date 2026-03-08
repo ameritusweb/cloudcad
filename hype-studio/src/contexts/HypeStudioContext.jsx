@@ -39,6 +39,7 @@ const initialHypeStudioState = {
     Z: 'hidden'
   },
   selectedSketchType: null,
+  secondarySketchId: null,
   snapSettings: { gridEnabled: true, gridSize: 1, snapToEndpoints: true, snapThreshold: 0.3 },
   constraints: {},
   autosaveInterval: 30000,
@@ -327,10 +328,11 @@ model.getElementById = function(id) {
   };
 
   model.selectElement = function(elementId) {
-    this.setState(state => ({ 
-      ...state, 
+    this.setState(state => ({
+      ...state,
       selectedElementId: elementId,
-      selectedSketchType: null // Reset selected sketch type when selecting an element
+      secondarySketchId: null,
+      selectedSketchType: null,
     }));
   };
 

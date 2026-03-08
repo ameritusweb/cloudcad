@@ -61,6 +61,7 @@ export const ImportExportView = () => {
       customPlanes: [],
       planeStates: { X: 'hidden', Y: 'hidden', Z: 'hidden' },
       selectedSketchType: null,
+      secondarySketchId: null,
       snapSettings: { gridEnabled: true, gridSize: 1, snapToEndpoints: true, snapThreshold: 0.3 },
       constraints: {},
       autosaveInterval: 30000,

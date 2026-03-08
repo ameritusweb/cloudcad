@@ -11,6 +11,7 @@ import { ExtrudeView } from './ExtrudeView';
 import { TextToSketchView } from './TextToSketchView';
 import { ImportExportView } from './ImportExportView';
 import { BendToolView } from './BendToolView';
+import { SketchConstraintPanel } from './SketchConstraintPanel';
 import { TwistToolView } from './TwistToolView';
 import { SliceToolView } from './SliceToolView';
 import { SweepToolView } from './SweepToolView';
@@ -29,7 +30,9 @@ export const LeftPanel = memo(() => {
   const elements = useHypeStudioState('elements', {});
   const content = useHypeStudioState('leftPanelContent', []);
 
-  const version = useVersioning(['activeView', 'selectedSketchType', 'selectedElementId', 'leftPanelContent', 'groups', 'elements']);
+  const secondarySketchId = useHypeStudioState('secondarySketchId', null);
+
+  const version = useVersioning(['activeView', 'selectedSketchType', 'selectedElementId', 'secondarySketchId', 'leftPanelContent', 'groups', 'elements']);
 
   const groups = useHypeStudioState('groups', []);
   const ungroupedItems = model.getUngroupedItems();
@@ -265,22 +268,32 @@ const handleDrop = useCallback(
       </>
       )}
     {activeView === 'Sketch View' && (
-      <ul>
-        <li 
-          onClick={() => handleSketchTypeSelect('circle')} 
-          className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedSketchType === 'circle' ? 'bg-blue-100' : ''}`}
-        >
-          <FaCircle className="mr-2" />
-          Circle
-        </li>
-        <li 
-          onClick={() => handleSketchTypeSelect('rectangle')} 
-          className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedSketchType === 'rectangle' ? 'bg-blue-100' : ''}`}
-        >
-          <FaSquare className="mr-2" />
-          Rectangle
-        </li>
-      </ul>
+      <>
+        <ul>
+          <li
+            onClick={() => handleSketchTypeSelect('circle')}
+            className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedSketchType === 'circle' ? 'bg-blue-100' : ''}`}
+          >
+            <FaCircle className="mr-2" />
+            Circle
+          </li>
+          <li
+            onClick={() => handleSketchTypeSelect('rectangle')}
+            className={`py-2 px-1 cursor-pointer hover:bg-gray-100 flex items-center ${selectedSketchType === 'rectangle' ? 'bg-blue-100' : ''}`}
+          >
+            <FaSquare className="mr-2" />
+            Rectangle
+          </li>
+        </ul>
+        {selectedElementId && elements.sketches?.[selectedElementId] && (
+          <SketchConstraintPanel
+            sketchId={selectedElementId}
+            sketch={elements.sketches[selectedElementId]}
+            secondarySketchId={secondarySketchId}
+            secondarySketch={secondarySketchId ? elements.sketches[secondarySketchId] : null}
+          />
+        )}
+      </>
     )}
     {activeView === 'Extrude View' && <ExtrudeView />}
     {activeView === 'Text to Sketch View' && <TextToSketchView />}

@@ -1,6 +1,15 @@
 import { Color3, Vector3 } from '@babylonjs/core';
 import { getSketchEndpoints, getPlaneInfo } from './sketchSnapUtils';
 
+export const CONSTRAINT_LABELS = {
+  horizontal: { label: 'Horizontal', symbol: 'H'  },
+  vertical:   { label: 'Vertical',   symbol: 'V'  },
+  equal:      { label: 'Equal',      symbol: '='  },
+  fixed:      { label: 'Fixed',      symbol: '\u22a3' },
+  coincident: { label: 'Coincident', symbol: '\u25ce' },
+  dimension:  { label: 'Dimension',  symbol: '\u2194' },
+};
+
 /**
  * Infer geometric constraints from a just-drawn sketch.
  * planeInfo is optional; if omitted, defaults to the Z (XY) plane.

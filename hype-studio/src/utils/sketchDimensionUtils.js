@@ -12,7 +12,7 @@ export const createDimensionUI = (scene) => {
 /**
  * Project a 3D world point to 2D screen-space [0-1] coordinates.
  */
-const worldToScreen = (worldPoint, scene) => {
+export const worldToScreen = (worldPoint, scene) => {
   const viewport = scene.activeCamera.viewport.toGlobal(
     scene.getEngine().getRenderWidth(),
     scene.getEngine().getRenderHeight()
