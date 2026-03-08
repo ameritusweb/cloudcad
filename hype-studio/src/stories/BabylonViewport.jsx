@@ -29,9 +29,8 @@ import {
 import { usePointerEvents } from '../hooks/usePointerEvents';
 import { useScrollWheelEvents } from '../hooks/useScrollWheelEvents';
 import { applySnap, computeInferenceLines, getPlaneInfo } from '../utils/sketchSnapUtils';
-import { inferConstraints } from '../utils/sketchConstraintSolver';
+import { inferConstraints, CONSTRAINT_LABELS, solveConstraints } from '../utils/sketchConstraintSolver';
 import { createDimensionUI, showDimensionInput, worldToScreen } from '../utils/sketchDimensionUtils';
-import { CONSTRAINT_LABELS } from '../utils/sketchConstraintSolver';
 import {
   selectEdge,
   selectFace,
@@ -142,6 +141,35 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
         ctrl.left = `${Math.round(screen.x * w) + 8}px`;
         ctrl.top = `${Math.round(screen.y * h) - 18}px`;
       });
+    });
+
+    const constraintSolverSubscription = modelRef.current.subscribe('constraints', () => {
+      const state = modelRef.current.state;
+      const sketches = state.elements?.sketches ?? {};
+      const constraintsMap = state.constraints ?? {};
+      if (!Object.keys(constraintsMap).some(k => constraintsMap[k]?.length)) return;
+
+      const solved = solveConstraints(sketches, constraintsMap);
+
+      const hasChanges = Object.entries(solved).some(([id, sk]) => {
+        const orig = sketches[id];
+        if (!orig) return true;
+        return (
+          sk.radius !== orig.radius ||
+          sk.width !== orig.width ||
+          sk.height !== orig.height ||
+          sk.center?.x !== orig.center?.x ||
+          sk.center?.y !== orig.center?.y ||
+          sk.center?.z !== orig.center?.z
+        );
+      });
+
+      if (hasChanges) {
+        modelRef.current.setState(
+          s => ({ ...s, elements: { ...s.elements, sketches: solved } }),
+          false
+        );
+      }
     });
 
     const constraintOverlaySubscription = modelRef.current.subscribe('constraints', () => rebuildConstraintOverlays());
@@ -556,6 +584,7 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
         renderSubscription.unsubscribe();
         constraintsSubscription.unsubscribe();
         currentModelViewSubscription.unsubscribe();
+        constraintSolverSubscription.unsubscribe();
         constraintOverlaySubscription.unsubscribe();
         constraintSketchSubscription.unsubscribe();
         constraintOverlaysRef.current.forEach(({ ctrl }) => ctrl.dispose());
@@ -626,23 +655,23 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
           sceneRef.current,
           label,
           (val) => {
-            if (sketch.type === 'circle') {
-              modelRef.current.setState(state => ({
-                ...state,
-                elements: { ...state.elements, sketches: {
-                  ...state.elements.sketches,
-                  [sketchId]: { ...sketch, radius: val }
-                }}
-              }));
-            } else if (sketch.type === 'rectangle') {
-              modelRef.current.setState(state => ({
-                ...state,
-                elements: { ...state.elements, sketches: {
-                  ...state.elements.sketches,
-                  [sketchId]: { ...sketch, width: val, height: val }
-                }}
-              }));
-            }
+            const updatedSketch = sketch.type === 'circle'
+              ? { ...sketch, radius: val }
+              : { ...sketch, width: val, height: val };
+            modelRef.current.setState(state => ({
+              ...state,
+              elements: {
+                ...state.elements,
+                sketches: { ...state.elements.sketches, [sketchId]: updatedSketch }
+              },
+              constraints: {
+                ...state.constraints,
+                [sketchId]: [
+                  ...(state.constraints[sketchId] ?? []).filter(c => c.type !== 'dimension'),
+                  { type: 'dimension', value: val },
+                ],
+              },
+            }));
             currentDimensionControlRef.current = null;
           }
         );

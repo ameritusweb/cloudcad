@@ -110,3 +110,74 @@ export const getDegreesOfFreedom = (sketchType, constraints) => {
   }, 0);
   return Math.max(0, baseDOF - reduction);
 };
+
+/**
+ * Analytical constraint solver.
+ * Returns a new sketches map with geometry updated to satisfy constraints.
+ * Pure function — does not mutate inputs.
+ */
+export const solveConstraints = (sketches, constraintsMap) => {
+  // Deep clone
+  const solved = {};
+  for (const [id, sketch] of Object.entries(sketches)) {
+    solved[id] = { ...sketch, center: { ...sketch.center } };
+  }
+
+  // Pass 1: single-entity constraints (no targetSketchId)
+  for (const [sketchId, constraints] of Object.entries(constraintsMap)) {
+    if (!constraints?.length || !solved[sketchId]) continue;
+    const sketch = solved[sketchId];
+    for (const c of constraints) {
+      if (c.targetSketchId) continue;
+      switch (c.type) {
+        case 'equal':
+          if (sketch.type === 'rectangle') {
+            const avg = ((sketch.width ?? 1) + (sketch.height ?? 1)) / 2;
+            sketch.width = avg;
+            sketch.height = avg;
+          }
+          break;
+        case 'dimension':
+          if (c.value != null && c.value > 0) {
+            if (sketch.type === 'circle') sketch.radius = c.value;
+            if (sketch.type === 'rectangle') sketch.width = c.value;
+          }
+          break;
+        // horizontal, vertical, fixed: orientation only — geometry unchanged
+        default: break;
+      }
+    }
+  }
+
+  // Pass 2: two-entity constraints (has targetSketchId)
+  const processed = new Set();
+  for (const [sketchId, constraints] of Object.entries(constraintsMap)) {
+    if (!constraints?.length || !solved[sketchId]) continue;
+    const primary = solved[sketchId];
+    for (const c of constraints) {
+      if (!c.targetSketchId) continue;
+      const pairKey = [sketchId, c.targetSketchId].sort().join(':');
+      if (processed.has(pairKey)) continue;
+      processed.add(pairKey);
+      const secondary = solved[c.targetSketchId];
+      if (!secondary) continue;
+      switch (c.type) {
+        case 'coincident':
+          secondary.center = { ...primary.center };
+          break;
+        case 'equal':
+          if (primary.type === 'circle' && secondary.type === 'circle') {
+            secondary.radius = primary.radius;
+          }
+          if (primary.type === 'rectangle' && secondary.type === 'rectangle') {
+            secondary.width = primary.width;
+            secondary.height = primary.height;
+          }
+          break;
+        default: break;
+      }
+    }
+  }
+
+  return solved;
+};
