@@ -1,6 +1,7 @@
-import { 
+import {
   Vector3, MeshBuilder, StandardMaterial, VertexBuffer, Mesh, Color3, HighlightLayer, TransformNode
 } from '@babylonjs/core';
+import { getConstraintColor } from './sketchConstraintSolver';
 
 let highlightLayer;
 
@@ -121,13 +122,13 @@ const manageEllipseSketchMesh = (scene, sketch, existingMesh = null) => {
 };
 
 // Function to manage circle sketch meshes
-const manageCircleSketchMesh = (scene, sketch, existingMesh = null) => {
+const manageCircleSketchMesh = (scene, sketch, existingMesh = null, constraints = []) => {
   const options = {
     diameter: sketch.radius * 2,
     thickness: 0.01,
     tessellation: 64
   };
-  
+
   let mesh;
   if (existingMesh) {
     mesh = MeshBuilder.CreateTorus("circle", options, scene);
@@ -135,26 +136,26 @@ const manageCircleSketchMesh = (scene, sketch, existingMesh = null) => {
   } else {
     mesh = MeshBuilder.CreateTorus("circle", options, scene);
   }
-  
+
   mesh.position = new Vector3(sketch.center.x, sketch.center.y, 0);
   mesh.rotation.x = Math.PI / 2; // Rotate to lie flat on the XY plane
-  
+
   const material = new StandardMaterial("circleMaterial", scene);
-  material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+  material.diffuseColor = getConstraintColor(constraints);
   material.wireframe = true;
   mesh.material = material;
-  
+
   return mesh;
 };
 
 // Function to manage rectangle sketch meshes
-const manageRectangleSketchMesh = (scene, sketch, existingMesh = null) => {
+const manageRectangleSketchMesh = (scene, sketch, existingMesh = null, constraints = []) => {
   const options = {
     width: sketch.width,
     height: sketch.height,
     updatable: true
   };
-  
+
   let mesh;
   if (existingMesh) {
     mesh = MeshBuilder.CreatePlane("rectangle", options, scene);
@@ -162,20 +163,20 @@ const manageRectangleSketchMesh = (scene, sketch, existingMesh = null) => {
   } else {
     mesh = MeshBuilder.CreatePlane("rectangle", options, scene);
   }
-  
+
   mesh.position = new Vector3(sketch.center.x, sketch.center.y, 0);
-  
+
   const material = new StandardMaterial("rectangleMaterial", scene);
-  material.diffuseColor = new Color3(0, 0, 1); // Blue color for sketches
+  material.diffuseColor = getConstraintColor(constraints);
   material.wireframe = true;
   mesh.material = material;
-  
+
   return mesh;
 };
 
 // Exported function to create a sketch mesh
-export const createSketchMesh = (scene, sketch) => {
-  return manageSketchMesh(scene, sketch);
+export const createSketchMesh = (scene, sketch, constraints = []) => {
+  return manageSketchMesh(scene, sketch, null, constraints);
 };
 
 // Exported function to create an extrusion mesh
@@ -184,15 +185,15 @@ export const createExtrusionMesh = (scene, extrusion, baseSketch) => {
 };
 
 // Exported function to manage a sketch mesh
-export const manageSketchMesh = (scene, sketch, existingMesh = null) => {
+export const manageSketchMesh = (scene, sketch, existingMesh = null, constraints = []) => {
   try {
     let mesh;
     switch (sketch.type) {
       case 'circle':
-        mesh = manageCircleSketchMesh(scene, sketch, existingMesh);
+        mesh = manageCircleSketchMesh(scene, sketch, existingMesh, constraints);
         break;
       case 'rectangle':
-        mesh = manageRectangleSketchMesh(scene, sketch, existingMesh);
+        mesh = manageRectangleSketchMesh(scene, sketch, existingMesh, constraints);
         break;
       case 'ellipse':
         mesh = manageEllipseSketchMesh(scene, sketch, existingMesh);

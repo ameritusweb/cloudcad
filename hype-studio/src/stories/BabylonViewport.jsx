@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, memo } from 'react';
 import { HighlightLayer, Vector3, VertexBuffer, MeshBuilder, Color3, ShaderMaterial } from '@babylonjs/core';
+import { manageExtrusionMesh } from '../utils/meshUtils';
 import { useHypeStudioModel } from '../contexts/HypeStudioContext';
 import { useHypeStudioState } from '../hooks/useHypeStudioState';
 import { createControlCube, getViewFromNormal } from '../utils/sceneUtils';
@@ -26,6 +27,9 @@ import {
 } from '../utils/cameraUtils';
 import { usePointerEvents } from '../hooks/usePointerEvents';
 import { useScrollWheelEvents } from '../hooks/useScrollWheelEvents';
+import { applySnap, computeInferenceLines, getPlaneInfo } from '../utils/sketchSnapUtils';
+import { inferConstraints } from '../utils/sketchConstraintSolver';
+import { createDimensionUI, showDimensionInput } from '../utils/sketchDimensionUtils';
 import {
   selectEdge,
   selectFace,
@@ -48,6 +52,7 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
   const meshesRef = useRef({});
   const planesRef = useRef({});
   const shapesRef = useRef({});
+  const extrusionsRef = useRef({});
 
   const shapes = useHypeStudioState('elements.shapes', {});
 
@@ -58,6 +63,11 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
 
   const highlightLayerRef = useRef(null);
   const highlightedMeshRef = useRef(null);
+  const inferenceLinesMeshRef = useRef(null);
+  const gridsRef = useRef({});         // keyed by planeId — one grid per visible plane
+  const activeDrawingPlaneRef = useRef(getPlaneInfo('Z')); // planeInfo for current drawing
+  const dimensionUIRef = useRef(null);
+  const currentDimensionControlRef = useRef(null);
 
   useEffect(() => {
     if (!engine || !canvas || !engine.isEngineActive) return;
@@ -80,6 +90,66 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
     modelRef.current.setState(state => ({ ...state, currentModelView: currentViewRef.current }), false);
 
     highlightLayerRef.current = new HighlightLayer("highlightLayer", scene);
+
+    // Dimension UI
+    dimensionUIRef.current = createDimensionUI(scene);
+
+    // Grid helpers — one grid mesh per visible plane
+    const buildGridForPlane = (planeId, planeInfo, gridSize) => {
+      const { tangent1, tangent2, normal, origin } = planeInfo;
+      const EXTENT = 20;
+      const lines = [];
+      const offset = normal.scale(0.002); // avoid z-fighting with plane mesh
+      for (let i = -EXTENT; i <= EXTENT; i += gridSize) {
+        lines.push([
+          origin.add(tangent1.scale(-EXTENT)).add(tangent2.scale(i)).add(offset),
+          origin.add(tangent1.scale(EXTENT)).add(tangent2.scale(i)).add(offset),
+        ]);
+        lines.push([
+          origin.add(tangent2.scale(-EXTENT)).add(tangent1.scale(i)).add(offset),
+          origin.add(tangent2.scale(EXTENT)).add(tangent1.scale(i)).add(offset),
+        ]);
+      }
+      const mesh = MeshBuilder.CreateLineSystem(`sketchGrid_${planeId}`, { lines }, scene);
+      mesh.color = new Color3(0.78, 0.78, 0.78);
+      mesh.isPickable = false;
+      return mesh;
+    };
+
+    const rebuildGrids = () => {
+      // Dispose existing grids
+      Object.values(gridsRef.current).forEach(m => m.dispose());
+      gridsRef.current = {};
+
+      if (modelRef.current.state.activeView !== 'Sketch View') return;
+
+      const planeStates = modelRef.current.state.planeStates;
+      const customPlanes = modelRef.current.state.customPlanes;
+      const gridSize = modelRef.current.state.snapSettings?.gridSize ?? 1;
+
+      // Standard planes
+      ['X', 'Y', 'Z'].forEach(planeId => {
+        if (planeStates[planeId] && planeStates[planeId] !== 'hidden') {
+          gridsRef.current[planeId] = buildGridForPlane(planeId, getPlaneInfo(planeId), gridSize);
+        }
+      });
+
+      // Custom planes
+      customPlanes.forEach(cp => {
+        if (planeStates[cp.id] && planeStates[cp.id] !== 'hidden') {
+          const customNormal = new Vector3(
+            parseFloat(cp.normal.x),
+            parseFloat(cp.normal.y),
+            parseFloat(cp.normal.z)
+          );
+          gridsRef.current[cp.id] = buildGridForPlane(cp.id, getPlaneInfo(cp.id, customNormal), gridSize);
+        }
+      });
+    };
+
+    const activeViewSubscription = modelRef.current.subscribe('activeView', () => rebuildGrids());
+
+    const planeStatesGridSubscription = modelRef.current.subscribe('planeStates', () => rebuildGrids());
 
     // Plane setup
     planesRef.current = {
@@ -389,7 +459,30 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
       });
     });
 
+    const extrusionsSubscription = modelRef.current.subscribe('elements.extrusions', (newExtrusions) => {
+      // Add or update extrusions
+      Object.entries(newExtrusions).forEach(([id, extrusionData]) => {
+        if (extrusionsRef.current[id]) {
+          extrusionsRef.current[id].dispose();
+        }
+        const node = manageExtrusionMesh(sceneRef.current, extrusionData, extrusionData.sketchGeometry, extrusionData.customProperties);
+        if (node) extrusionsRef.current[id] = node;
+      });
+
+      // Remove deleted extrusions
+      Object.keys(extrusionsRef.current).forEach(id => {
+        if (!newExtrusions[id]) {
+          extrusionsRef.current[id].dispose();
+          delete extrusionsRef.current[id];
+        }
+      });
+    });
+
     const renderSubscription = modelRef.current.subscribe('elements', () => {
+      meshesRef.current = renderScene(scene, modelRef.current, meshesRef.current);
+    });
+
+    const constraintsSubscription = modelRef.current.subscribe('constraints', () => {
       meshesRef.current = renderScene(scene, modelRef.current, meshesRef.current);
     });
   
@@ -406,8 +499,16 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
         planeStatesSubscription.unsubscribe();
         customPlanesSubscription.unsubscribe();
         shapesSubscription.unsubscribe();
+        extrusionsSubscription.unsubscribe();
         renderSubscription.unsubscribe();
+        constraintsSubscription.unsubscribe();
         currentModelViewSubscription.unsubscribe();
+        activeViewSubscription.unsubscribe();
+        planeStatesGridSubscription.unsubscribe();
+        Object.values(gridsRef.current).forEach(m => m.dispose());
+        gridsRef.current = {};
+        if (inferenceLinesMeshRef.current) { inferenceLinesMeshRef.current.dispose(); inferenceLinesMeshRef.current = null; }
+        if (dimensionUIRef.current) { dimensionUIRef.current.dispose(); dimensionUIRef.current = null; }
 
         if (highlightedMeshRef.current) {
           highlightLayerRef.current.removeMesh(highlightedMeshRef.current);
@@ -450,10 +551,75 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
     return;
   }
 
-    if (activeView === 'Sketch View' && selectedSketchType && pickResult.hit && pickResult.pickedMesh.name.includes('Plane')) {
+    // Dimension tool: click a sketch mesh to drive a dimension
+    if (controlMode === 'dimension' && pickResult.hit) {
+      const mesh = pickResult.pickedMesh;
+      const sketchId = mesh?.name?.replace('sketch_', '') || null;
+      const sketch = sketchId ? modelRef.current.state.elements?.sketches?.[sketchId] : null;
+      if (sketch && dimensionUIRef.current) {
+        if (currentDimensionControlRef.current) {
+          currentDimensionControlRef.current.dispose();
+          currentDimensionControlRef.current = null;
+        }
+        const label = sketch.type === 'circle' ? 'r' : 'w';
+        const control = showDimensionInput(
+          dimensionUIRef.current,
+          pickResult.pickedPoint,
+          sceneRef.current,
+          label,
+          (val) => {
+            if (sketch.type === 'circle') {
+              modelRef.current.setState(state => ({
+                ...state,
+                elements: { ...state.elements, sketches: {
+                  ...state.elements.sketches,
+                  [sketchId]: { ...sketch, radius: val }
+                }}
+              }));
+            } else if (sketch.type === 'rectangle') {
+              modelRef.current.setState(state => ({
+                ...state,
+                elements: { ...state.elements, sketches: {
+                  ...state.elements.sketches,
+                  [sketchId]: { ...sketch, width: val, height: val }
+                }}
+              }));
+            }
+            currentDimensionControlRef.current = null;
+          }
+        );
+        currentDimensionControlRef.current = control;
+      }
+      return;
+    }
+
+    // Detect which reference plane (if any) was clicked
+    const clickedPlaneEntry = Object.entries(planesRef.current)
+      .find(([, m]) => m === pickResult.pickedMesh);
+    const clickedPlaneId = clickedPlaneEntry?.[0] ?? null;
+
+    if (activeView === 'Sketch View' && selectedSketchType && clickedPlaneId) {
+      // Build planeInfo for the clicked plane
+      let customNormal = null;
+      if (!['X', 'Y', 'Z'].includes(clickedPlaneId)) {
+        const cp = modelRef.current.state.customPlanes.find(p => p.id === clickedPlaneId);
+        if (cp) {
+          customNormal = new Vector3(
+            parseFloat(cp.normal.x),
+            parseFloat(cp.normal.y),
+            parseFloat(cp.normal.z)
+          );
+        }
+      }
+      const planeInfo = getPlaneInfo(clickedPlaneId, customNormal);
+      activeDrawingPlaneRef.current = planeInfo;
+
+      const snapSettings = modelRef.current.state.snapSettings;
+      const sketches = modelRef.current.state.elements?.sketches ?? {};
+      const { snappedPoint } = applySnap(pickResult.pickedPoint, sketches, snapSettings, planeInfo);
       isDrawingRef.current = true;
-      startPointRef.current = pickResult.pickedPoint;
-      previewMeshRef.current = createPreviewMesh(scene, selectedSketchType, pickResult.pickedPoint);
+      startPointRef.current = snappedPoint;
+      previewMeshRef.current = createPreviewMesh(scene, selectedSketchType, snappedPoint);
     } else if (pickResult.hit) {
       const mesh = pickResult.pickedMesh;
       let selection;
@@ -545,9 +711,27 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
   }, [activeView, selectedSketchType]);
 
   const handlePointerMove = useCallback((evt, pickResult) => {
-    if (isDrawingRef.current && previewMeshRef.current) {
-      if (pickResult.hit) {
-        updatePreviewMesh(previewMeshRef.current, startPointRef.current, pickResult.pickedPoint, selectedSketchType);
+    if (isDrawingRef.current && previewMeshRef.current && pickResult.hit) {
+      const snapSettings = modelRef.current.state.snapSettings;
+      const sketches = modelRef.current.state.elements?.sketches ?? {};
+      const planeInfo = activeDrawingPlaneRef.current;
+      const { snappedPoint } = applySnap(pickResult.pickedPoint, sketches, snapSettings, planeInfo);
+
+      updatePreviewMesh(previewMeshRef.current, startPointRef.current, snappedPoint, selectedSketchType);
+
+      // Update inference lines
+      const inferenceData = computeInferenceLines(snappedPoint, sketches, snapSettings.snapThreshold ?? 0.3, planeInfo);
+      if (inferenceLinesMeshRef.current) {
+        inferenceLinesMeshRef.current.dispose();
+        inferenceLinesMeshRef.current = null;
+      }
+      if (inferenceData.length > 0 && sceneRef.current) {
+        const lines = inferenceData.map(d => [d.from, d.to]);
+        const mesh = MeshBuilder.CreateLineSystem('inferenceLines', { lines }, sceneRef.current);
+        mesh.color = new Color3(1, 0.85, 0);
+        mesh.isPickable = false;
+        mesh.renderingGroupId = 1;
+        inferenceLinesMeshRef.current = mesh;
       }
     }
   }, [selectedSketchType]);
@@ -555,10 +739,40 @@ export const BabylonViewport = memo(({ engine, canvas, updateMarkings }) => {
   const handlePointerUp = useCallback(() => {
     if (isDrawingRef.current && previewMeshRef.current) {
       isDrawingRef.current = false;
+
+      // Clean up inference lines
+      if (inferenceLinesMeshRef.current) {
+        inferenceLinesMeshRef.current.dispose();
+        inferenceLinesMeshRef.current = null;
+      }
+
       const sketchData = getSketchDataFromPreview(previewMeshRef.current, selectedSketchType);
-      modelRef.current.createSketch({ type: selectedSketchType, ...sketchData });
+      const endPoint = previewMeshRef.current.position.clone();
+
+      // Auto-infer constraints before disposing the mesh
+      const sketches = modelRef.current.state.elements?.sketches ?? {};
+      const snapThreshold = modelRef.current.state.snapSettings?.snapThreshold ?? 0.3;
+      const autoConstraints = inferConstraints(
+        selectedSketchType, startPointRef.current, endPoint, sketches, snapThreshold,
+        activeDrawingPlaneRef.current
+      );
+
       previewMeshRef.current.dispose();
       previewMeshRef.current = null;
+
+      // Store sketch + constraints together
+      const sketchId = `sketch_${Date.now()}`;
+      modelRef.current.setState(state => ({
+        ...state,
+        elements: {
+          ...state.elements,
+          sketches: {
+            ...state.elements.sketches,
+            [sketchId]: { id: sketchId, type: selectedSketchType, ...sketchData }
+          }
+        },
+        constraints: { ...state.constraints, [sketchId]: autoConstraints }
+      }));
     }
 
     if (cameraRef.current) {

@@ -281,8 +281,9 @@ export const removeShape = (scene, mesh) => {
     meshes = {};
   
     // Render sketches
+    const constraintsMap = model.state.constraints ?? {};
     Object.values(model.state.elements.sketches).forEach(sketch => {
-      const mesh = meshUtils.createSketchMesh(scene, sketch);
+      const mesh = meshUtils.createSketchMesh(scene, sketch, constraintsMap[sketch.id] ?? []);
       meshes[sketch.id] = mesh;
     });
   

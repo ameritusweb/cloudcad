@@ -7,6 +7,16 @@ import { SettingsView } from './SettingsView';
 import { ShapeCreator } from './ShapeCreator';
 import { CustomPlanesView } from './CustomPlanesView';
 import { HierarchyView } from './HierarchyView';
+import { ExtrudeView } from './ExtrudeView';
+import { TextToSketchView } from './TextToSketchView';
+import { ImportExportView } from './ImportExportView';
+import { BendToolView } from './BendToolView';
+import { TwistToolView } from './TwistToolView';
+import { SliceToolView } from './SliceToolView';
+import { SweepToolView } from './SweepToolView';
+import { CrushToolView } from './CrushToolView';
+import { PointToolView } from './PointToolView';
+import { RayToolView } from './RayToolView';
 
 export const LeftPanel = memo(() => {
 
@@ -272,6 +282,16 @@ const handleDrop = useCallback(
         </li>
       </ul>
     )}
+    {activeView === 'Extrude View' && <ExtrudeView />}
+    {activeView === 'Text to Sketch View' && <TextToSketchView />}
+    {activeView === 'Import/Export View' && <ImportExportView />}
+    {activeView === 'Bend Tool View' && <BendToolView />}
+    {activeView === 'Twist Tool View' && <TwistToolView />}
+    {activeView === 'Slice Tool View' && <SliceToolView />}
+    {activeView === 'Sweep Tool View' && <SweepToolView />}
+    {activeView === 'Crush Tool View' && <CrushToolView />}
+    {activeView === 'Point Tool View' && <PointToolView />}
+    {activeView === 'Ray Tool View' && <RayToolView />}
     {activeView === 'List View' && (
         <HierarchyView
           items={elements}

@@ -15,8 +15,7 @@ const initialHypeStudioState = {
   elements: {
     sketches: {},
     extrusions: {},
-    shapes: {}
-    // Add other element types as needed
+    shapes: {},
   },
   groups: [],
   camera: {
@@ -40,6 +39,8 @@ const initialHypeStudioState = {
     Z: 'hidden'
   },
   selectedSketchType: null,
+  snapSettings: { gridEnabled: true, gridSize: 1, snapToEndpoints: true, snapThreshold: 0.3 },
+  constraints: {},
   autosaveInterval: 30000,
   stateVersion: '1.0.0',
 };

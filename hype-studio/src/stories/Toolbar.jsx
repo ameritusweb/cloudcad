@@ -10,6 +10,7 @@ import MyFormulaIcon from '../assets/formula.svg?react';
 import MyShapeIcon from '../assets/shape.svg?react';
 import MyPlanesIcon from '../assets/planes.svg?react';
 import MyStructuralAnalysisIcon from '../assets/analysis.svg?react';
+import MyTextIcon from '../assets/text.svg?react';
 import MyBackIcon from '../assets/back.svg?react';
 import MyShatterIcon from '../assets/shatter.svg?react';
 import MyTwistIcon from '../assets/twist.svg?react';
@@ -35,6 +36,7 @@ const mainToolbarItems = [
   { icon: MyPatternIcon, name: 'Pattern View' },
   { icon: MyFormulaIcon, name: 'Formula View' },
   { icon: MyStructuralAnalysisIcon, name: 'Structural Analysis View' },
+  { icon: MyTextIcon, name: 'Text to Sketch View' },
   { icon: MySettingsIcon, name: 'Settings View' },
 ];
 
